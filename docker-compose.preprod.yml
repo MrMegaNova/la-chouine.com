@@ -33,11 +33,12 @@ services:
     environment:
       NODE_ENV:       production
       PORT:           "3000"
-      PGHOST:         db
+      PGHOST:         preprod-db
       PGPORT:         "5432"
       PGUSER:         ${POSTGRES_USER}
       PGPASSWORD:     ${POSTGRES_PASSWORD}
       PGDATABASE:     ${POSTGRES_DB}
+      PGSSLMODE:      disable
       JWT_SECRET:     ${JWT_SECRET}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
       SMTP_HOST:      ${SMTP_HOST}

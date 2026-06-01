@@ -44,6 +44,7 @@ services:
       PGUSER:         chouine
       PGPASSWORD:     chouine_dev
       PGDATABASE:     chouine_dev
+      PGSSLMODE:      disable
       JWT_SECRET:     dev_jwt_secret_please_change_in_production
       JWT_EXPIRES_IN: 7d
       SMTP_HOST:      mailhog
