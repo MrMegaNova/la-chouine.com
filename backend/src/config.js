@@ -18,7 +18,7 @@ module.exports = {
     user:     required('PGUSER'),
     password: required('PGPASSWORD'),
     database: required('PGDATABASE'),
-    ssl: process.env.NODE_ENV === 'production'
+    ssl: process.env.PGSSLMODE === 'require'
       ? { rejectUnauthorized: false }
       : false,
   },

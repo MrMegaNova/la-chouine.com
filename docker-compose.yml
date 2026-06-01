@@ -10,14 +10,14 @@
 services:
 
   db:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     restart: unless-stopped
     environment:
       POSTGRES_USER:     chouine
       POSTGRES_PASSWORD: chouine_dev
       POSTGRES_DB:       chouine_dev
     volumes:
-      - postgres_dev_data:/var/lib/postgresql/data
+      - postgres_dev_data:/var/lib/postgresql
     ports:
       - "5432:5432"
     healthcheck:
