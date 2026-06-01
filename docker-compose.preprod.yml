@@ -63,8 +63,8 @@ services:
       - preprod-backend
     labels:
       - traefik.enable=true
-      - traefik.http.routers.www-la-chouine-com.rule=Host(`preprod.la-chouine.com`)
-      - traefik.http.services.www-la-chouine-com.loadbalancer.server.port=80
+      - traefik.http.routers.preprod-la-chouine-com.rule=Host(`preprod.la-chouine.com`)
+      - traefik.http.services.preprod-la-chouine-com.loadbalancer.server.port=80
 
 volumes:
   postgres_preprod_data:
