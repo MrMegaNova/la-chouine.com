@@ -1,0 +1,1045 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>La Chouine — le jeu de cartes du Val de Loir</title>
+<meta name="description" content="Jouez à la Chouine en ligne, contre l'ordinateur ou entre amis. Le jeu de cartes historique de la Vallée du Loir." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,900;1,9..144,500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --felt-1:#0c2018; --felt-2:#123026; --felt-edge:#081710;
+  --ink:#16261d; --cream:#f4ebd6; --cream-2:#e7d9b6;
+  --gold:#c9a14a; --gold-soft:#d9bd78; --gold-deep:#9c7a2c;
+  --wine:#8a2b2b; --wine-2:#a23535; --wine-deep:#5e1c1c;
+  --paper:#f7f0df; --paper-edge:#d8c79b;
+  --red:#b3262a; --black:#1d2b23;
+  --line:rgba(201,161,74,.28);
+  --shadow:0 18px 40px -18px rgba(0,0,0,.65);
+  --r:16px;
+  --serif:"Fraunces",Georgia,serif;
+  --sans:"Manrope",system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  font-family:var(--sans); color:var(--cream);
+  background:
+    radial-gradient(120% 90% at 50% -10%, #16382a 0%, var(--felt-1) 55%, var(--felt-edge) 100%);
+  min-height:100%; overflow-x:hidden;
+  -webkit-tap-highlight-color:transparent;
+}
+body::before{
+  content:""; position:fixed; inset:0; pointer-events:none; z-index:0; opacity:.5;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.035'/%3E%3C/svg%3E");
+}
+a{color:inherit}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+.wrap{position:relative;z-index:1;max-width:1180px;margin:0 auto;padding:0 18px}
+
+/* ===== Top bar ===== */
+header.bar{
+  position:sticky;top:0;z-index:50;
+  backdrop-filter:blur(10px);
+  background:linear-gradient(180deg, rgba(8,18,13,.85), rgba(8,18,13,.55));
+  border-bottom:1px solid var(--line);
+}
+.bar .wrap{display:flex;align-items:center;gap:16px;height:66px}
+.brand{display:flex;align-items:center;gap:11px;cursor:pointer;user-select:none}
+.brand .owl{width:34px;height:34px;flex:0 0 auto}
+.brand b{font-family:var(--serif);font-weight:900;font-size:23px;letter-spacing:.3px;line-height:1}
+.brand b i{font-style:italic;color:var(--gold-soft);font-weight:500}
+.brand small{display:block;font-size:10px;letter-spacing:3px;text-transform:uppercase;color:var(--gold);opacity:.85;margin-top:2px}
+nav.top{margin-left:auto;display:flex;align-items:center;gap:6px}
+nav.top a{padding:9px 13px;border-radius:10px;font-weight:600;font-size:14px;opacity:.82;transition:.18s;cursor:pointer}
+nav.top a:hover{opacity:1;background:rgba(201,161,74,.1)}
+nav.top a.active{opacity:1;color:var(--gold-soft)}
+.userchip{display:flex;align-items:center;gap:9px;padding:6px 8px 6px 6px;border:1px solid var(--line);border-radius:30px;cursor:pointer;transition:.18s}
+.userchip:hover{border-color:var(--gold)}
+.userchip .av{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:13px;color:#0c2018;background:linear-gradient(135deg,var(--gold-soft),var(--gold-deep))}
+.userchip span{font-weight:700;font-size:14px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  border-radius:12px;padding:11px 18px;font-weight:700;font-size:15px;
+  transition:transform .12s, box-shadow .2s, background .2s; white-space:nowrap;
+}
+.btn:active{transform:translateY(1px)}
+.btn-gold{background:linear-gradient(135deg,var(--gold-soft),var(--gold-deep));color:#16261d;box-shadow:0 8px 22px -8px rgba(201,161,74,.7)}
+.btn-gold:hover{box-shadow:0 12px 28px -8px rgba(201,161,74,.85)}
+.btn-ghost{border:1px solid var(--line);color:var(--cream)}
+.btn-ghost:hover{border-color:var(--gold);background:rgba(201,161,74,.08)}
+.btn-wine{background:linear-gradient(135deg,var(--wine-2),var(--wine-deep));color:var(--cream)}
+.btn-sm{padding:8px 13px;font-size:13.5px;border-radius:10px}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+
+/* ===== Views ===== */
+.view{display:none;animation:fade .5s ease both}
+.view.show{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+/* ===== Hero ===== */
+.hero{padding:46px 0 30px;position:relative}
+.hero-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:40px;align-items:center}
+.kicker{display:inline-flex;align-items:center;gap:9px;font-size:12px;letter-spacing:3px;text-transform:uppercase;color:var(--gold);border:1px solid var(--line);padding:6px 13px;border-radius:30px}
+.hero h1{font-family:var(--serif);font-weight:900;font-size:clamp(40px,7vw,76px);line-height:.96;margin:18px 0 14px;letter-spacing:-1px}
+.hero h1 em{font-style:italic;color:var(--gold-soft);font-weight:500}
+.hero p.lead{font-size:18px;line-height:1.6;max-width:520px;color:var(--cream-2)}
+.hero .cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:26px}
+.hero-card-stack{position:relative;height:360px}
+.fan{position:absolute;left:50%;top:50%;transform-origin:bottom center}
+.statline{display:flex;gap:26px;margin-top:30px;flex-wrap:wrap}
+.statline div b{font-family:var(--serif);font-size:30px;color:var(--gold-soft);font-weight:900;display:block;line-height:1}
+.statline div span{font-size:12px;text-transform:uppercase;letter-spacing:2px;opacity:.7}
+
+.section-title{font-family:var(--serif);font-size:clamp(26px,4vw,38px);font-weight:900;margin-bottom:6px}
+.section-sub{color:var(--cream-2);opacity:.85;max-width:560px;margin-bottom:26px}
+
+.modes{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;padding:14px 0 50px}
+.mode{position:relative;border:1px solid var(--line);border-radius:var(--r);padding:26px 22px;background:linear-gradient(180deg,rgba(247,240,223,.04),rgba(247,240,223,.015));overflow:hidden;transition:.22s;cursor:pointer}
+.mode:hover{transform:translateY(-4px);border-color:var(--gold);box-shadow:var(--shadow)}
+.mode .ic{width:50px;height:50px;border-radius:13px;display:grid;place-items:center;font-size:24px;background:rgba(201,161,74,.14);border:1px solid var(--line);margin-bottom:16px}
+.mode h3{font-family:var(--serif);font-size:23px;font-weight:600;margin-bottom:6px}
+.mode p{color:var(--cream-2);font-size:14.5px;line-height:1.5;opacity:.85;min-height:62px}
+.mode .tag{position:absolute;top:16px;right:16px;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--gold);opacity:.7}
+
+.howto{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;padding-bottom:54px}
+.step{border-top:2px solid var(--line);padding-top:16px}
+.step b{font-family:var(--serif);font-size:40px;color:var(--gold-soft);font-weight:900;display:block;line-height:1}
+.step h4{margin:8px 0 6px;font-size:16px}
+.step p{font-size:13.5px;color:var(--cream-2);opacity:.8;line-height:1.5}
+
+footer{border-top:1px solid var(--line);padding:30px 0;margin-top:30px;color:var(--cream-2)}
+footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;font-size:13.5px;opacity:.8}
+
+/* ===== Panels / cards UI ===== */
+.panel{border:1px solid var(--line);border-radius:var(--r);background:linear-gradient(180deg,rgba(247,240,223,.045),rgba(247,240,223,.02));padding:24px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:13px;font-weight:600;margin-bottom:6px;opacity:.85}
+.field input,.field select{
+  width:100%;padding:12px 14px;border-radius:11px;border:1px solid var(--line);
+  background:rgba(8,18,13,.45);color:var(--cream);font-size:15px;font-family:inherit;outline:none;transition:.18s}
+.field input:focus,.field select:focus{border-color:var(--gold);background:rgba(8,18,13,.7)}
+.field input::placeholder{color:rgba(244,235,214,.4)}
+.err{color:#f3a3a3;font-size:13px;min-height:18px;margin-top:4px}
+.ok{color:#a8d9a0}
+.tabs{display:flex;gap:8px;margin-bottom:20px;border-bottom:1px solid var(--line)}
+.tabs button{padding:10px 4px;font-weight:700;opacity:.6;border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs button.on{opacity:1;color:var(--gold-soft);border-color:var(--gold)}
+
+/* ===== Playing cards ===== */
+.card{
+  --w:74px; width:var(--w); height:calc(var(--w)*1.46);
+  border-radius:9px; position:relative; user-select:none; flex:0 0 auto;
+  background:linear-gradient(160deg,#fdfaf0,#efe6cf); color:var(--black);
+  box-shadow:0 6px 14px -6px rgba(0,0,0,.6), inset 0 0 0 1px rgba(0,0,0,.06);
+  transition:transform .18s, box-shadow .18s, margin .18s;
+}
+.card.red{color:var(--red)}
+.card .corner{position:absolute;font-weight:800;line-height:.9;text-align:center;font-family:var(--sans)}
+.card .corner.tl{top:5px;left:6px}
+.card .corner.br{bottom:5px;right:6px;transform:rotate(180deg)}
+.card .corner .rk{font-size:15px}
+.card .corner .su{font-size:13px;display:block}
+.card .pip{position:absolute;inset:0;display:grid;place-items:center;font-size:30px;opacity:.95}
+.card.trump{box-shadow:0 6px 14px -6px rgba(0,0,0,.6), 0 0 0 2px var(--gold)}
+.card .crown{position:absolute;top:-9px;left:50%;transform:translateX(-50%);font-size:11px;color:var(--gold-deep)}
+.card.back{
+  background:
+    repeating-linear-gradient(45deg,#123026 0 7px,#0e251c 7px 14px);
+  box-shadow:inset 0 0 0 1px rgba(201,161,74,.5), inset 0 0 0 6px rgba(8,18,13,.4), 0 6px 14px -6px rgba(0,0,0,.6);
+  display:grid;place-items:center;
+}
+.card.back .owl{width:46%;opacity:.92}
+.card.sel{transform:translateY(-16px);box-shadow:0 16px 26px -10px rgba(0,0,0,.7), 0 0 0 2px var(--gold)}
+.card.playable{cursor:pointer}
+.card.playable:hover{transform:translateY(-12px)}
+.card.dim{opacity:.42;filter:grayscale(.3)}
+
+/* ===== Game table ===== */
+#view-game{position:fixed;inset:0;z-index:60;display:none;flex-direction:column;
+  background:radial-gradient(120% 80% at 50% 22%,#1a4233 0%,var(--felt-1) 60%,var(--felt-edge) 100%)}
+#view-game.show{display:flex}
+.gtop{display:flex;align-items:center;gap:14px;padding:12px 18px;border-bottom:1px solid var(--line);background:rgba(8,18,13,.5)}
+.gtop .who{display:flex;align-items:center;gap:9px;font-weight:700}
+.gtop .who .av{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:13px;color:#0c2018;background:linear-gradient(135deg,var(--gold-soft),var(--gold-deep))}
+.scorepill{display:flex;align-items:center;gap:7px;padding:6px 13px;border:1px solid var(--line);border-radius:30px;font-weight:800;font-size:14px}
+.scorepill b{color:var(--gold-soft);font-family:var(--serif);font-size:18px}
+.gtop .spacer{flex:1}
+.felt{flex:1;position:relative;display:flex;flex-direction:column;justify-content:space-between;padding:10px 14px;overflow:hidden}
+.handrow{display:flex;justify-content:center;align-items:flex-end;gap:6px;min-height:118px;padding:6px}
+.handrow.opp .card{--w:54px}
+.midrow{display:flex;align-items:center;justify-content:center;gap:40px;flex:1;position:relative}
+.talonbox{display:flex;flex-direction:column;align-items:center;gap:8px}
+.talonbox .stack{position:relative;width:74px;height:108px}
+.talonbox .stack .card{position:absolute;top:0;left:0}
+.talonbox .turnup{position:absolute;left:54px;top:8px;transform:rotate(90deg);transform-origin:left center}
+.talonbox .count{font-size:12px;letter-spacing:1px;opacity:.75;text-transform:uppercase}
+.trickzone{display:flex;gap:18px;min-width:200px;justify-content:center;min-height:130px;align-items:center}
+.trickzone .slot{position:relative}
+.trickzone .lbl{position:absolute;top:-20px;left:0;right:0;text-align:center;font-size:11px;opacity:.6;letter-spacing:1px;text-transform:uppercase}
+.toast{position:absolute;left:50%;top:14px;transform:translateX(-50%);background:rgba(8,18,13,.9);border:1px solid var(--gold);color:var(--cream);padding:9px 16px;border-radius:30px;font-weight:700;font-size:14px;opacity:0;transition:.3s;pointer-events:none;z-index:5;text-align:center}
+.toast.show{opacity:1}
+.actbar{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;padding:8px 0 4px;min-height:30px}
+.capt{position:absolute;font-size:11px;opacity:.7;letter-spacing:.5px}
+.capt.me{bottom:8px;right:14px}
+.capt.opp{top:8px;right:14px}
+
+/* modal */
+.modal-bg{position:fixed;inset:0;z-index:80;background:rgba(5,12,8,.72);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;padding:18px;animation:fade .25s both}
+.modal-bg.show{display:flex}
+.modal{width:min(520px,100%);max-height:90vh;overflow:auto;border-radius:20px;border:1px solid var(--gold);background:linear-gradient(180deg,#14302410,#0c2018);background-color:#102a20;box-shadow:0 30px 80px -20px #000;padding:30px}
+.modal h2{font-family:var(--serif);font-size:30px;font-weight:900;margin-bottom:4px}
+.modal .x{position:absolute;top:16px;right:18px;font-size:24px;opacity:.6;cursor:pointer}
+.endbig{font-family:var(--serif);font-size:46px;font-weight:900;text-align:center;line-height:1}
+.endbig.win{color:var(--gold-soft)}
+.endbig.lose{color:#d99}
+
+/* lists */
+.list{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;align-items:center;gap:13px;padding:13px 15px;border:1px solid var(--line);border-radius:13px;background:rgba(247,240,223,.025)}
+.row .av{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;font-weight:800;color:#0c2018;background:linear-gradient(135deg,var(--gold-soft),var(--gold-deep));flex:0 0 auto}
+.row .meta{flex:1;min-width:0}
+.row .meta b{display:block;font-size:15px}
+.row .meta span{font-size:12.5px;opacity:.7}
+.row .right{display:flex;gap:8px;align-items:center}
+.badge{font-size:11px;padding:3px 9px;border-radius:20px;border:1px solid var(--line);letter-spacing:.5px}
+.badge.win{color:#a8d9a0;border-color:#3c6b3a}
+.badge.loss{color:#e0a0a0;border-color:#6b3a3a}
+.empty{text-align:center;padding:40px 20px;color:var(--cream-2);opacity:.6}
+
+.rules-cols{columns:2;column-gap:36px}
+.rules h3{font-family:var(--serif);color:var(--gold-soft);font-size:20px;margin:18px 0 6px;break-after:avoid}
+.rules p,.rules li{font-size:14.5px;line-height:1.6;color:var(--cream-2);margin-bottom:8px}
+.rules ul{padding-left:18px}
+.rules table{width:100%;border-collapse:collapse;margin:8px 0;font-size:14px}
+.rules td{border-bottom:1px solid var(--line);padding:6px 4px}
+.rules td:last-child{text-align:right;color:var(--gold-soft);font-weight:700}
+
+.note{font-size:12.5px;color:var(--cream-2);opacity:.7;line-height:1.5}
+.diffbtns,.targetbtns{display:flex;gap:8px;flex-wrap:wrap}
+.diffbtns button,.targetbtns button{flex:1;padding:12px;border-radius:11px;border:1px solid var(--line);font-weight:700;transition:.16s;min-width:90px}
+.diffbtns button.on,.targetbtns button.on{border-color:var(--gold);background:rgba(201,161,74,.14);color:var(--gold-soft)}
+
+@media(max-width:860px){
+  .hero-grid{grid-template-columns:1fr}.hero-card-stack{display:none}
+  .modes{grid-template-columns:1fr}.howto{grid-template-columns:1fr 1fr}
+  .grid2{grid-template-columns:1fr}.rules-cols{columns:1}
+  nav.top a:not(.icon-only){display:none}
+}
+@media(max-width:520px){
+  .howto{grid-template-columns:1fr}
+  .card{--w:62px}.handrow.opp .card{--w:46px}
+  .talonbox .stack{width:62px}.talonbox .turnup{left:46px}
+  .midrow{gap:14px}.trickzone{gap:10px}
+}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+<!-- ============ HEADER ============ -->
+<header class="bar">
+  <div class="wrap">
+    <div class="brand" onclick="go('home')">
+      <svg class="owl" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+        <path d="M32 6c-9 0-15 5-16 13-4 2-6 6-6 11 0 12 9 22 22 22s22-10 22-22c0-5-2-9-6-11C47 11 41 6 32 6Z" fill="#123026" stroke="#c9a14a" stroke-width="2"/>
+        <circle cx="23" cy="28" r="8" fill="#f4ebd6" stroke="#c9a14a" stroke-width="2"/>
+        <circle cx="41" cy="28" r="8" fill="#f4ebd6" stroke="#c9a14a" stroke-width="2"/>
+        <circle cx="23" cy="28" r="3.4" fill="#16261d"/><circle cx="41" cy="28" r="3.4" fill="#16261d"/>
+        <path d="M32 33l-4 6h8l-4-6Z" fill="#c9a14a"/>
+        <path d="M20 44c4 4 8 4 12 4s8 0 12-4" stroke="#c9a14a" stroke-width="2" fill="none" stroke-linecap="round"/>
+      </svg>
+      <div>
+        <b>La&nbsp;<i>Chouine</i></b>
+        <small>la-chouine.com</small>
+      </div>
+    </div>
+    <nav class="top">
+      <a onclick="go('home')" data-nav="home">Accueil</a>
+      <a onclick="go('play')" data-nav="play">Jouer</a>
+      <a onclick="go('friends')" data-nav="friends" class="auth-only">Amis</a>
+      <a onclick="go('profile')" data-nav="profile" class="auth-only">Profil</a>
+      <a onclick="go('rules')" data-nav="rules">Règles</a>
+      <span id="authArea"></span>
+    </nav>
+  </div>
+</header>
+
+<!-- ============ HOME ============ -->
+<section id="view-home" class="view show">
+  <div class="wrap hero">
+    <div class="hero-grid">
+      <div>
+        <span class="kicker">◑ Jeu du Val de Loir · depuis le XVIᵉ siècle</span>
+        <h1>Le jeu de cartes de la <em>Vallée du Loir</em>.</h1>
+        <p class="lead">La Chouine se joue à deux, avec 32 cartes, des brisques à capturer et des annonces à dénicher. Affrontez l'ordinateur en quelques secondes — ou créez un compte pour défier vos amis et suivre vos parties.</p>
+        <div class="cta">
+          <button class="btn btn-gold" onclick="go('play')">Jouer maintenant</button>
+          <button class="btn btn-ghost" onclick="go('rules')">Apprendre les règles</button>
+        </div>
+        <div class="statline">
+          <div><b>32</b><span>cartes</span></div>
+          <div><b>8</b><span>brisques</span></div>
+          <div><b>2</b><span>joueurs</span></div>
+          <div><b>50</b><span>la quinte</span></div>
+        </div>
+      </div>
+      <div class="hero-card-stack" id="heroFan"></div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <h2 class="section-title">Trois façons de jouer</h2>
+    <p class="section-sub">Aucune inscription n'est nécessaire pour jouer contre l'ordinateur. Inscrivez-vous pour débloquer le jeu entre amis et l'historique.</p>
+    <div class="modes">
+      <div class="mode" onclick="startQuick('ai')">
+        <span class="tag">Sans inscription</span>
+        <div class="ic">🤖</div>
+        <h3>Contre l'ordinateur</h3>
+        <p>Trois niveaux de difficulté. Idéal pour apprendre les règles ou s'entraîner avant un tournoi.</p>
+        <button class="btn btn-gold btn-sm">Affronter l'ordinateur</button>
+      </div>
+      <div class="mode" onclick="go('play')">
+        <span class="tag">Sur un même écran</span>
+        <div class="ic">👥</div>
+        <h3>À deux, en local</h3>
+        <p>Passez l'appareil de main en main. Parfait pour une partie en famille autour de la table.</p>
+        <button class="btn btn-ghost btn-sm">Partie locale</button>
+      </div>
+      <div class="mode" onclick="requireAuthThen('friends')">
+        <span class="tag">Compte requis</span>
+        <div class="ic">🌐</div>
+        <h3>Entre amis</h3>
+        <p>Cherchez des joueurs, ajoutez-les en amis et lancez une partie. Vos résultats sont enregistrés.</p>
+        <button class="btn btn-ghost btn-sm">Trouver des amis</button>
+      </div>
+    </div>
+
+    <h2 class="section-title">Comment ça marche</h2>
+    <div class="howto">
+      <div class="step"><b>1</b><h4>La donne</h4><p>5 cartes chacun. La 11ᵉ carte retournée fixe l'atout. Le reste forme le talon.</p></div>
+      <div class="step"><b>2</b><h4>Les annonces</h4><p>Mariage, tierce, quarteron, quinte… déclarées en gagnant la main rapportent des points bonus.</p></div>
+      <div class="step"><b>3</b><h4>Les plis</h4><p>Tant qu'il reste du talon, on joue librement. Une fois vide, il faut fournir, monter et couper.</p></div>
+      <div class="step"><b>4</b><h4>Le décompte</h4><p>On additionne brisques, honneurs, annonces et le dix de der. Le plus haut total rafle le point.</p></div>
+    </div>
+  </div>
+
+  <footer><div class="wrap">
+    <span>◑ La Chouine — hébergé sur <b>la-chouine.com</b></span>
+    <span>Jeu historique de la Vallée du Loir · Championnat du monde à Lavardin</span>
+  </div></footer>
+</section>
+
+<!-- ============ PLAY ============ -->
+<section id="view-play" class="view">
+  <div class="wrap" style="padding:36px 0 60px">
+    <h2 class="section-title">Lancer une partie</h2>
+    <p class="section-sub">Choisissez votre mode, votre format et c'est parti.</p>
+    <div class="grid2">
+      <div class="panel">
+        <h3 style="font-family:var(--serif);font-size:22px;margin-bottom:14px">🤖 Contre l'ordinateur</h3>
+        <div class="field"><label>Difficulté</label>
+          <div class="diffbtns" id="diffBtns">
+            <button data-diff="easy">Débutant</button>
+            <button data-diff="normal" class="on">Confirmé</button>
+            <button data-diff="hard">Expert</button>
+          </div>
+        </div>
+        <div class="field"><label>Partie en</label>
+          <div class="targetbtns" id="targetBtns">
+            <button data-target="3" class="on">3 points</button>
+            <button data-target="5">5 points</button>
+          </div>
+        </div>
+        <button class="btn btn-gold" style="width:100%;margin-top:6px" onclick="startConfiguredAI()">Commencer</button>
+        <p class="note" style="margin-top:12px">Disponible sans inscription. Connecté, le résultat est ajouté à votre historique.</p>
+      </div>
+      <div class="panel">
+        <h3 style="font-family:var(--serif);font-size:22px;margin-bottom:14px">👥 À deux, en local</h3>
+        <div class="field"><label>Nom du joueur 1</label><input id="loc1" maxlength="16" placeholder="Joueur 1"></div>
+        <div class="field"><label>Nom du joueur 2</label><input id="loc2" maxlength="16" placeholder="Joueur 2"></div>
+        <div class="field"><label>Partie en</label>
+          <div class="targetbtns" id="targetBtns2">
+            <button data-target="3" class="on">3 points</button>
+            <button data-target="5">5 points</button>
+          </div>
+        </div>
+        <button class="btn btn-ghost" style="width:100%" onclick="startLocal()">Commencer</button>
+        <p class="note" style="margin-top:12px">Chacun joue à son tour sur le même appareil ; les cartes de l'adversaire sont masquées entre les tours.</p>
+      </div>
+    </div>
+    <div class="panel" style="margin-top:18px">
+      <h3 style="font-family:var(--serif);font-size:22px;margin-bottom:6px">🌐 Entre amis</h3>
+      <p class="section-sub" style="margin-bottom:14px">Défiez un ami de votre liste. <span id="onlineAuthMsg"></span></p>
+      <div id="friendQuickList" class="list"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FRIENDS ============ -->
+<section id="view-friends" class="view">
+  <div class="wrap" style="padding:36px 0 60px">
+    <h2 class="section-title">Amis &amp; joueurs</h2>
+    <p class="section-sub">Recherchez des joueurs par pseudo, envoyez des invitations, puis lancez une partie.</p>
+    <div class="grid2">
+      <div class="panel">
+        <div class="field"><label>Rechercher un joueur</label>
+          <input id="searchPlayer" placeholder="Tapez un pseudo…" oninput="renderSearch()"></div>
+        <div id="searchResults" class="list"></div>
+      </div>
+      <div class="panel">
+        <div class="tabs">
+          <button class="on" data-ftab="friends" onclick="setFTab('friends')">Mes amis</button>
+          <button data-ftab="requests" onclick="setFTab('requests')">Invitations <span id="reqCount"></span></button>
+        </div>
+        <div id="friendsPane" class="list"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ PROFILE ============ -->
+<section id="view-profile" class="view">
+  <div class="wrap" style="padding:36px 0 60px">
+    <div style="display:flex;align-items:center;gap:18px;margin-bottom:26px">
+      <div class="av" id="profAv" style="width:64px;height:64px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:26px;color:#0c2018;background:linear-gradient(135deg,var(--gold-soft),var(--gold-deep))"></div>
+      <div>
+        <h2 class="section-title" id="profName" style="margin:0"></h2>
+        <p class="section-sub" id="profSince" style="margin:0"></p>
+      </div>
+      <div style="flex:1"></div>
+      <button class="btn btn-ghost btn-sm" onclick="logout()">Se déconnecter</button>
+    </div>
+    <div class="statline" id="profStats" style="margin:0 0 26px"></div>
+    <h3 style="font-family:var(--serif);font-size:24px;margin-bottom:14px">Historique des parties</h3>
+    <div id="historyList" class="list"></div>
+  </div>
+</section>
+
+<!-- ============ RULES ============ -->
+<section id="view-rules" class="view">
+  <div class="wrap" style="padding:36px 0 60px">
+    <h2 class="section-title">Les règles de la Chouine</h2>
+    <p class="section-sub">Version classique à deux joueurs, telle que pratiquée dans la Vallée du Loir.</p>
+    <div class="panel rules">
+      <div class="rules-cols">
+        <h3>Le matériel</h3>
+        <p>Un jeu de 32 cartes (7, 8, 9, 10, Valet, Dame, Roi, As) dans les quatre couleurs : ♠ pique, ♥ cœur, ♦ carreau, ♣ trèfle.</p>
+        <h3>Ordre &amp; valeur des cartes</h3>
+        <table>
+          <tr><td>As</td><td>11 pts</td></tr>
+          <tr><td>Dix</td><td>10 pts</td></tr>
+          <tr><td>Roi</td><td>4 pts</td></tr>
+          <tr><td>Dame</td><td>3 pts</td></tr>
+          <tr><td>Valet</td><td>2 pts</td></tr>
+          <tr><td>9, 8, 7</td><td>0 pt</td></tr>
+        </table>
+        <p>Pour remporter un pli, l'ordre de force est : As &gt; 10 &gt; Roi &gt; Dame &gt; Valet &gt; 9 &gt; 8 &gt; 7. Les <b>As</b> et les <b>Dix</b> sont les <b>brisques</b>, les cartes qui font les points.</p>
+        <h3>La donne &amp; l'atout</h3>
+        <p>Chaque joueur reçoit 5 cartes. La 11ᵉ carte est retournée : sa couleur devient l'<b>atout</b> du coup. Le reste forme le talon. Le joueur qui possède le <b>7 d'atout</b> peut l'échanger contre la retourne.</p>
+        <h3>Le déroulement</h3>
+        <p><b>Tant qu'il reste des cartes au talon :</b> on joue librement, sans obligation de fournir. Le gagnant du pli pioche une carte, puis l'adversaire ; on repasse ainsi à 5 cartes. Le gagnant entame le pli suivant.</p>
+        <p><b>Quand le talon est vide :</b> il faut fournir à la couleur demandée, monter (jouer plus fort) si l'atout est demandé, et couper si l'on n'a pas la couleur.</p>
+        <h3>Les annonces</h3>
+        <p>Déclarées par le joueur qui vient de gagner la main, elles rapportent des points bonus. À l'atout, les trois premières valent double.</p>
+        <table>
+          <tr><td>Mariage (R + D)</td><td>20 / 40</td></tr>
+          <tr><td>Tierce (R + D + V)</td><td>30 / 60</td></tr>
+          <tr><td>Quarteron (A + R + D + V)</td><td>40 / 80</td></tr>
+          <tr><td>Quinte (5 brisques)</td><td>50</td></tr>
+          <tr><td>Chouine (A+10+R+D+V)</td><td>gagne le coup</td></tr>
+        </table>
+        <h3>Le décompte du coup</h3>
+        <p>Chaque joueur additionne la valeur des cartes de ses plis, ses annonces, et <b>10 points pour le dernier pli</b> (« dix de der »). Le plus haut total remporte 1 point de partie.</p>
+        <h3>La victoire</h3>
+        <p>On joue généralement en 3 ou 5 points. Le premier qui atteint le total convenu gagne le match. Une <b>chouine</b> (A, 10, R, D, V d'une même couleur) fait gagner le coup immédiatement.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ GAME TABLE ============ -->
+<section id="view-game">
+  <div class="gtop">
+    <button class="btn btn-ghost btn-sm" onclick="quitGame()">← Quitter</button>
+    <div class="spacer"></div>
+    <div class="who" id="oppTag"></div>
+    <div class="scorepill"><span id="sNameA">—</span> <b id="sA">0</b></div>
+    <div class="scorepill"><b id="sB">0</b> <span id="sNameB">—</span></div>
+    <div class="who" id="meTag" style="margin-left:auto"></div>
+  </div>
+  <div class="felt">
+    <div class="toast" id="toast"></div>
+    <div class="handrow opp" id="oppHand"></div>
+    <div class="midrow">
+      <div class="talonbox">
+        <div class="stack" id="talonStack"></div>
+        <div class="count" id="talonCount"></div>
+      </div>
+      <div class="trickzone" id="trickZone"></div>
+      <div class="capt opp" id="captOpp"></div>
+      <div class="capt me" id="captMe"></div>
+    </div>
+    <div class="actbar" id="actBar"></div>
+    <div class="handrow me" id="myHand"></div>
+  </div>
+</section>
+
+<!-- ============ MODALS ============ -->
+<div class="modal-bg" id="modalBg"><div class="modal" id="modalBox" style="position:relative"></div></div>
+
+<script>
+/* ================= STORAGE (graceful: localStorage on real domain, memory fallback in sandbox) ================= */
+const Store = (()=>{
+  let mem = {}; let useLS = false;
+  try{ const k='__chouine_t'; localStorage.setItem(k,'1'); localStorage.removeItem(k); useLS=true; }catch(e){ useLS=false; }
+  return {
+    get(k){ try{ if(useLS){const v=localStorage.getItem(k); return v?JSON.parse(v):null;} }catch(e){} return mem[k]??null; },
+    set(k,v){ try{ if(useLS){localStorage.setItem(k,JSON.stringify(v)); return;} }catch(e){} mem[k]=v; },
+    persistent: ()=>useLS
+  };
+})();
+
+/* ================= USERS & AUTH ================= */
+const SUITS=['pique','coeur','carreau','trefle'];
+const SUITSYM={pique:'♠',coeur:'♥',carreau:'♦',trefle:'♣'};
+const RANKS=['7','8','9','10','V','D','R','A'];
+const ORDER={'7':0,'8':1,'9':2,'V':3,'D':4,'R':5,'10':6,'A':7};
+const PTS={'7':0,'8':0,'9':0,'V':2,'D':3,'R':4,'10':10,'A':11};
+
+function uid(){return 'u'+Math.random().toString(36).slice(2,9)}
+function hash(s){let h=0;for(let i=0;i<s.length;i++){h=(h*31+s.charCodeAt(i))|0}return h+''}
+function loadUsers(){let u=Store.get('chouine_users');if(!u){u=seedUsers();Store.set('chouine_users',u)}return u}
+function saveUsers(u){Store.set('chouine_users',u)}
+function seedUsers(){
+  const names=['Margaux','LucasD','La_Vigne','Tonton72','Solène_C','Bertrand','PiocheFolle','MimiLoir'];
+  const o={};
+  names.forEach(n=>{const w=Math.floor(Math.random()*40),l=Math.floor(Math.random()*35);
+    o[n.toLowerCase()]={id:uid(),name:n,pass:null,seeded:true,friends:[],requests:[],
+      stats:{wins:w,losses:l,plays:w+l},history:[],joined:Date.now()-Math.random()*3e10};});
+  return o;
+}
+let USERS=loadUsers();
+let ME=null;
+(function restore(){const id=Store.get('chouine_session');if(id){for(const k in USERS)if(USERS[k].id===id){ME=USERS[k];break}}})();
+
+function refreshUser(){ if(!ME) return; USERS=loadUsers(); for(const k in USERS) if(USERS[k].id===ME.id){ME=USERS[k];break} }
+function commit(){ if(ME) USERS[ME.name.toLowerCase()]=ME; saveUsers(USERS); }
+
+function renderAuthArea(){
+  const el=document.getElementById('authArea');
+  document.querySelectorAll('.auth-only').forEach(a=>a.style.display=ME?'':'none');
+  if(ME){
+    el.innerHTML=`<div class="userchip" onclick="go('profile')"><div class="av">${initials(ME.name)}</div><span>${esc(ME.name)}</span></div>`;
+  }else{
+    el.innerHTML=`<button class="btn btn-ghost btn-sm" onclick="openAuth()">Se connecter</button>`;
+  }
+  const oam=document.getElementById('onlineAuthMsg');
+  if(oam) oam.innerHTML = ME?'' : `<a onclick="openAuth()" style="color:var(--gold-soft);cursor:pointer;text-decoration:underline">Connectez-vous</a> pour jouer en ligne.`;
+}
+function initials(n){return n.replace(/[^A-Za-zÀ-ÿ0-9]/g,'').slice(0,2).toUpperCase()}
+function esc(s){return (s+'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+
+/* ----- Auth modal ----- */
+function openAuth(tab='login'){
+  modal(`
+    <div class="x" onclick="closeModal()">×</div>
+    <h2>${tab==='login'?'Content de vous revoir':'Rejoindre la table'}</h2>
+    <p class="section-sub" style="margin-bottom:18px">${tab==='login'?'Connectez-vous pour retrouver vos amis et votre historique.':'Créez un compte gratuit pour jouer en ligne.'}</p>
+    <div class="tabs">
+      <button class="${tab==='login'?'on':''}" onclick="openAuth('login')">Connexion</button>
+      <button class="${tab==='register'?'on':''}" onclick="openAuth('register')">Inscription</button>
+    </div>
+    <div class="field"><label>Pseudo</label><input id="auU" maxlength="16" placeholder="Votre pseudo"></div>
+    <div class="field"><label>Mot de passe</label><input id="auP" type="password" placeholder="••••••••"></div>
+    <div class="err" id="auErr"></div>
+    <button class="btn btn-gold" style="width:100%" onclick="${tab==='login'?'doLogin()':'doRegister()'}">${tab==='login'?'Se connecter':'Créer mon compte'}</button>
+    <p class="note" style="margin-top:14px">${Store.persistent()?'Vos données sont enregistrées sur cet appareil.':'⚠ Aperçu : le stockage durable est désactivé ici. Hébergé sur la-chouine.com, vos comptes seront conservés.'}</p>
+  `);
+  setTimeout(()=>document.getElementById('auU')?.focus(),50);
+}
+function doRegister(){
+  const u=val('auU').trim(), p=val('auP'); const e=document.getElementById('auErr');
+  if(u.length<2)return e.textContent='Pseudo trop court.';
+  if(p.length<3)return e.textContent='Mot de passe trop court.';
+  if(USERS[u.toLowerCase()])return e.textContent='Ce pseudo est déjà pris.';
+  const nu={id:uid(),name:u,pass:hash(p),seeded:false,friends:[],requests:[],stats:{wins:0,losses:0,plays:0},history:[],joined:Date.now()};
+  USERS[u.toLowerCase()]=nu; ME=nu; commit(); Store.set('chouine_session',nu.id);
+  closeModal(); renderAuthArea(); go('play'); toastTop('Bienvenue, '+u+' !');
+}
+function doLogin(){
+  const u=val('auU').trim(), p=val('auP'); const e=document.getElementById('auErr');
+  const rec=USERS[u.toLowerCase()];
+  if(!rec)return e.textContent="Aucun compte avec ce pseudo.";
+  if(rec.seeded||rec.pass!==hash(p))return e.textContent="Mot de passe incorrect.";
+  ME=rec; Store.set('chouine_session',rec.id); closeModal(); renderAuthArea(); go('profile');
+}
+function logout(){ME=null;Store.set('chouine_session',null);renderAuthArea();go('home')}
+function val(id){return document.getElementById(id).value}
+
+function requireAuthThen(view){ if(ME)go(view); else openAuth('register'); }
+
+/* ================= ROUTER ================= */
+function go(view){
+  if((view==='friends'||view==='profile')&&!ME){openAuth('login');return}
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('show'));
+  document.getElementById('view-'+view).classList.add('show');
+  document.querySelectorAll('nav.top a[data-nav]').forEach(a=>a.classList.toggle('active',a.dataset.nav===view));
+  window.scrollTo(0,0);
+  if(view==='friends'){renderSearch();renderFriends()}
+  if(view==='profile')renderProfile();
+  if(view==='play')renderFriendQuick();
+}
+
+/* ================= FRIENDS ================= */
+let FTAB='friends';
+function setFTab(t){FTAB=t;document.querySelectorAll('[data-ftab]').forEach(b=>b.classList.toggle('on',b.dataset.ftab===t));renderFriends()}
+function allOthers(){return Object.values(USERS).filter(u=>u.id!==ME?.id)}
+function isFriend(u){return ME?.friends?.includes(u.id)}
+function userById(id){return Object.values(USERS).find(u=>u.id===id)}
+
+function renderSearch(){
+  if(!ME)return;
+  const q=(document.getElementById('searchPlayer')?.value||'').toLowerCase().trim();
+  let list=allOthers();
+  if(q)list=list.filter(u=>u.name.toLowerCase().includes(q));
+  list=list.slice(0,12);
+  const box=document.getElementById('searchResults');
+  if(!list.length){box.innerHTML='<div class="empty">Aucun joueur trouvé.</div>';return}
+  box.innerHTML=list.map(u=>{
+    const f=isFriend(u);
+    const pending=u.requests?.some(r=>r.from===ME.id);
+    return `<div class="row"><div class="av">${initials(u.name)}</div>
+      <div class="meta"><b>${esc(u.name)}</b><span>${u.stats.wins} victoires · ${u.stats.plays} parties</span></div>
+      <div class="right">${ f?'<span class="badge win">Ami</span>'
+        : pending?'<span class="badge">Invitation envoyée</span>'
+        : `<button class="btn btn-gold btn-sm" onclick="addFriend('${u.id}')">+ Ajouter</button>`}</div></div>`;
+  }).join('');
+}
+function addFriend(id){
+  refreshUser(); const target=userById(id); if(!target)return;
+  if(target.seeded){
+    // friendly bots accept instantly
+    if(!ME.friends.includes(target.id))ME.friends.push(target.id);
+    if(!target.friends.includes(ME.id))target.friends.push(ME.id);
+    USERS[target.name.toLowerCase()]=target; commit();
+    toastTop(target.name+' a accepté votre invitation !');
+  }else{
+    if(!target.requests.some(r=>r.from===ME.id))target.requests.push({from:ME.id,name:ME.name});
+    USERS[target.name.toLowerCase()]=target; saveUsers(USERS);
+    toastTop('Invitation envoyée à '+target.name);
+  }
+  renderSearch();renderFriends();
+}
+function acceptReq(fromId){
+  refreshUser(); const from=userById(fromId); if(!from)return;
+  if(!ME.friends.includes(fromId))ME.friends.push(fromId);
+  if(!from.friends.includes(ME.id))from.friends.push(ME.id);
+  ME.requests=ME.requests.filter(r=>r.from!==fromId);
+  USERS[from.name.toLowerCase()]=from; commit(); renderFriends();
+}
+function declineReq(fromId){refreshUser();ME.requests=ME.requests.filter(r=>r.from!==fromId);commit();renderFriends()}
+function renderFriends(){
+  if(!ME)return; refreshUser();
+  const rc=document.getElementById('reqCount');
+  if(rc)rc.textContent=ME.requests?.length?`(${ME.requests.length})`:'';
+  const box=document.getElementById('friendsPane');
+  if(FTAB==='friends'){
+    const fr=ME.friends.map(userById).filter(Boolean);
+    box.innerHTML=fr.length?fr.map(u=>`<div class="row"><div class="av">${initials(u.name)}</div>
+      <div class="meta"><b>${esc(u.name)}</b><span>${u.stats.wins} victoires</span></div>
+      <div class="right"><button class="btn btn-gold btn-sm" onclick="playFriend('${u.id}')">Jouer</button></div></div>`).join('')
+      :'<div class="empty">Pas encore d\'amis. Recherchez des joueurs à gauche !</div>';
+  }else{
+    const rq=ME.requests||[];
+    box.innerHTML=rq.length?rq.map(r=>`<div class="row"><div class="av">${initials(r.name)}</div>
+      <div class="meta"><b>${esc(r.name)}</b><span>souhaite vous ajouter</span></div>
+      <div class="right"><button class="btn btn-gold btn-sm" onclick="acceptReq('${r.from}')">Accepter</button>
+      <button class="btn btn-ghost btn-sm" onclick="declineReq('${r.from}')">Refuser</button></div></div>`).join('')
+      :'<div class="empty">Aucune invitation en attente.</div>';
+  }
+}
+function renderFriendQuick(){
+  const box=document.getElementById('friendQuickList'); if(!box)return;
+  if(!ME){box.innerHTML='<div class="empty">Connectez-vous pour voir vos amis.</div>';return}
+  refreshUser();
+  const fr=ME.friends.map(userById).filter(Boolean);
+  box.innerHTML=fr.length?fr.map(u=>`<div class="row"><div class="av">${initials(u.name)}</div>
+    <div class="meta"><b>${esc(u.name)}</b><span>${u.stats.wins} victoires · ${u.stats.plays} parties</span></div>
+    <div class="right"><button class="btn btn-gold btn-sm" onclick="playFriend('${u.id}')">Défier</button></div></div>`).join('')
+    :'<div class="empty">Ajoutez des amis depuis l\'onglet <b>Amis</b> pour les défier ici.</div>';
+}
+
+/* ================= PROFILE ================= */
+function renderProfile(){
+  if(!ME)return; refreshUser();
+  document.getElementById('profAv').textContent=initials(ME.name);
+  document.getElementById('profName').textContent=ME.name;
+  const d=new Date(ME.joined);
+  document.getElementById('profSince').textContent='Membre depuis '+d.toLocaleDateString('fr-FR',{month:'long',year:'numeric'});
+  const s=ME.stats, wr=s.plays?Math.round(s.wins/s.plays*100):0;
+  document.getElementById('profStats').innerHTML=`
+    <div><b>${s.plays}</b><span>Parties</span></div>
+    <div><b>${s.wins}</b><span>Victoires</span></div>
+    <div><b>${s.losses}</b><span>Défaites</span></div>
+    <div><b>${wr}%</b><span>Réussite</span></div>`;
+  const h=document.getElementById('historyList');
+  if(!ME.history?.length){h.innerHTML='<div class="empty">Aucune partie jouée pour l\'instant. <a onclick="go(\'play\')" style="color:var(--gold-soft);cursor:pointer">Lancez-en une !</a></div>';return}
+  h.innerHTML=ME.history.slice().reverse().map(g=>{
+    const dt=new Date(g.date).toLocaleDateString('fr-FR',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+    const mlabel={ai:'Ordinateur',local:'Local',friend:'Ami'}[g.mode]||g.mode;
+    return `<div class="row"><div class="av">${g.win?'🏆':'·'}</div>
+      <div class="meta"><b>vs ${esc(g.opp)}</b><span>${mlabel} · ${dt}</span></div>
+      <div class="right"><span class="badge ${g.win?'win':'loss'}">${g.score}</span></div></div>`;
+  }).join('');
+}
+function recordMatch(opp,mode,win,score){
+  if(!ME)return; refreshUser();
+  ME.stats.plays++; win?ME.stats.wins++:ME.stats.losses++;
+  ME.history.push({date:Date.now(),opp,mode,win,score});
+  if(ME.history.length>60)ME.history=ME.history.slice(-60);
+  commit();
+}
+
+/* ================= MODAL / TOAST ================= */
+function modal(html){document.getElementById('modalBox').innerHTML=html;document.getElementById('modalBg').classList.add('show')}
+function closeModal(){document.getElementById('modalBg').classList.remove('show')}
+document.getElementById('modalBg').addEventListener('click',e=>{if(e.target.id==='modalBg')closeModal()});
+let toastT;
+function toastTop(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),2200)}
+
+/* ================= CARD RENDERING ================= */
+function owlSVG(){return `<svg class="owl" viewBox="0 0 64 64" fill="none"><path d="M32 6c-9 0-15 5-16 13-4 2-6 6-6 11 0 12 9 22 22 22s22-10 22-22c0-5-2-9-6-11C47 11 41 6 32 6Z" fill="#0e251c" stroke="#c9a14a" stroke-width="2"/><circle cx="23" cy="28" r="7" fill="#1a3a2c" stroke="#c9a14a" stroke-width="1.5"/><circle cx="41" cy="28" r="7" fill="#1a3a2c" stroke="#c9a14a" stroke-width="1.5"/><circle cx="23" cy="28" r="2.6" fill="#c9a14a"/><circle cx="41" cy="28" r="2.6" fill="#c9a14a"/><path d="M32 32l-3 5h6l-3-5Z" fill="#c9a14a"/></svg>`}
+function isBrisque(c){return c.r==='A'||c.r==='10'}
+function cardEl(card,opts={}){
+  const d=document.createElement('div'); d.className='card';
+  if(opts.back){d.classList.add('back'); d.innerHTML=owlSVG(); return d;}
+  if(card.s==='coeur'||card.s==='carreau')d.classList.add('red');
+  if(opts.trump)d.classList.add('trump');
+  if(opts.sel)d.classList.add('sel');
+  if(opts.dim)d.classList.add('dim');
+  if(opts.playable){d.classList.add('playable');d.onclick=opts.onClick;}
+  const sym=SUITSYM[card.s],rk=card.r;
+  d.innerHTML=`<div class="corner tl"><span class="rk">${rk}</span><span class="su">${sym}</span></div><div class="pip">${sym}</div><div class="corner br"><span class="rk">${rk}</span><span class="su">${sym}</span></div>`;
+  return d;
+}
+function buildHeroFan(){
+  const host=document.getElementById('heroFan'); if(!host)return; host.innerHTML='';
+  const s=[{s:'pique',r:'A'},{s:'coeur',r:'10'},{s:'trefle',r:'R'},{s:'carreau',r:'D'},{s:'coeur',r:'V'}];
+  s.forEach((c,i)=>{const el=cardEl(c,{}); el.classList.add('fan');
+    el.style.setProperty('--w','118px');
+    const ang=(i-(s.length-1)/2)*15;
+    el.style.transform=`translate(-50%,-58%) rotate(${ang}deg)`;
+    el.style.zIndex=i; el.style.animation=`fade .6s ${i*0.08}s both`;
+    el.style.boxShadow='0 20px 40px -16px rgba(0,0,0,.7)';
+    host.appendChild(el);});
+}
+
+/* ================= CONFIG BUTTONS ================= */
+const cfg={diff:'normal',target:3,target2:3};
+function wireGroup(id,key,parse){
+  const g=document.getElementById(id); if(!g)return;
+  g.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
+    g.querySelectorAll('button').forEach(x=>x.classList.remove('on')); b.classList.add('on');
+    cfg[key]=parse(b);
+  }));
+}
+wireGroup('diffBtns','diff',b=>b.dataset.diff);
+wireGroup('targetBtns','target',b=>+b.dataset.target);
+wireGroup('targetBtns2','target2',b=>+b.dataset.target);
+
+/* ================= GAME ENGINE ================= */
+const suitRank={};SUITS.forEach((s,i)=>suitRank[s]=i);
+let G=null;
+function buildDeck(){const d=[];for(const s of SUITS)for(const r of RANKS)d.push({s,r});return d;}
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]];}return a;}
+function sortHand(p){G.players[p].hand.sort((a,b)=>suitRank[a.s]-suitRank[b.s]||ORDER[a.r]-ORDER[b.r]);}
+
+function startQuick(mode){ startGame({mode:'ai',diff:'normal',target:3,oppName:'Ordinateur',names:['Vous','Ordinateur']}); }
+function startConfiguredAI(){ startGame({mode:'ai',diff:cfg.diff,target:cfg.target,oppName:'Ordinateur',names:[ME?ME.name:'Vous','Ordinateur']}); }
+function startLocal(){
+  const n1=(val('loc1')||'').trim()||'Joueur 1', n2=(val('loc2')||'').trim()||'Joueur 2';
+  startGame({mode:'local',target:cfg.target2,oppName:n2,names:[n1,n2]});
+}
+function playFriend(id){
+  const fr=userById(id); if(!fr)return;
+  startGame({mode:'friend',diff:'hard',target:3,oppName:fr.name,oppId:id,names:[ME.name,fr.name]});
+  toastTop('Partie amicale contre '+fr.name);
+}
+
+function startGame(opts){
+  G={mode:opts.mode,diff:opts.diff||'normal',target:opts.target||3,
+     oppName:opts.oppName,oppId:opts.oppId||null,names:opts.names||['Vous',opts.oppName],
+     scores:[0,0],dealer:1,handNo:0,viewPlayer:0,opts};
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('show'));
+  document.getElementById('view-game').classList.add('show');
+  newHand();
+}
+function isAuto(p){return (G.mode==='ai'||G.mode==='friend')&&p===1;}
+
+function newHand(){
+  G.handNo++;
+  G.dealer=G.handNo===1?(Math.random()<.5?0:1):1-G.dealer;
+  const deck=shuffle(buildDeck());
+  G.players=[{won:[],hand:[],declared:new Set(),annonce:0},{won:[],hand:[],declared:new Set(),annonce:0}];
+  const nd=1-G.dealer;
+  for(let i=0;i<5;i++){G.players[nd].hand.push(deck.pop());G.players[G.dealer].hand.push(deck.pop());}
+  G.turnUp=deck.pop(); G.trump=G.turnUp.s; G.talon=deck;
+  G.trick=[]; G.leader=nd; G.turn=nd; G.phase='draw'; G.handOver=false; G.lastTrickWinner=null; G.gatePending=false;
+  sortHand(0); sortHand(1);
+  G.viewPlayer = G.mode==='local'?G.leader:0;
+  proceed();
+  toastTop('Atout : '+SUITSYM[G.trump]+'  —  '+G.names[nd]+' entame');
+}
+
+function trickWinner(led,resp,trump){
+  if(resp.s===trump&&led.s!==trump)return 'resp';
+  if(led.s===trump&&resp.s!==trump)return 'led';
+  if(resp.s===led.s)return ORDER[resp.r]>ORDER[led.r]?'resp':'led';
+  return 'led';
+}
+function legalMoves(p){
+  const hand=G.players[p].hand;
+  if(G.trick.length===0)return hand.slice();
+  const led=G.trick[0].card;
+  if(G.phase==='draw')return hand.slice();
+  const same=hand.filter(c=>c.s===led.s);
+  if(same.length){
+    if(led.s===G.trump){const hi=same.filter(c=>ORDER[c.r]>ORDER[led.r]);return hi.length?hi:same;}
+    return same;
+  }
+  const tr=hand.filter(c=>c.s===G.trump);
+  return tr.length?tr:hand.slice();
+}
+
+function proceed(){
+  if(!G||G.handOver)return;
+  renderGame();
+  const actor=G.turn;
+  if(isAuto(actor)){ setTimeout(()=>{ if(G&&!G.handOver&&G.turn===actor) aiTurn(actor); },780); return; }
+  if(G.mode==='local'&&actor!==G.viewPlayer){ G.gatePending=true; renderGame(); showGate(actor); }
+}
+
+function onPlay(card){
+  const p=G.turn; if(!G||G.handOver||isAuto(p)||G.gatePending)return;
+  if(p!==G.viewPlayer)return;
+  if(!legalMoves(p).includes(card))return;
+  playCard(p,card);
+}
+function playCard(p,card){
+  const h=G.players[p].hand; const i=h.indexOf(card); if(i<0)return; h.splice(i,1);
+  G.trick.push({p,card});
+  if(G.trick.length===2){ renderGame(); setTimeout(resolveTrick,680); }
+  else { G.turn=1-p; proceed(); }
+}
+function resolveTrick(){
+  const led=G.trick[0],resp=G.trick[1];
+  const w=trickWinner(led.card,resp.card,G.trump)==='led'?led.p:resp.p;
+  G.players[w].won.push(led.card,resp.card);
+  G.lastTrickWinner=w; G.trick=[]; G.leader=w; G.turn=w;
+  if(G.phase==='draw'){ drawOne(w); drawOne(1-w); sortHand(0); sortHand(1); if(!G.talon.length&&!G.turnUp)G.phase='final'; }
+  if(G.players[0].hand.length===0&&G.players[1].hand.length===0){ endHand(); return; }
+  if(G.mode==='local')G.viewPlayer=w;
+  proceed();
+}
+function drawOne(p){ if(G.talon.length){G.players[p].hand.push(G.talon.pop());return true;} if(G.turnUp){G.players[p].hand.push(G.turnUp);G.turnUp=null;return true;} return false; }
+
+/* ---- announcements ---- */
+function availableCombos(p){
+  const hand=G.players[p].hand,decl=G.players[p].declared,res=[];
+  for(const s of SUITS){const rs=new Set(hand.filter(c=>c.s===s).map(c=>c.r));
+    if(['A','10','R','D','V'].every(r=>rs.has(r)))res.push({type:'chouine',suit:s,sig:'chouine|'+s,label:'CHOUINE '+SUITSYM[s],value:0});}
+  for(const s of SUITS){const rs=new Set(hand.filter(c=>c.s===s).map(c=>c.r));const dbl=s===G.trump?2:1;let c=null;
+    if(['A','R','D','V'].every(r=>rs.has(r)))c={t:'quarteron',b:40,l:'Quarteron'};
+    else if(['R','D','V'].every(r=>rs.has(r)))c={t:'tierce',b:30,l:'Tierce'};
+    else if(['R','D'].every(r=>rs.has(r)))c={t:'mariage',b:20,l:'Mariage'};
+    if(c){const sig=c.t+'|'+s;if(!decl.has(sig))res.push({type:c.t,suit:s,sig,label:c.l+' '+SUITSYM[s],value:c.b*dbl});}}
+  if(hand.filter(isBrisque).length>=5&&!decl.has('quinte'))res.push({type:'quinte',suit:null,sig:'quinte',label:'Quinte',value:50});
+  return res;
+}
+function declareCombo(p,combo){
+  if(combo.type==='chouine'){ toastTop(G.names[p]+' réalise une CHOUINE !'); endHand(p); return; }
+  G.players[p].annonce+=combo.value; G.players[p].declared.add(combo.sig);
+  toastTop(G.names[p]+' annonce '+combo.label+'  +'+combo.value);
+  renderGame();
+}
+function humanDeclare(sig){
+  const p=G.turn; const combo=availableCombos(p).find(c=>c.sig===sig); if(combo)declareCombo(p,combo);
+}
+function exchangeSeven(){
+  const p=G.turn; if(!G.turnUp||G.phase!=='draw')return;
+  const h=G.players[p].hand; const i=h.findIndex(c=>c.s===G.trump&&c.r==='7'); if(i<0)return;
+  const seven=h[i]; h[i]=G.turnUp; G.turnUp=seven; sortHand(p);
+  toastTop(G.names[p]+' échange le 7 d\'atout'); renderGame();
+}
+
+/* ---- AI ---- */
+function aiTurn(p){
+  if(!G||G.handOver)return;
+  if(G.trick.length===0){
+    const combos=availableCombos(p);
+    const ch=combos.find(c=>c.type==='chouine'); if(ch){declareCombo(p,ch);return;}
+    combos.filter(c=>c.type!=='chouine').forEach(c=>declareCombo(p,c));
+    if(G.turnUp&&G.phase==='draw'&&PTS[G.turnUp.r]>=2&&G.players[p].hand.some(c=>c.s===G.trump&&c.r==='7'))exchangeSeven();
+    setTimeout(()=>{ if(G&&!G.handOver) playCard(p,aiLead(p)); },480);
+  } else {
+    playCard(p,aiRespond(p));
+  }
+}
+function aiLead(p){
+  const hand=G.players[p].hand.slice();
+  const k=c=>(c.s===G.trump?100:0)+(isBrisque(c)?40:0)+PTS[c.r]+ORDER[c.r]*0.1;
+  hand.sort((a,b)=>k(a)-k(b));
+  if(G.diff==='easy'&&Math.random()<0.4)return hand[Math.floor(Math.random()*hand.length)];
+  return hand[0];
+}
+function aiRespond(p){
+  const legal=legalMoves(p),led=G.trick[0].card,stake=PTS[led.r];
+  const k=c=>(isBrisque(c)?40:0)+(c.s===G.trump?20:0)+PTS[c.r]+ORDER[c.r]*0.1;
+  const winners=legal.filter(c=>trickWinner(led,c,G.trump)==='resp').sort((a,b)=>k(a)-k(b));
+  let choice=null;
+  if(winners.length){const cheap=winners[0];const worth=stake>=10||G.phase==='final'||(stake>0&&k(cheap)<=stake+6);if(worth)choice=cheap;}
+  if(!choice)choice=legal.slice().sort((a,b)=>k(a)-k(b))[0];
+  if(G.diff==='easy'&&Math.random()<0.5)choice=legal[Math.floor(Math.random()*legal.length)];
+  else if(G.diff==='normal'&&Math.random()<0.16)choice=legal[Math.floor(Math.random()*legal.length)];
+  return choice;
+}
+
+/* ---- end of hand / match ---- */
+function endHand(forceWinner){
+  G.handOver=true;
+  const cp=[0,1].map(p=>G.players[p].won.reduce((a,c)=>a+PTS[c.r],0));
+  const ann=[G.players[0].annonce,G.players[1].annonce];
+  const der=G.lastTrickWinner; const tot=[cp[0]+ann[0],cp[1]+ann[1]];
+  if(der!=null)tot[der]+=10;
+  let winner;
+  if(forceWinner!=null)winner=forceWinner;
+  else winner=tot[0]>tot[1]?0:(tot[1]>tot[0]?1:-1);
+  if(winner>=0)G.scores[winner]++;
+  const matchWinner=(G.scores[0]>=G.target||G.scores[1]>=G.target)?(G.scores[0]>G.scores[1]?0:1):null;
+  renderGame();
+  showEnd({cp,ann,der,tot,winner,forceWinner:forceWinner!=null,matchWinner});
+}
+function showEnd({cp,ann,der,tot,winner,forceWinner,matchWinner}){
+  const row=p=>`<div class="row"><div class="av">${initials(G.names[p])}</div><div class="meta"><b>${esc(G.names[p])}</b>
+     <span>${cp[p]} pts cartes${ann[p]?` · +${ann[p]} annonces`:''}${der===p?' · +10 der':''}</span></div>
+     <div class="right"><span class="scorepill"><b>${tot[p]}</b></span></div></div>`;
+  let head;
+  if(forceWinner)head=`<div class="endbig win">Chouine !</div><p class="section-sub" style="text-align:center">${esc(G.names[winner])} remporte le coup d'office.</p>`;
+  else if(winner<0)head=`<div class="endbig">Égalité</div><p class="section-sub" style="text-align:center">Personne ne marque ce coup.</p>`;
+  else head=`<p class="section-sub" style="text-align:center;margin-bottom:6px">Coup remporté par</p><div class="endbig win">${esc(G.names[winner])}</div>`;
+  let foot;
+  if(matchWinner!=null){
+    finalizeMatch(matchWinner);
+    const meWon=(G.mode==='local')?null:matchWinner===0;
+    const big=meWon===null?(`<div class="endbig win">${esc(G.names[matchWinner])} gagne&nbsp;!</div>`)
+      :(meWon?`<div class="endbig win">Victoire&nbsp;!</div>`:`<div class="endbig lose">Défaite</div>`);
+    head=`${big}<p class="section-sub" style="text-align:center">Match terminé · ${G.scores[0]} – ${G.scores[1]}</p>`;
+    foot=`<div style="display:flex;gap:10px;margin-top:18px"><button class="btn btn-gold" style="flex:1" onclick="rematch()">Rejouer</button><button class="btn btn-ghost" style="flex:1" onclick="quitGame(true)">Accueil</button></div>`;
+  }else{
+    foot=`<div style="margin-top:18px"><button class="btn btn-gold" style="width:100%" onclick="closeModal();newHand()">Coup suivant →</button></div>`;
+  }
+  modal(`${head}
+    <div style="display:flex;justify-content:center;gap:18px;margin:16px 0">
+      <div class="scorepill"><span>${esc(G.names[0])}</span> <b>${G.scores[0]}</b></div>
+      <div class="scorepill"><b>${G.scores[1]}</b> <span>${esc(G.names[1])}</span></div>
+    </div>
+    <div class="list">${row(0)}${row(1)}</div>${foot}`);
+}
+function finalizeMatch(matchWinner){
+  if(G._recorded)return; G._recorded=true;
+  const score=`${G.scores[0]} – ${G.scores[1]}`;
+  if(ME&&(G.mode==='ai'||G.mode==='friend')){
+    recordMatch(G.oppName,G.mode,matchWinner===0,score);
+    if(G.mode==='friend'&&G.oppId){const fr=userById(G.oppId);if(fr){fr.stats.plays++;matchWinner===0?fr.stats.losses++:fr.stats.wins++;USERS[fr.name.toLowerCase()]=fr;saveUsers(USERS);}}
+  }
+}
+function rematch(){closeModal();startGame(G.opts);}
+function showGate(p){
+  modal(`<div style="text-align:center"><div class="av" style="width:64px;height:64px;border-radius:50%;display:inline-grid;place-items:center;font-weight:800;font-size:24px;color:#0c2018;background:linear-gradient(135deg,var(--gold-soft),var(--gold-deep));margin-bottom:14px">${initials(G.names[p])}</div>
+    <h2>Au tour de ${esc(G.names[p])}</h2><p class="section-sub" style="margin-bottom:18px">Passez l'appareil à ce joueur, puis révélez le jeu.</p>
+    <button class="btn btn-gold" style="width:100%" onclick="G.viewPlayer=${p};G.gatePending=false;closeModal();renderGame()">Voir mon jeu</button></div>`);
+}
+function quitGame(skip){
+  if(!skip&&G&&!G.handOver){
+    modal(`<h2>Quitter la partie ?</h2><p class="section-sub" style="margin-bottom:18px">La partie en cours sera abandonnée.</p>
+      <div style="display:flex;gap:10px"><button class="btn btn-wine" style="flex:1" onclick="closeModal();quitGame(true)">Quitter</button>
+      <button class="btn btn-ghost" style="flex:1" onclick="closeModal()">Continuer</button></div>`);
+    return;
+  }
+  closeModal(); G=null;
+  document.getElementById('view-game').classList.remove('show');
+  go(ME?'profile':'home');
+}
+
+/* ================= TABLE RENDERING ================= */
+function captInfo(p){const won=G.players[p].won;return{plis:won.length/2,briq:won.filter(isBrisque).length,ann:G.players[p].annonce};}
+function renderGame(){
+  if(!G)return;
+  const me=G.viewPlayer,opp=1-me;
+  // header
+  document.getElementById('sNameA').textContent=G.names[0];
+  document.getElementById('sNameB').textContent=G.names[1];
+  document.getElementById('sA').textContent=G.scores[0];
+  document.getElementById('sB').textContent=G.scores[1];
+  document.getElementById('oppTag').innerHTML=`<div class="scorepill">Atout <b style="color:${(G.trump==='coeur'||G.trump==='carreau')?'var(--wine-2)':'var(--cream)'}">${SUITSYM[G.trump]}</b></div>`;
+  document.getElementById('meTag').innerHTML=`<div class="scorepill" style="font-size:13px;font-weight:600">en ${G.target} pts</div>`;
+  // opponent hand (masked)
+  const oh=document.getElementById('oppHand'); oh.innerHTML='';
+  for(let i=0;i<G.players[opp].hand.length;i++)oh.appendChild(cardEl(null,{back:true}));
+  // talon
+  const ts=document.getElementById('talonStack'); ts.innerHTML='';
+  const shown=Math.min(3,G.talon.length+(G.turnUp?1:0));
+  for(let i=0;i<shown;i++){const b=cardEl(null,{back:true});b.style.top=(i*2)+'px';b.style.left=(i*1.5)+'px';ts.appendChild(b);}
+  if(G.turnUp){const tu=cardEl(G.turnUp,{trump:true});tu.classList.add('turnup');ts.appendChild(tu);}
+  document.getElementById('talonCount').textContent=G.phase==='final'?'Talon épuisé':('Talon : '+(G.talon.length+(G.turnUp?1:0)));
+  // trick
+  const tz=document.getElementById('trickZone'); tz.innerHTML='';
+  G.trick.forEach(t=>{const slot=document.createElement('div');slot.className='slot';
+    slot.innerHTML=`<span class="lbl">${esc(G.names[t.p])}</span>`;
+    slot.appendChild(cardEl(t.card,{trump:t.card.s===G.trump})); tz.appendChild(slot);});
+  // captures
+  const ci=captInfo(me),co=captInfo(opp);
+  document.getElementById('captMe').textContent=`${esc(G.names[me])} — plis ${ci.plis} · brisques ${ci.briq}${ci.ann?` · annonces ${ci.ann}`:''}`;
+  document.getElementById('captOpp').textContent=`${esc(G.names[opp])} — plis ${co.plis} · brisques ${co.briq}${co.ann?` · annonces ${co.ann}`:''}`;
+  // my hand
+  const mh=document.getElementById('myHand'); mh.innerHTML='';
+  const myTurn=(G.turn===me)&&!isAuto(me)&&!G.handOver&&!G.gatePending;
+  const legal=myTurn?legalMoves(me):[];
+  if(G.gatePending){ for(let i=0;i<G.players[me].hand.length;i++)mh.appendChild(cardEl(null,{back:true})); }
+  else{
+    G.players[me].hand.forEach(card=>{
+      const playable=myTurn&&legal.includes(card);
+      const el=cardEl(card,{trump:card.s===G.trump,playable,dim:myTurn&&!playable,onClick:()=>onPlay(card)});
+      mh.appendChild(el);
+    });
+  }
+  // action bar
+  const ab=document.getElementById('actBar'); ab.innerHTML='';
+  if(G.handOver){ab.innerHTML='<span class="note">Coup terminé.</span>';return;}
+  if(G.gatePending){ab.innerHTML='';return;}
+  if(myTurn){
+    if(G.trick.length===0){ // leading -> declarations + exchange
+      const combos=availableCombos(me);
+      combos.forEach(c=>{const b=document.createElement('button');b.className='btn '+(c.type==='chouine'?'btn-wine':'btn-gold')+' btn-sm';
+        b.textContent=(c.type==='chouine'?'⚑ ':'+'+c.value+' ')+c.label; b.onclick=()=>humanDeclare(c.sig); ab.appendChild(b);});
+      if(G.turnUp&&G.phase==='draw'&&G.players[me].hand.some(c=>c.s===G.trump&&c.r==='7')){
+        const b=document.createElement('button');b.className='btn btn-ghost btn-sm';b.textContent='Échanger le 7 d\'atout';b.onclick=exchangeSeven;ab.appendChild(b);}
+      const h=document.createElement('span');h.className='note';h.style.alignSelf='center';h.textContent=combos.length?'  Annoncez puis entamez.':'À vous d\'entamer — posez une carte.';ab.appendChild(h);
+    } else {
+      ab.innerHTML=`<span class="note" style="align-self:center">À vous de répondre${G.phase==='final'?' (fournir / monter / couper)':''}.</span>`;
+    }
+  } else if(isAuto(G.turn)){
+    ab.innerHTML='<span class="note" style="align-self:center">🤖 '+esc(G.oppName)+' réfléchit…</span>';
+  } else {
+    ab.innerHTML='<span class="note" style="align-self:center">En attente de '+esc(G.names[G.turn])+'…</span>';
+  }
+}
+
+renderAuthArea();
+buildHeroFan();
+</script>
+</body>
+</html>
