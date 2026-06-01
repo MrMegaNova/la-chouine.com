@@ -25,8 +25,18 @@
   flex: 1;
   justify-content: center;
   flex-wrap: wrap;
+
+  // Pillules de score plus lisibles en jeu
+  :global(.score-pill) {
+    padding: 7px 18px;
+    gap: 10px;
+    b { font-size: 26px; line-height: 1; }
+  }
 }
-.scoreMe { border-color: var(--gold) !important; }
+.scoreMe {
+  border-color: var(--gold) !important;
+  background: rgba(201, 161, 74, 0.1);
+}
 
 .felt {
   flex: 1;
@@ -130,7 +140,13 @@
   align-items: center;
   flex-wrap: wrap;
 }
-.trickSlot { position: relative; }
+.trickSlot {
+  position: relative;
+
+  // Cartes posées : animation alternée gauche / droite
+  &:nth-child(odd)  :global(.playing-card) { animation: card-land-a 0.42s ease-out both; }
+  &:nth-child(even) :global(.playing-card) { animation: card-land-b 0.42s ease-out both; }
+}
 .trickLabel {
   position: absolute;
   top: -20px;
@@ -171,6 +187,12 @@
   gap: 6px;
   min-height: 118px;
   padding: 6px;
+
+  // Distribution au début : monte depuis le bas avec stagger via --i inline
+  :global(.playing-card) {
+    animation: card-deal 0.40s ease-out both;
+    animation-delay: var(--deal-delay, 0ms);
+  }
 }
 
 // Gate screen

@@ -181,6 +181,7 @@ export function GameTable() {
                   playable={playable}
                   dim={myTurn && !playable}
                   onClick={() => onPlay(card)}
+                  style={{ ['--deal-delay' as string]: `${i * 50}ms` }}
                 />
               );
             })

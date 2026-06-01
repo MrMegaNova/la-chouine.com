@@ -11,7 +11,7 @@
   background: linear-gradient(160deg, #fdfaf0, #efe6cf);
   color: $black;
   @include card-shadow;
-  transition: transform 0.18s, box-shadow 0.18s, margin 0.18s;
+  transition: transform 0.32s ease-out, box-shadow 0.28s ease, margin 0.22s ease, opacity 0.22s ease;
 
   &--red { color: $red; }
 
@@ -30,7 +30,10 @@
 
   &--playable {
     cursor: pointer;
-    &:hover { transform: translateY(-12px); }
+    &:hover {
+      transform: translateY(-14px);
+      transition-duration: 0.16s;
+    }
   }
 
   &--dim { opacity: 0.42; filter: grayscale(0.3); }
@@ -63,6 +66,24 @@
   &__rank { font-size: 15px; display: block; }
   &__suit-corner { font-size: 13px; display: block; }
   &__pip { position: absolute; inset: 0; display: grid; place-items: center; font-size: 30px; opacity: 0.95; }
+}
+
+// ─── Animations ───────────────────────────────────────────────────────────────
+
+// Carte jouée sur le tapis : tombe depuis le haut avec légère rotation
+@keyframes card-land-a {
+  from { opacity: 0; transform: translateY(-24px) scale(0.88) rotate(-3deg); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes card-land-b {
+  from { opacity: 0; transform: translateY(-24px) scale(0.88) rotate(3deg); }
+  to   { opacity: 1; transform: none; }
+}
+
+// Carte distribuée en main : monte depuis le bas
+@keyframes card-deal {
+  from { opacity: 0; transform: translateY(32px) scale(0.93); }
+  to   { opacity: 1; transform: none; }
 }
 
 // Variante hero fan
