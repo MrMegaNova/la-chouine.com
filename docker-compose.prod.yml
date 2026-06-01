@@ -9,6 +9,8 @@ services:
   db:
     image: postgres:16-alpine
     restart: always
+    networks:
+      - lachouine
     environment:
       POSTGRES_USER:     ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -24,6 +26,8 @@ services:
   backend:
     image: ghcr.io/mrmeganova/la-chouine.com/backend:${TAG:-latest}
     restart: always
+    networks:
+      - lachouine
     environment:
       NODE_ENV:       production
       PORT:           "3000"
@@ -45,6 +49,7 @@ services:
     image: ghcr.io/mrmeganova/la-chouine.com/frontend:${TAG:-latest}
     restart: always
     networks:
+      - lachouine
       - traefik
     depends_on:
       - backend
