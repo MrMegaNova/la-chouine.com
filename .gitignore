@@ -19,6 +19,7 @@ npm-debug.log*
 Thumbs.db
 .vscode/settings.json
 .idea/
+.claude
 
 # ─── Couverture de tests ──────────────────────────────────────────────────────
 coverage/

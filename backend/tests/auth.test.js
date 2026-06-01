@@ -31,7 +31,7 @@ test('POST /api/auth/register — pseudo invalide', async () => {
   const res = await request.post('/api/auth/register').send({
     username: 'a', // trop court
     email: 'user@test.la-chouine.invalid',
-    password: 'motdepasse123',
+    password: 'Motdepasse123!',
   });
   assert.equal(res.status, 422);
   assert.ok(Array.isArray(res.body.errors));
@@ -41,7 +41,7 @@ test('POST /api/auth/register — email invalide', async () => {
   const res = await request.post('/api/auth/register').send({
     username: 'TestUser1',
     email: 'pas-un-email',
-    password: 'motdepasse123',
+    password: 'Motdepasse123!',
   });
   assert.equal(res.status, 422);
 });
@@ -55,11 +55,23 @@ test('POST /api/auth/register — mot de passe trop court', async () => {
   assert.equal(res.status, 422);
 });
 
+test('POST /api/auth/register — politique mot de passe', async () => {
+  const cases = ['motdepasse123', 'MOTDEPASSE123', 'MotDePasse', 'MotDePasse123'];
+  for (const password of cases) {
+    const res = await request.post('/api/auth/register').send({
+      username: 'TestUser1',
+      email: 'user@test.la-chouine.invalid',
+      password,
+    });
+    assert.equal(res.status, 422, `password "${password}" aurait dû être rejeté`);
+  }
+});
+
 test('POST /api/auth/register — succès', async () => {
   const res = await request.post('/api/auth/register').send({
     username: 'TestUser1',
     email: 'testuser1@test.la-chouine.invalid',
-    password: 'motdepasse123',
+    password: 'Motdepasse123!',
   });
   assert.equal(res.status, 201);
   assert.ok(res.body.message);
@@ -69,7 +81,7 @@ test('POST /api/auth/register — pseudo déjà pris', async () => {
   const res = await request.post('/api/auth/register').send({
     username: 'TestUser1',
     email: 'autre@test.la-chouine.invalid',
-    password: 'motdepasse123',
+    password: 'Motdepasse123!',
   });
   assert.equal(res.status, 409);
 });
@@ -77,7 +89,7 @@ test('POST /api/auth/register — pseudo déjà pris', async () => {
 test('POST /api/auth/login — compte non vérifié', async () => {
   const res = await request.post('/api/auth/login').send({
     username: 'TestUser1',
-    password: 'motdepasse123',
+    password: 'Motdepasse123!',
   });
   assert.equal(res.status, 403);
   assert.equal(res.body.code, 'EMAIL_NOT_VERIFIED');
