@@ -1,0 +1,237 @@
+'use strict';
+
+const express = require('express');
+const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
+const { query, withTransaction } = require('../db');
+const { signToken } = require('../middleware/auth');
+const { sendVerificationEmail, sendPasswordResetEmail } = require('../services/email');
+const config = require('../config');
+
+const router = express.Router();
+
+// ─── Validation ───────────────────────────────────────────────────────────────
+
+const USERNAME_RE = /^[A-Za-z0-9_\-]{2,30}$/;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function validatePassword(password) {
+  if (!password || password.length < 8)
+    return 'Le mot de passe doit contenir au moins 8 caractères.';
+  if (password.length > 128)
+    return 'Mot de passe trop long (128 caractères max).';
+  if (!/[a-z]/.test(password))
+    return 'Le mot de passe doit contenir au moins une lettre minuscule.';
+  if (!/[A-Z]/.test(password))
+    return 'Le mot de passe doit contenir au moins une lettre majuscule.';
+  if (!/[0-9]/.test(password))
+    return 'Le mot de passe doit contenir au moins un chiffre.';
+  if (!/[^A-Za-z0-9]/.test(password))
+    return 'Le mot de passe doit contenir au moins un caractère spécial.';
+  return null;
+}
+
+function validateRegister(body) {
+  const errors = [];
+  const { username, email, password } = body;
+  if (!username || !USERNAME_RE.test(username))
+    errors.push('Le pseudo doit contenir 2 à 30 caractères (lettres, chiffres, _ ou -).');
+  if (!email || !EMAIL_RE.test(email))
+    errors.push('Adresse email invalide.');
+  const pwdError = validatePassword(password);
+  if (pwdError) errors.push(pwdError);
+  return errors;
+}
+
+function generateToken() {
+  return crypto.randomBytes(32).toString('hex'); // 64 chars hex
+}
+
+// ─── POST /api/auth/register ──────────────────────────────────────────────────
+
+router.post('/register', async (req, res) => {
+  const errors = validateRegister(req.body);
+  if (errors.length) return res.status(422).json({ errors });
+
+  const { username, email, password } = req.body;
+
+  try {
+    // Vérifier unicité insensible à la casse
+    const exists = await query(
+      `SELECT 1 FROM users
+       WHERE username = $1 OR LOWER(email) = LOWER($2)
+       LIMIT 1`,
+      [username, email]
+    );
+    if (exists.rows.length) {
+      return res.status(409).json({
+        errors: ['Ce pseudo ou cette adresse email est déjà utilisé.'],
+      });
+    }
+
+    const passwordHash = await bcrypt.hash(password, config.auth.bcryptRounds);
+    const verifyToken = generateToken();
+    const verifyExpires = new Date(Date.now() + config.auth.verifyTokenTtlMs);
+
+    const { rows } = await query(
+      `INSERT INTO users (username, email, password_hash, verify_token, verify_expires)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, username, email`,
+      [username, email, passwordHash, verifyToken, verifyExpires]
+    );
+    const user = rows[0];
+
+    // Envoi de l'email — non bloquant pour la réponse
+    sendVerificationEmail(user.email, verifyToken, user.username).catch(err =>
+      console.error('Erreur envoi email de vérification :', err.message)
+    );
+
+    res.status(201).json({
+      message:
+        'Compte créé. Un email de confirmation a été envoyé à votre adresse.',
+    });
+  } catch (err) {
+    console.error('register error:', err);
+    res.status(500).json({ errors: ['Erreur interne. Réessayez.'] });
+  }
+});
+
+// ─── GET /api/auth/verify-email?token=… ──────────────────────────────────────
+
+router.get('/verify-email', async (req, res) => {
+  const { token } = req.query;
+  if (!token || typeof token !== 'string' || token.length !== 64) {
+    return res.status(400).json({ error: 'Token invalide.' });
+  }
+
+  try {
+    const { rows } = await query(
+      `UPDATE users
+       SET email_verified = TRUE, verify_token = NULL, verify_expires = NULL, updated_at = NOW()
+       WHERE verify_token = $1
+         AND verify_expires > NOW()
+         AND email_verified = FALSE
+       RETURNING id, username`,
+      [token]
+    );
+
+    if (!rows.length) {
+      return res.status(400).json({ error: 'Lien invalide ou expiré.' });
+    }
+
+    res.json({ message: 'Adresse email confirmée. Vous pouvez vous connecter.' });
+  } catch (err) {
+    console.error('verify-email error:', err);
+    res.status(500).json({ error: 'Erreur interne.' });
+  }
+});
+
+// ─── POST /api/auth/login ─────────────────────────────────────────────────────
+
+router.post('/login', async (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) {
+    return res.status(422).json({ error: 'Pseudo et mot de passe requis.' });
+  }
+
+  try {
+    const { rows } = await query(
+      `SELECT id, username, email, password_hash, email_verified
+       FROM users WHERE username = $1`,
+      [username]
+    );
+    const user = rows[0];
+
+    // Toujours appeler bcrypt pour éviter le timing oracle
+    const validHash = user ? user.password_hash : '$2a$12$invalide.hash.pour.eviter.timing';
+    const match = await bcrypt.compare(password, validHash);
+
+    if (!user || !match) {
+      return res.status(401).json({ error: 'Identifiants incorrects.' });
+    }
+    if (!user.email_verified) {
+      return res.status(403).json({
+        error: 'Compte non activé. Vérifiez vos emails.',
+        code: 'EMAIL_NOT_VERIFIED',
+      });
+    }
+
+    const token = signToken(user);
+    res.json({ token, username: user.username, id: user.id });
+  } catch (err) {
+    console.error('login error:', err);
+    res.status(500).json({ error: 'Erreur interne.' });
+  }
+});
+
+// ─── POST /api/auth/forgot-password ──────────────────────────────────────────
+
+router.post('/forgot-password', async (req, res) => {
+  const { email } = req.body;
+  // Réponse identique qu'il existe ou non pour éviter l'énumération
+  const generic = { message: 'Si ce compte existe, un email a été envoyé.' };
+
+  if (!email || !EMAIL_RE.test(email)) {
+    return res.json(generic);
+  }
+
+  try {
+    const { rows } = await query(
+      `SELECT id, username, email FROM users
+       WHERE LOWER(email) = LOWER($1) AND email_verified = TRUE`,
+      [email]
+    );
+    if (!rows.length) return res.json(generic);
+
+    const user = rows[0];
+    const resetToken = generateToken();
+    const resetExpires = new Date(Date.now() + 3_600_000); // 1 h
+
+    await query(
+      `UPDATE users SET reset_token = $1, reset_expires = $2, updated_at = NOW()
+       WHERE id = $3`,
+      [resetToken, resetExpires, user.id]
+    );
+
+    sendPasswordResetEmail(user.email, resetToken, user.username).catch(err =>
+      console.error('Erreur envoi email reset :', err.message)
+    );
+
+    res.json(generic);
+  } catch (err) {
+    console.error('forgot-password error:', err);
+    res.json(generic); // Ne pas révéler l'erreur
+  }
+});
+
+// ─── POST /api/auth/reset-password ───────────────────────────────────────────
+
+router.post('/reset-password', async (req, res) => {
+  const { token, password } = req.body;
+  if (!token || typeof token !== 'string' || token.length !== 64) {
+    return res.status(400).json({ error: 'Token invalide.' });
+  }
+  const pwdError = validatePassword(password);
+  if (pwdError) return res.status(422).json({ error: pwdError });
+
+  try {
+    const passwordHash = await bcrypt.hash(password, config.auth.bcryptRounds);
+    const { rows } = await query(
+      `UPDATE users
+       SET password_hash = $1, reset_token = NULL, reset_expires = NULL, updated_at = NOW()
+       WHERE reset_token = $2 AND reset_expires > NOW()
+       RETURNING id`,
+      [passwordHash, token]
+    );
+
+    if (!rows.length) {
+      return res.status(400).json({ error: 'Lien invalide ou expiré.' });
+    }
+    res.json({ message: 'Mot de passe modifié. Vous pouvez vous connecter.' });
+  } catch (err) {
+    console.error('reset-password error:', err);
+    res.status(500).json({ error: 'Erreur interne.' });
+  }
+});
+
+module.exports = router;

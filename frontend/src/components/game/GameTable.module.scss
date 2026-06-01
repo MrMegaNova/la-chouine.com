@@ -1,0 +1,199 @@
+@use '@/styles/variables' as *;
+
+.table {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  background: radial-gradient(120% 80% at 50% 22%, #1a4233 0%, $felt-1 60%, $felt-edge 100%);
+}
+
+.topBar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(8, 18, 13, 0.5);
+  flex-wrap: wrap;
+}
+
+.scoreRow {
+  display: flex;
+  gap: 8px;
+  flex: 1;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.scoreMe { border-color: var(--gold) !important; }
+
+.felt {
+  flex: 1;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 10px 14px;
+  overflow: hidden;
+}
+
+.toast {
+  position: absolute;
+  left: 50%;
+  top: 14px;
+  transform: translateX(-50%);
+  background: rgba(8, 18, 13, 0.9);
+  border: 1px solid var(--gold);
+  color: var(--cream);
+  padding: 9px 16px;
+  border-radius: 30px;
+  font-weight: 700;
+  font-size: 14px;
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+  z-index: 5;
+  white-space: nowrap;
+}
+.toastVisible { opacity: 1; }
+
+// Opponents
+.oppArea {
+  display: flex;
+  justify-content: center;
+  gap: 22px;
+  flex-wrap: wrap;
+  padding: 6px;
+  min-height: 90px;
+}
+.oppSlot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.oppActive .oppName { color: var(--gold-soft); opacity: 1 !important; }
+.oppName {
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  opacity: 0.65;
+}
+.oppCards { display: flex; gap: 3px; align-items: flex-end; }
+
+// Mid row
+.midRow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 40px;
+  flex: 1;
+  position: relative;
+  flex-wrap: wrap;
+}
+
+.talonBox {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.talonStack {
+  position: relative;
+  width: 74px;
+  height: 108px;
+}
+.talonCard {
+  position: absolute;
+}
+.turnup {
+  position: absolute;
+  left: 54px;
+  top: 8px;
+  transform: rotate(90deg);
+  transform-origin: left center;
+}
+.talonCount {
+  font-size: 12px;
+  letter-spacing: 1px;
+  opacity: 0.75;
+  text-transform: uppercase;
+}
+
+.trickZone {
+  display: flex;
+  gap: 14px;
+  min-width: 200px;
+  justify-content: center;
+  min-height: 130px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.trickSlot { position: relative; }
+.trickLabel {
+  position: absolute;
+  top: -20px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 11px;
+  opacity: 0.6;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.captureInfo {
+  position: absolute;
+  bottom: 8px;
+  right: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+.captLine { font-size: 11px; opacity: 0.65; letter-spacing: 0.5px; }
+.captMe { opacity: 0.9; }
+
+.actBar {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+  padding: 8px 0 4px;
+  min-height: 42px;
+}
+
+.myHand {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 6px;
+  min-height: 118px;
+  padding: 6px;
+}
+
+// Gate screen
+.gate {
+  position: absolute;
+  inset: 0;
+  background: rgba(5, 12, 8, 0.92);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+.gateContent {
+  text-align: center;
+  max-width: 340px;
+  padding: 32px;
+  border: 1px solid var(--gold);
+  border-radius: 20px;
+  background: #102a20;
+}
+
+@media (max-width: 520px) {
+  .midRow { gap: 14px; }
+  .trickZone { gap: 8px; }
+}

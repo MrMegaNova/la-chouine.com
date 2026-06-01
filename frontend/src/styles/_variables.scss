@@ -1,0 +1,61 @@
+// ─── Couleurs ─────────────────────────────────────────────────────────────────
+$felt-1:      #0c2018;
+$felt-2:      #123026;
+$felt-edge:   #081710;
+$ink:         #16261d;
+$cream:       #f4ebd6;
+$cream-2:     #e7d9b6;
+$gold:        #c9a14a;
+$gold-soft:   #d9bd78;
+$gold-deep:   #9c7a2c;
+$wine:        #8a2b2b;
+$wine-2:      #a23535;
+$wine-deep:   #5e1c1c;
+$paper:       #f7f0df;
+$paper-edge:  #d8c79b;
+$red:         #b3262a;
+$black:       #1d2b23;
+
+// ─── Tokens CSS ───────────────────────────────────────────────────────────────
+:root {
+  --felt-1:    #{$felt-1};
+  --felt-2:    #{$felt-2};
+  --felt-edge: #{$felt-edge};
+  --ink:       #{$ink};
+  --cream:     #{$cream};
+  --cream-2:   #{$cream-2};
+  --gold:      #{$gold};
+  --gold-soft: #{$gold-soft};
+  --gold-deep: #{$gold-deep};
+  --wine:      #{$wine};
+  --wine-2:    #{$wine-2};
+  --wine-deep: #{$wine-deep};
+  --paper:     #{$paper};
+  --paper-edge: #{$paper-edge};
+  --red:       #{$red};
+  --black:     #{$black};
+
+  --line:      rgba(201, 161, 74, 0.28);
+  --shadow:    0 18px 40px -18px rgba(0, 0, 0, 0.65);
+  --r:         16px;
+  --serif:     "Fraunces", Georgia, serif;
+  --sans:      "Manrope", system-ui, sans-serif;
+}
+
+// ─── Mixins ───────────────────────────────────────────────────────────────────
+@mixin gold-gradient {
+  background: linear-gradient(135deg, $gold-soft, $gold-deep);
+}
+@mixin felt-background {
+  background: radial-gradient(
+    120% 90% at 50% -10%,
+    #16382a 0%,
+    $felt-1 55%,
+    $felt-edge 100%
+  );
+}
+@mixin card-shadow {
+  box-shadow: 0 6px 14px -6px rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(0, 0, 0, 0.06);
+}
+@mixin transition-fast { transition: 0.18s ease; }
+@mixin transition-med  { transition: 0.25s ease; }

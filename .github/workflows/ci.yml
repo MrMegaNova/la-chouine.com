@@ -1,0 +1,116 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ─── Backend ──────────────────────────────────────────────────────────────────
+  backend:
+    name: Backend (Node.js + PostgreSQL)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: chouine
+          POSTGRES_PASSWORD: chouine_ci_pass
+          POSTGRES_DB: chouine_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U chouine -d chouine_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://chouine:chouine_ci_pass@localhost:5432/chouine_test
+      JWT_SECRET: ci_jwt_secret_not_used_in_prod_change_me
+      JWT_EXPIRES_IN: 7d
+      SMTP_HOST: localhost
+      SMTP_PORT: 1025
+      SMTP_SECURE: "false"
+      SMTP_USER: contact@la-chouine.com
+      SMTP_PASS: ci_smtp_pass
+      SMTP_FROM: "La Chouine <contact@la-chouine.com>"
+      FRONTEND_URL: http://localhost:5173
+      NODE_ENV: test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Run database migrations
+        working-directory: backend
+        run: npm run migrate
+
+      - name: Run tests
+        working-directory: backend
+        run: npm test
+
+  # ─── Frontend (React + TypeScript) ───────────────────────────────────────────
+  frontend:
+    name: Frontend (Vite + React + TypeScript)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Type check
+        working-directory: frontend
+        run: npm run type-check
+
+      - name: Build
+        working-directory: frontend
+        run: npm run build
+
+  # ─── Sécurité ─────────────────────────────────────────────────────────────────
+  security:
+    name: Audit de sécurité npm
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: npm audit (sévérité haute et critique)
+        working-directory: backend
+        run: npm audit --audit-level=high

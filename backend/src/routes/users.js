@@ -1,0 +1,128 @@
+'use strict';
+
+const express = require('express');
+const { query } = require('../db');
+const { requireAuth } = require('../middleware/auth');
+
+const router = express.Router();
+
+// ─── GET /api/users/me ────────────────────────────────────────────────────────
+
+router.get('/me', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await query(
+      `SELECT u.id, u.username, u.email, u.created_at,
+              COALESCE(stats.wins, 0)   AS wins,
+              COALESCE(stats.losses, 0) AS losses,
+              COALESCE(stats.plays, 0)  AS plays
+       FROM users u
+       LEFT JOIN (
+         SELECT gp.user_id,
+                COUNT(*) FILTER (WHERE gp.won = TRUE)  AS wins,
+                COUNT(*) FILTER (WHERE gp.won = FALSE) AS losses,
+                COUNT(*)                                AS plays
+         FROM game_players gp
+         WHERE gp.user_id = $1
+         GROUP BY gp.user_id
+       ) stats ON stats.user_id = u.id
+       WHERE u.id = $1`,
+      [req.user.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Utilisateur introuvable.' });
+    const u = rows[0];
+    res.json({
+      id: u.id,
+      username: u.username,
+      email: u.email,
+      joined: u.created_at,
+      stats: {
+        wins: Number(u.wins),
+        losses: Number(u.losses),
+        plays: Number(u.plays),
+      },
+    });
+  } catch (err) {
+    console.error('GET /users/me error:', err);
+    res.status(500).json({ error: 'Erreur interne.' });
+  }
+});
+
+// ─── GET /api/users/search?q=pseudo ──────────────────────────────────────────
+
+router.get('/search', requireAuth, async (req, res) => {
+  const q = (req.query.q || '').trim();
+  if (q.length < 2) {
+    return res.status(422).json({ error: 'Recherche trop courte (2 caractères min).' });
+  }
+
+  try {
+    const { rows } = await query(
+      `SELECT u.id, u.username,
+              COALESCE(stats.wins, 0) AS wins,
+              COALESCE(stats.plays, 0) AS plays,
+              f.status AS friendship_status,
+              f.requester_id AS friendship_requester
+       FROM users u
+       LEFT JOIN (
+         SELECT gp.user_id,
+                COUNT(*) FILTER (WHERE gp.won = TRUE) AS wins,
+                COUNT(*) AS plays
+         FROM game_players gp GROUP BY gp.user_id
+       ) stats ON stats.user_id = u.id
+       LEFT JOIN friendships f ON (
+         (f.requester_id = $1 AND f.addressee_id = u.id) OR
+         (f.addressee_id = $1 AND f.requester_id = u.id)
+       )
+       WHERE u.id <> $1
+         AND u.email_verified = TRUE
+         AND u.username ILIKE $2
+       ORDER BY u.username
+       LIMIT 20`,
+      [req.user.id, `%${q}%`]
+    );
+    res.json(rows.map(u => ({
+      id: u.id,
+      username: u.username,
+      wins: Number(u.wins),
+      plays: Number(u.plays),
+      friendshipStatus: u.friendship_status || null,
+      friendshipRequester: u.friendship_requester || null,
+    })));
+  } catch (err) {
+    console.error('GET /users/search error:', err);
+    res.status(500).json({ error: 'Erreur interne.' });
+  }
+});
+
+// ─── GET /api/users/history ───────────────────────────────────────────────────
+
+router.get('/history', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await query(
+      `SELECT g.id, g.mode, g.variant, g.player_count, g.target_score,
+              g.created_at AS date, g.ended_at,
+              gp_me.score AS my_score, gp_me.won,
+              (
+                SELECT STRING_AGG(
+                  COALESCE(u2.username, gp2.guest_name), ', '
+                  ORDER BY gp2.seat
+                )
+                FROM game_players gp2
+                LEFT JOIN users u2 ON u2.id = gp2.user_id
+                WHERE gp2.game_id = g.id AND gp2.user_id <> $1
+              ) AS opponents
+       FROM games g
+       JOIN game_players gp_me ON gp_me.game_id = g.id AND gp_me.user_id = $1
+       WHERE g.ended_at IS NOT NULL
+       ORDER BY g.ended_at DESC
+       LIMIT 50`,
+      [req.user.id]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('GET /users/history error:', err);
+    res.status(500).json({ error: 'Erreur interne.' });
+  }
+});
+
+module.exports = router;

@@ -1,0 +1,89 @@
+# Environnement de développement
+# Usage : docker compose up
+#
+# Accès :
+#   Frontend (Vite HMR)  → http://localhost:5173
+#   Backend API          → http://localhost:3000
+#   MailHog (emails)     → http://localhost:8025
+#   PostgreSQL           → localhost:5432
+
+services:
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER:     chouine
+      POSTGRES_PASSWORD: chouine_dev
+      POSTGRES_DB:       chouine_dev
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      # -d obligatoire : pg_isready cherche sinon une base du même nom que l'utilisateur
+      test: ["CMD-SHELL", "pg_isready -U chouine -d chouine_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      target: deps        # image avec toutes les dépendances (incl. dev)
+    restart: unless-stopped
+    # "npm" est dans la liste blanche de l'entrypoint officiel node:alpine
+    # → évite que Node.js tente d'exécuter notre script shell comme du JS
+    command: ["npm", "run", "start:docker-dev"]
+    environment:
+      NODE_ENV:       development
+      PORT:           "3000"
+      DATABASE_URL:   postgresql://chouine:chouine_dev@db:5432/chouine_dev
+      JWT_SECRET:     dev_jwt_secret_please_change_in_production
+      JWT_EXPIRES_IN: 7d
+      SMTP_HOST:      mailhog
+      SMTP_PORT:      "1025"
+      SMTP_SECURE:    "false"
+      SMTP_USER:      contact@la-chouine.com
+      SMTP_PASS:      ""
+      SMTP_FROM:      "La Chouine <contact@la-chouine.com>"
+      FRONTEND_URL:   http://localhost:5173
+    volumes:
+      - ./backend/src:/app/src:ro
+      - ./backend/migrations:/app/migrations:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      target: deps        # image avec toutes les dépendances
+    restart: unless-stopped
+    command: ["npm", "run", "dev"]
+    environment:
+      VITE_API_URL:        http://backend:3000
+      CHOKIDAR_USEPOLLING: "true"   # hot reload fiable sous Docker
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/index.html:/app/index.html
+      - ./frontend/public:/app/public
+      - ./frontend/vite.config.ts:/app/vite.config.ts:ro
+      - ./frontend/tsconfig.json:/app/tsconfig.json:ro
+      - ./frontend/tsconfig.node.json:/app/tsconfig.node.json:ro
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    restart: unless-stopped
+    ports:
+      - "8025:8025"   # interface web
+      - "1025:1025"   # SMTP
+
+volumes:
+  postgres_dev_data:

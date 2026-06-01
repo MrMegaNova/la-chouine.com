@@ -1,0 +1,101 @@
+@use '@/styles/variables' as *;
+
+.bar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  backdrop-filter: blur(10px);
+  background: linear-gradient(180deg, rgba(8,18,13,.85), rgba(8,18,13,.55));
+  border-bottom: 1px solid var(--line);
+}
+
+.inner {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: 66px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  cursor: pointer;
+  user-select: none;
+  text-decoration: none;
+  color: inherit;
+}
+.owl { width: 34px; height: 34px; flex: 0 0 auto; }
+.brandName {
+  font-family: var(--serif);
+  font-weight: 900;
+  font-size: 23px;
+  letter-spacing: 0.3px;
+  line-height: 1;
+  display: block;
+  i { font-style: italic; color: var(--gold-soft); font-weight: 500; }
+}
+.brandSub {
+  font-size: 10px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--gold);
+  opacity: 0.85;
+  margin-top: 2px;
+  display: block;
+}
+
+.nav {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.navLink {
+  padding: 9px 13px;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 14px;
+  opacity: 0.82;
+  transition: 0.18s;
+  cursor: pointer;
+  text-decoration: none;
+  color: inherit;
+  &:hover { opacity: 1; background: rgba(201, 161, 74, 0.1); }
+  &.active { opacity: 1; color: var(--gold-soft); }
+}
+
+.authArea { margin-left: 8px; }
+.userChip {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 8px 6px 6px;
+  border: 1px solid var(--line);
+  border-radius: 30px;
+  cursor: pointer;
+  transition: 0.18s;
+  &:hover { border-color: var(--gold); }
+}
+.avatar {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 13px;
+  color: #0c2018;
+  background: linear-gradient(135deg, var(--gold-soft), var(--gold-deep));
+}
+.userName {
+  font-weight: 700;
+  font-size: 14px;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 860px) {
+  .navLink:not(:last-child) { display: none; }
+}

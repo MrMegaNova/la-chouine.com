@@ -1,0 +1,60 @@
+@use 'variables' as *;
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 12px;
+  padding: 11px 18px;
+  font-weight: 700;
+  font-size: 15px;
+  transition: transform 0.12s, box-shadow 0.2s, background 0.2s;
+  white-space: nowrap;
+  cursor: pointer;
+  border: none;
+
+  &:active { transform: translateY(1px); }
+  &:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  &--gold {
+    @include gold-gradient;
+    color: #16261d;
+    box-shadow: 0 8px 22px -8px rgba(201, 161, 74, 0.7);
+    &:hover { box-shadow: 0 12px 28px -8px rgba(201, 161, 74, 0.85); }
+  }
+  &--ghost {
+    border: 1px solid var(--line);
+    color: var(--cream);
+    &:hover { border-color: var(--gold); background: rgba(201, 161, 74, 0.08); }
+  }
+  &--wine {
+    background: linear-gradient(135deg, $wine-2, $wine-deep);
+    color: var(--cream);
+  }
+  &--sm { padding: 8px 13px; font-size: 13.5px; border-radius: 10px; }
+  &--full { width: 100%; }
+}
+
+// Groupe de boutons toggle (difficulté, target, etc.)
+.btn-group {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+
+  button {
+    flex: 1;
+    padding: 12px;
+    border-radius: 11px;
+    border: 1px solid var(--line);
+    font-weight: 700;
+    min-width: 70px;
+    @include transition-fast;
+
+    &.active {
+      border-color: var(--gold);
+      background: rgba(201, 161, 74, 0.14);
+      color: var(--gold-soft);
+    }
+  }
+}
