@@ -63,6 +63,8 @@ volumes:
   postgres_prod_data:
 
 networks:
+  lachouine:
+    name: lachouine
   traefik:
     name: traefik
     external: true
