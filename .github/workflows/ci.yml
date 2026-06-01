@@ -28,7 +28,11 @@ jobs:
           --health-retries 5
 
     env:
-      DATABASE_URL: postgresql://chouine:chouine_ci_pass@localhost:5432/chouine_test
+      PGHOST:     localhost
+      PGPORT:     "5432"
+      PGUSER:     chouine
+      PGPASSWORD: chouine_ci_pass
+      PGDATABASE: chouine_test
       JWT_SECRET: ci_jwt_secret_not_used_in_prod_change_me
       JWT_EXPIRES_IN: 7d
       SMTP_HOST: localhost

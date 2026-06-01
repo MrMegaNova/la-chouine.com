@@ -13,7 +13,11 @@ module.exports = {
   isProd: process.env.NODE_ENV === 'production',
 
   db: {
-    url: required('DATABASE_URL'),
+    host:     process.env.PGHOST     || 'localhost',
+    port:     parseInt(process.env.PGPORT || '5432', 10),
+    user:     required('PGUSER'),
+    password: required('PGPASSWORD'),
+    database: required('PGDATABASE'),
     ssl: process.env.NODE_ENV === 'production'
       ? { rejectUnauthorized: false }
       : false,

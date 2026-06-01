@@ -38,7 +38,11 @@ services:
     environment:
       NODE_ENV:       development
       PORT:           "3000"
-      DATABASE_URL:   postgresql://chouine:chouine_dev@db:5432/chouine_dev
+      PGHOST:         db
+      PGPORT:         "5432"
+      PGUSER:         chouine
+      PGPASSWORD:     chouine_dev
+      PGDATABASE:     chouine_dev
       JWT_SECRET:     dev_jwt_secret_please_change_in_production
       JWT_EXPIRES_IN: 7d
       SMTP_HOST:      mailhog

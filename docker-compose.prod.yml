@@ -31,7 +31,11 @@ services:
     environment:
       NODE_ENV:       production
       PORT:           "3000"
-      DATABASE_URL:   postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      PGHOST:         db
+      PGPORT:         "5432"
+      PGUSER:         ${POSTGRES_USER}
+      PGPASSWORD:     ${POSTGRES_PASSWORD}
+      PGDATABASE:     ${POSTGRES_DB}
       JWT_SECRET:     ${JWT_SECRET}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
       SMTP_HOST:      ${SMTP_HOST}
