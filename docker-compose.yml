@@ -16,8 +16,9 @@ services:
       POSTGRES_USER:     chouine
       POSTGRES_PASSWORD: chouine_dev
       POSTGRES_DB:       chouine_dev
+      PGDATA:            /var/lib/postgresql/data
     volumes:
-      - postgres_dev_data:/var/lib/postgresql
+      - postgres_dev_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
     healthcheck:

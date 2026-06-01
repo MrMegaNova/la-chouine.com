@@ -6,29 +6,30 @@
 
 services:
 
-  db:
+  preprod-db:
     image: postgres:18-alpine
     restart: always
     networks:
-      - lachouine
+      - lachouine-preprod
     environment:
       POSTGRES_USER:     ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB:       ${POSTGRES_DB}
       PGDATA:            /var/lib/postgresql/data
     volumes:
-      - postgres_prod_data:/var/lib/postgresql/data
+      - postgres_preprod_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 10
 
-  backend:
-    image: ghcr.io/mrmeganova/la-chouine.com/backend:${TAG:-latest}
+  preprod-backend:
+    image: backend:preprod
+    build: backend/.
     restart: always
     networks:
-      - lachouine
+      - lachouine-preprod
     environment:
       NODE_ENV:       production
       PORT:           "3000"
@@ -47,29 +48,29 @@ services:
       SMTP_FROM:      ${SMTP_FROM}
       FRONTEND_URL:   ${FRONTEND_URL}
     depends_on:
-      db:
+      preprod-db:
         condition: service_healthy
 
-  frontend:
-    image: ghcr.io/mrmeganova/la-chouine.com/frontend:${TAG:-latest}
+  preprod-frontend:
+    image: frontend:preprod
+    build: frontend/.
     restart: always
     networks:
-      - lachouine
+      - lachouine-preprod
       - traefik
     depends_on:
-      - backend
+      - preprod-backend
     labels:
       - traefik.enable=true
-      - traefik.http.routers.www-la-chouine-com.middlewares=redirect-non-www-to-www
-      - traefik.http.routers.www-la-chouine-com.rule=Host(`www.la-chouine.com`) || Host(`la-chouine.com`)
+      - traefik.http.routers.www-la-chouine-com.rule=Host(`preprod.la-chouine.com`)
       - traefik.http.services.www-la-chouine-com.loadbalancer.server.port=80
 
 volumes:
-  postgres_prod_data:
+  postgres_preprod_data:
 
 networks:
-  lachouine:
-    name: lachouine
+  lachouine-preprod:
+    name: lachouine-preprod
   traefik:
     name: traefik
     external: true
