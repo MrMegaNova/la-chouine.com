@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="La Chouine">
+  <!-- Fond feutré de la marque -->
+  <defs>
+    <linearGradient id="felt" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#123026" />
+      <stop offset="1" stop-color="#081710" />
+    </linearGradient>
+  </defs>
+  <rect x="1.5" y="1.5" width="61" height="61" rx="14" fill="url(#felt)" stroke="#c9a14a" stroke-width="2.5" />
+  <!-- Chouette, tirée du logo (Header.tsx) -->
+  <path d="M32 12c-8 0-13.5 4.5-14.4 11.7C14 25.5 12.4 29.1 12.4 33.6c0 10.8 8.1 19.8 19.6 19.8s19.6-9 19.6-19.8c0-4.5-1.6-8.1-5.2-9.9C45.5 16.5 40 12 32 12Z"
+    fill="#0c2018" stroke="#c9a14a" stroke-width="2" />
+  <circle cx="24" cy="31" r="7.2" fill="#f4ebd6" stroke="#c9a14a" stroke-width="2" />
+  <circle cx="40" cy="31" r="7.2" fill="#f4ebd6" stroke="#c9a14a" stroke-width="2" />
+  <circle cx="24" cy="31" r="3.1" fill="#16261d" />
+  <circle cx="40" cy="31" r="3.1" fill="#16261d" />
+  <path d="M32 35.5l-3.6 5.4h7.2L32 35.5Z" fill="#c9a14a" />
+  <path d="M21 45.5c3.6 3.6 7.3 3.6 11 3.6s7.4 0 11-3.6" stroke="#c9a14a" stroke-width="2" fill="none" stroke-linecap="round" />
+</svg>
