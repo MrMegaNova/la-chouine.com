@@ -78,20 +78,15 @@ export default function Login() {
           </div>
         )}
 
-        <div className="field">
-          <label>Pseudo</label>
-          <input value={username} onChange={e => setUsername(e.target.value)} maxLength={30} placeholder="Votre pseudo"
-            onKeyDown={e => e.key === 'Enter' && (tab === 'login' ? handleLogin() : handleRegister())} />
-        </div>
-
-        {tab !== 'login' && (
+        {tab !== 'forgot' && (
           <div className="field">
-            <label>Email</label>
-            <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="votre@email.com" />
+            <label>Pseudo</label>
+            <input value={username} onChange={e => setUsername(e.target.value)} maxLength={30} placeholder="Votre pseudo"
+              onKeyDown={e => e.key === 'Enter' && (tab === 'login' ? handleLogin() : handleRegister())} />
           </div>
         )}
 
-        {tab === 'forgot' && (
+        {tab !== 'login' && (
           <div className="field">
             <label>Email</label>
             <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="votre@email.com" />
