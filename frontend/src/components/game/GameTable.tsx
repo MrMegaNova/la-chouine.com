@@ -70,7 +70,7 @@ export function GameTable() {
                 </span>
                 <div className={styles.oppCards}>
                   {game.players[opp].hand.map((_, i) => (
-                    <PlayingCard key={i} back size={46} />
+                    <PlayingCard key={i} back />
                   ))}
                 </div>
               </div>

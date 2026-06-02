@@ -90,7 +90,12 @@
   text-transform: uppercase;
   opacity: 0.65;
 }
-.oppCards { display: flex; gap: 3px; align-items: flex-end; }
+.oppCards {
+  display: flex;
+  gap: 3px;
+  align-items: flex-end;
+  :global(.playing-card) { --w: var(--card-w-opp); }
+}
 
 // Mid row
 .midRow {
@@ -215,7 +220,47 @@
   background: #102a20;
 }
 
+// ─── Responsive ───────────────────────────────────────────────────────────────
+
+// Tablette / petit portable : on resserre un peu les espacements horizontaux.
+@media (max-width: 860px) {
+  .topBar { gap: 10px; padding: 10px 12px; }
+  .midRow { gap: 28px; }
+  .scoreRow :global(.score-pill) {
+    padding: 6px 13px;
+    b { font-size: 22px; }
+  }
+}
+
+// Mobile (portrait étroit) : cartes plus serrées, polices de score réduites,
+// l'aire des adversaires prend moins de place verticale.
 @media (max-width: 520px) {
+  .topBar { gap: 8px; padding: 8px 10px; }
+  .felt { padding: 8px 8px; }
   .midRow { gap: 14px; }
-  .trickZone { gap: 8px; }
+  .trickZone { gap: 8px; min-width: 0; }
+  .oppArea { gap: 14px; min-height: 64px; }
+  .myHand { gap: 4px; padding: 4px; }
+  .scoreRow {
+    gap: 6px;
+    :global(.score-pill) {
+      padding: 5px 11px;
+      b { font-size: 19px; }
+    }
+  }
+  .captureInfo { position: static; align-items: center; margin-top: 4px; }
+}
+
+// Paysage court (mobile/tablette couchés) : la hauteur est la ressource rare —
+// on aplatit toutes les bandes pour que talon, pli, main et adversaires
+// tiennent dans la hauteur sans scroll. La taille des cartes est déjà bornée
+// par la hauteur via `min(…, 13vh)`.
+@media (orientation: landscape) and (max-height: 600px) {
+  .topBar { padding: 6px 12px; gap: 8px; }
+  .felt { padding: 6px 14px; }
+  .oppArea { min-height: 0; padding: 2px; gap: 16px; }
+  .oppName { font-size: 10px; }
+  .actBar { min-height: 0; padding: 4px 0; }
+  .myHand { min-height: calc(var(--card-w) * 1.46); padding: 2px; }
+  .scoreRow :global(.score-pill) b { font-size: 18px; }
 }

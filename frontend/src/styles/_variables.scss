@@ -35,7 +35,17 @@ $black:       #1d2b23;
   --red:       #{$red};
   --black:     #{$black};
 
-  --card-w:    clamp(74px, 5vw, 96px);
+  // Taille des cartes pilotée par les DEUX axes du viewport : on prend le plus
+  // petit entre une part de la largeur et une part de la hauteur, de sorte que
+  // le plateau (position: fixed, plein écran) tienne sans scroll aussi bien en
+  // portrait qu'en paysage, du mobile au grand écran.
+  //   • grand écran (≥1920×1080) ......... 96 px (plafond)
+  //   • portable / tablette .............. ~74–92 px
+  //   • mobile portrait (~390 px) ........ ~56 px
+  //   • mobile paysage (hauteur ~390 px) . borné par la hauteur (~50 px)
+  --card-w:     clamp(50px, min(13.5vw, 13vh), 96px);
+  // Cartes (dos) des adversaires : plus petites, mêmes contraintes bi-axes.
+  --card-w-opp: clamp(30px, min(8vw, 8vh), 52px);
 
   --line:      rgba(201, 161, 74, 0.28);
   --shadow:    0 18px 40px -18px rgba(0, 0, 0, 0.65);
