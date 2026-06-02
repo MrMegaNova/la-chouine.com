@@ -35,6 +35,8 @@ $black:       #1d2b23;
   --red:       #{$red};
   --black:     #{$black};
 
+  --card-w:    clamp(74px, 5vw, 96px);
+
   --line:      rgba(201, 161, 74, 0.28);
   --shadow:    0 18px 40px -18px rgba(0, 0, 0, 0.65);
   --r:         16px;
