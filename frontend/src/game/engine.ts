@@ -333,10 +333,6 @@ export function applyResolveTrick(game: GameState): GameState {
     players: newGame.players.map(pl => ({ ...pl, hand: sortHand(pl.hand) })),
   };
 
-  if (newGame.mode === 'local') {
-    newGame = { ...newGame, viewPlayer: winner };
-  }
-
   return newGame;
 }
 
