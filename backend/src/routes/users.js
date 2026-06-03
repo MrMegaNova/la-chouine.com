@@ -12,6 +12,7 @@ router.get('/me', requireAuth, async (req, res) => {
   try {
     const { rows } = await query(
       `SELECT u.id, u.username, u.email, u.created_at,
+              u.rating_classic, u.rating_mondoubleau,
               COALESCE(stats.wins, 0)   AS wins,
               COALESCE(stats.losses, 0) AS losses,
               COALESCE(stats.plays, 0)  AS plays
@@ -39,6 +40,10 @@ router.get('/me', requireAuth, async (req, res) => {
         wins: Number(u.wins),
         losses: Number(u.losses),
         plays: Number(u.plays),
+      },
+      ratings: {
+        classic: Number(u.rating_classic),
+        mondoubleau: Number(u.rating_mondoubleau),
       },
     });
   } catch (err) {

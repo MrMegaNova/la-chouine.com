@@ -45,6 +45,7 @@ export interface MeResponse {
   email: string;
   joined: string;
   stats: { wins: number; losses: number; plays: number };
+  ratings: { classic: number; mondoubleau: number };
 }
 
 export const authApi = {
