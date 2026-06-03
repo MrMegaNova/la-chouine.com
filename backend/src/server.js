@@ -3,11 +3,15 @@
 const http = require('http');
 const app = require('./app');
 const config = require('./config');
+const { verifyTransport } = require('./services/email');
 
 const server = http.createServer(app);
 
 server.listen(config.port, () => {
   console.log(`[la-chouine] Serveur démarré sur le port ${config.port} (${config.nodeEnv})`);
+  // Vérifie la connexion SMTP au démarrage pour rendre un problème de conf mail
+  // immédiatement visible dans les logs (non bloquant pour le serveur HTTP).
+  verifyTransport();
 });
 
 server.on('error', (err) => {
