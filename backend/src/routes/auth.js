@@ -5,7 +5,7 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { query, withTransaction } = require('../db');
 const { signToken } = require('../middleware/auth');
-const { sendVerificationEmail, sendPasswordResetEmail } = require('../services/email');
+const { sendVerificationEmail, sendPasswordResetEmail, logMailError } = require('../services/email');
 const config = require('../config');
 
 const router = express.Router();
@@ -83,7 +83,7 @@ router.post('/register', async (req, res) => {
 
     // Envoi de l'email — non bloquant pour la réponse
     sendVerificationEmail(user.email, verifyToken, user.username).catch(err =>
-      console.error('Erreur envoi email de vérification :', err.message)
+      logMailError('email de vérification', err)
     );
 
     res.status(201).json({
@@ -194,7 +194,7 @@ router.post('/forgot-password', async (req, res) => {
     );
 
     sendPasswordResetEmail(user.email, resetToken, user.username).catch(err =>
-      console.error('Erreur envoi email reset :', err.message)
+      logMailError('email reset', err)
     );
 
     res.json(generic);

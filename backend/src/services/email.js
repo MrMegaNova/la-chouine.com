@@ -107,4 +107,46 @@ function escHtml(str) {
     .replace(/"/g, '&quot;');
 }
 
-module.exports = { sendVerificationEmail, sendPasswordResetEmail };
+/**
+ * Loggue une erreur d'envoi de mail avec TOUT le détail SMTP utile au diagnostic.
+ * Les erreurs nodemailer/SMTP portent l'info exploitable dans code / command /
+ * responseCode / response — ne logger que `err.message` masque la vraie cause.
+ * @param {string} context  Libellé du mail concerné (ex: « email de vérification »)
+ * @param {Error}  err      L'erreur levée par sendMail()
+ */
+function logMailError(context, err) {
+  const details = {
+    message: err && err.message,
+    code: err && err.code,                 // ex: EAUTH, ECONNECTION, ETIMEDOUT
+    command: err && err.command,           // ex: AUTH LOGIN, CONN
+    responseCode: err && err.responseCode, // code SMTP numérique (535, 550…)
+    response: err && err.response,         // réponse texte du serveur SMTP
+  };
+  console.error(`Erreur envoi ${context} :`, JSON.stringify(details));
+}
+
+/**
+ * Vérifie au démarrage que la connexion SMTP est joignable et que les
+ * identifiants sont valides. Loggue clairement le résultat (sans secret) pour
+ * qu'un échec de configuration soit visible immédiatement dans les logs, sans
+ * attendre qu'un utilisateur déclenche un envoi.
+ * @returns {Promise<boolean>} true si le SMTP répond, false sinon
+ */
+async function verifyTransport() {
+  const { host, port, secure } = config.smtp;
+  try {
+    await getTransport().verify();
+    console.log(`[email] SMTP OK — ${host}:${port} (secure=${secure})`);
+    return true;
+  } catch (err) {
+    logMailError(`vérification SMTP (${host}:${port} secure=${secure})`, err);
+    return false;
+  }
+}
+
+module.exports = {
+  sendVerificationEmail,
+  sendPasswordResetEmail,
+  logMailError,
+  verifyTransport,
+};
