@@ -29,7 +29,12 @@ export function GameTable() {
 
   const me = game.viewPlayer;
   const n = game.playerCount;
-  const myTurn = game.turn === me && !((game.mode === 'ai' || game.mode === 'friend') && me > 0) && !game.handOver && !game.gatePending;
+  // `trick.length < playerCount` : tant qu'un pli complet n'est pas résolu (le
+  // tour reste sur le dernier joueur le temps de l'animation), on ne considère
+  // pas que c'est « à nous » de jouer — sinon les cartes restantes restent
+  // cliquables et s'empilent dans le pli.
+  const trickPending = game.trick.length >= n;
+  const myTurn = game.turn === me && !((game.mode === 'ai' || game.mode === 'friend') && me > 0) && !game.handOver && !game.gatePending && !trickPending;
   const legalMoves = myTurn ? getLegalMoves(game, me) : [];
   const combos = myTurn && game.trick.length === 0 ? getAvailableCombos(game, me) : [];
 
