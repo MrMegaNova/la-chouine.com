@@ -116,7 +116,12 @@
 }
 .talonStack {
   position: relative;
-  width: var(--card-w);
+  // La retourne (.turnup) est tournée à 90° : une fois couchée elle s'étend sur
+  // ~1.46 × card-w horizontalement et 1.73 × card-w verticalement. Comme elle est
+  // en position absolute, elle ne dilate pas la boîte ; on réserve donc nous-mêmes
+  // sa largeur ET sa hauteur, sinon elle déborde dans le « gap » et le pli vient
+  // la chevaucher (surtout en paysage mobile où le gap est étroit).
+  width: calc(var(--card-w) * 1.5);
   height: calc(var(--card-w) * 1.73 + 12px);
 }
 .talonCard {
