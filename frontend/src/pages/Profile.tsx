@@ -49,6 +49,18 @@ export default function Profile() {
         ))}
       </div>
 
+      <div style={{ display: 'flex', gap: 26, marginBottom: 30, flexWrap: 'wrap' }}>
+        {[
+          [user.ratings.classic, 'Elo Classique'],
+          [user.ratings.mondoubleau, 'Elo Mondoubleau'],
+        ].map(([v, l]) => (
+          <div key={String(l)}>
+            <b style={{ fontFamily: 'var(--serif)', fontSize: 30, color: 'var(--gold-soft)', fontWeight: 900, display: 'block', lineHeight: 1 }}>{v}</b>
+            <span style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: 2, opacity: .7 }}>{l}</span>
+          </div>
+        ))}
+      </div>
+
       <h3 style={{ fontFamily: 'var(--serif)', fontSize: 24, marginBottom: 14 }}>Historique des parties</h3>
       {history.length === 0 ? (
         <div className="list-empty">Aucune partie jouée. <a href="/jouer" style={{ color: 'var(--gold-soft)' }}>Lancez-en une !</a></div>
