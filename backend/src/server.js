@@ -4,8 +4,12 @@ const http = require('http');
 const app = require('./app');
 const config = require('./config');
 const { verifyTransport } = require('./services/email');
+const { attachWebSocketServer } = require('./realtime/wsServer');
 
 const server = http.createServer(app);
+
+// Transport temps-réel PvP (WebSocket sur /ws), greffé sur le même serveur HTTP.
+attachWebSocketServer(server);
 
 server.listen(config.port, () => {
   console.log(`[la-chouine] Serveur démarré sur le port ${config.port} (${config.nodeEnv})`);
