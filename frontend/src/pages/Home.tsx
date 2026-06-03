@@ -1,6 +1,9 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PlayingCard } from '@/components/game/PlayingCard';
-import type { Card } from '@/game/types';
+import { useAuthStore } from '@/store/authStore';
+import { useOnlineStore } from '@/store/onlineStore';
+import type { Card, Variant } from '@/game/types';
 
 const FAN_CARDS: Card[] = [
   { s: 'pique', r: 'A' },
@@ -34,9 +37,39 @@ function HeroFan() {
   );
 }
 
-export default function Home() {
-  
+function OnlineCta() {
+  const { user, token } = useAuthStore();
+  const findOpponent = useOnlineStore(s => s.findOpponent);
+  const [variant, setVariant] = useState<Variant>('classic');
 
+  if (!user || !token) {
+    return (
+      <p className="note" style={{ marginTop: 14 }}>
+        🌐 <Link to="/connexion" style={{ color: 'var(--gold-soft)' }}>Connectez-vous</Link> pour jouer en ligne et grimper au classement Elo.
+      </p>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginTop: 16 }}>
+      <button className="btn btn--wine" onClick={() => findOpponent(variant, token)}>
+        ⚔ Trouver un adversaire
+      </button>
+      <select
+        value={variant}
+        onChange={e => setVariant(e.target.value as Variant)}
+        aria-label="Variante"
+        style={{ padding: '9px 12px', borderRadius: 10, background: 'rgba(247,240,223,.06)', color: 'var(--cream)', border: '1px solid var(--line)' }}
+      >
+        <option value="classic">Classique</option>
+        <option value="mondoubleau">Mondoubleau</option>
+      </select>
+      <span className="note" style={{ fontSize: 12.5 }}>partie classée en ligne</span>
+    </div>
+  );
+}
+
+export default function Home() {
   return (
     <>
       <section>
@@ -54,6 +87,7 @@ export default function Home() {
                 <Link to="/jouer" className="btn btn--gold">Jouer maintenant</Link>
                 <Link to="/regles" className="btn btn--ghost">Apprendre les règles</Link>
               </div>
+              <OnlineCta />
               <div style={{ display: 'flex', gap: 26, marginTop: 30, flexWrap: 'wrap' }}>
                 {[['32','cartes'],['8','brisques'],['2–4','joueurs'],['50','la quinte']].map(([n, l]) => (
                   <div key={l}>

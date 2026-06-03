@@ -7,18 +7,28 @@ interface Props {
   onNext: () => void;
   token: string | null;
   userId: string | null;
+  // En PvP online, la progression (main suivante / rejouer / accueil) passe par
+  // le serveur via ces callbacks. Sinon, comportement local (store).
+  online?: {
+    nextHand: () => void;
+    rematch: () => void;
+    home: () => void;
+  };
 }
 
 function initials(n: string): string {
   return n.replace(/[^A-Za-zÀ-ÿ0-9]/g, '').slice(0, 2).toUpperCase();
 }
 
-export function HandResult({ result, game, onNext, token, userId }: Props) {
+export function HandResult({ result, game, onNext, token, userId, online }: Props) {
   const { newHand, quitGame, startGame, saveMatchResult } = useGameStore();
 
-  const handleNext = () => { onNext(); newHand(); };
-  const handleRematch = () => { onNext(); startGame(game.opts); };
-  const handleHome = async () => {
+  // Online : l'enregistrement classé (Elo) est déjà fait côté serveur ; la main
+  // suivante n'est distribuée qu'une fois les deux joueurs prêts (le serveur
+  // pousse alors le nouvel état, qui efface ce résultat).
+  const handleNext = online ? online.nextHand : () => { onNext(); newHand(); };
+  const handleRematch = online ? online.rematch : () => { onNext(); startGame(game.opts); };
+  const handleHome = online ? online.home : async () => {
     if (result.matchWinner !== null) {
       await saveMatchResult(token, userId);
     }

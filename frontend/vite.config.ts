@@ -15,6 +15,12 @@ export default defineConfig({
         target: process.env.VITE_API_URL ?? 'http://localhost:3000',
         changeOrigin: true,
       },
+      // WebSocket PvP : proxifié vers le backend en développement.
+      '/ws': {
+        target: process.env.VITE_API_URL ?? 'http://localhost:3000',
+        ws: true,
+        changeOrigin: true,
+      },
     },
   },
   build: {
