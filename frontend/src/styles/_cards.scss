@@ -1,7 +1,7 @@
 @use 'variables' as *;
 
 .playing-card {
-  --w: 74px;
+  --w: var(--card-w);
   width: var(--w);
   height: calc(var(--w) * 1.46);
   border-radius: 9px;
@@ -63,9 +63,9 @@
     &--tl { top: 5px; left: 6px; }
     &--br { bottom: 5px; right: 6px; transform: rotate(180deg); }
   }
-  &__rank { font-size: 15px; display: block; }
-  &__suit-corner { font-size: 13px; display: block; }
-  &__pip { position: absolute; inset: 0; display: grid; place-items: center; font-size: 30px; opacity: 0.95; }
+  &__rank { font-size: calc(var(--w) * 0.2); display: block; }
+  &__suit-corner { font-size: calc(var(--w) * 0.175); display: block; }
+  &__pip { position: absolute; inset: 0; display: grid; place-items: center; font-size: calc(var(--w) * 0.41); opacity: 0.95; }
 }
 
 // ─── Animations ───────────────────────────────────────────────────────────────
