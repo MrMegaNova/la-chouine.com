@@ -295,6 +295,11 @@ export function applyExchangeSeven(game: GameState, seat: number): GameState {
 }
 
 export function applyPlayCard(game: GameState, seat: number, card: Card): GameState {
+  // Garde défensif : on ne peut jamais ajouter une carte à un pli déjà complet
+  // (il doit d'abord être résolu). Évite l'empilement des cartes si la fonction
+  // est appelée pendant le délai de résolution.
+  if (game.trick.length >= game.playerCount) return game;
+
   const players = game.players.map((p, i) => {
     if (i !== seat) return p;
     return { ...p, hand: p.hand.filter(c => c !== card) };

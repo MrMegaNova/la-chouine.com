@@ -60,6 +60,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
   playCard: (seat, card) => {
     const { game } = get();
     if (!game || game.handOver || game.gatePending) return;
+    // Un pli complet attend sa résolution (délai d'animation) : refuser tout
+    // coup supplémentaire, sinon les cartes s'empilent et le pli n'est jamais
+    // résolu (le tour n'est pas avancé quand le pli se complète).
+    if (game.trick.length >= game.playerCount) return;
     if (game.turn !== seat) return;
     const legal = getLegalMoves(game, seat);
     if (!legal.includes(card)) return;
