@@ -22,7 +22,6 @@ Thumbs.db
 .vscode/settings.json
 .idea/
 .claude/
-.devcontainer/
 
 # ─── Couverture de tests ──────────────────────────────────────────────────────
 coverage/
