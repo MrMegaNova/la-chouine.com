@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { friendsApi, usersApi, type Friend, type FriendRequest, type SearchUser } from '@/api/client';
 import { useGameStore } from '@/store/gameStore';
+import { useNotificationStore } from '@/store/notificationStore';
 
 export default function Friends() {
   const { user, token } = useAuthStore();
@@ -23,6 +24,8 @@ export default function Friends() {
     const [fr, rq] = await Promise.all([friendsApi.list(token), friendsApi.requests(token)]);
     if (fr.ok) setFriends(fr.data);
     if (rq.ok) setRequests(rq.data);
+    // Garde le badge du header (#44) aligné sur ce que la page vient de lire.
+    useNotificationStore.getState().refresh(token);
   };
 
   const toast = (msg: string) => { setToastMsg(msg); setTimeout(() => setToastMsg(''), 2500); };

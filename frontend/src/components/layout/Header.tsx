@@ -1,5 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
+import { useNotificationStore } from '@/store/notificationStore';
 import styles from './Header.module.scss';
 
 function initials(name: string): string {
@@ -21,6 +22,7 @@ const OWL = (
 
 export function Header() {
   const { user } = useAuthStore();
+  const pendingRequests = useNotificationStore(s => s.pendingRequests);
   const location = useLocation();
 
   const isActive = (path: string) => location.pathname === path;
@@ -40,7 +42,22 @@ export function Header() {
           <div className={styles.nav}>
             <Link to="/" className={`${styles.navLink} ${isActive('/') ? styles.active : ''}`}>Accueil</Link>
             <Link to="/jouer" className={`${styles.navLink} ${isActive('/jouer') ? styles.active : ''}`}>Jouer</Link>
-            {user && <Link to="/amis" className={`${styles.navLink} ${isActive('/amis') ? styles.active : ''}`}>Amis</Link>}
+            {user && (
+              <Link to="/amis" className={`${styles.navLink} ${isActive('/amis') ? styles.active : ''}`}>
+                Amis
+                {pendingRequests > 0 && (
+                  <span
+                    aria-label={`${pendingRequests} invitation${pendingRequests > 1 ? 's' : ''} en attente`}
+                    style={{
+                      marginLeft: 5, padding: '1px 7px', borderRadius: 999, fontSize: 11.5,
+                      background: 'var(--gold)', color: '#16261d', fontWeight: 700, verticalAlign: 'middle',
+                    }}
+                  >
+                    {pendingRequests}
+                  </span>
+                )}
+              </Link>
+            )}
             {user && <Link to="/profil" className={`${styles.navLink} ${isActive('/profil') ? styles.active : ''}`}>Profil</Link>}
             <Link to="/regles" className={`${styles.navLink} ${isActive('/regles') ? styles.active : ''}`}>Règles</Link>
           </div>
