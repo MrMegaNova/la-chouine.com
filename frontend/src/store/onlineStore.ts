@@ -49,6 +49,12 @@ export interface ForfeitInfo {
   youWin: boolean;
 }
 
+export interface Presence {
+  online: number;
+  inQueue: number;
+  inGame: number;
+}
+
 interface OnlineState {
   status: OnlineStatus;
   variant: Variant;
@@ -63,7 +69,11 @@ interface OnlineState {
   opponentDeadline: number | null; // échéance (ms epoch) avant forfait adverse
   reconnecting: boolean;           // notre propre connexion est en cours de reprise
   forfeit: ForfeitInfo | null;     // issue du match si terminé par forfait
+  // Présence (#43)
+  presence: Presence | null;       // compteurs poussés par le serveur
 
+  connectPresence: (token: string) => void;
+  disconnectPresence: () => void;
   findOpponent: (variant: Variant, token: string) => void;
   cancelSearch: () => void;
   playCard: (seat: number, card: Card) => void;
@@ -165,8 +175,21 @@ export const useOnlineStore = create<OnlineState>((set, get) => {
       case 'matchFound':
         set({ status: 'found', opponent: (msg.opponent as string) ?? null });
         break;
+      case 'presence':
+        set({
+          presence: {
+            online: (msg.online as number) ?? 0,
+            inQueue: (msg.inQueue as number) ?? 0,
+            inGame: (msg.inGame as number) ?? 0,
+          },
+        });
+        break;
       case 'state': {
         const snap = msg.state as ServerSnapshot;
+        // Hors partie (connexion de présence) : un état *terminé* est un écho
+        // de fin de match après leave() → à ignorer. Un état *en cours* est une
+        // reprise (partie retrouvée après rechargement de la page) → on rentre.
+        if (get().status === 'idle' && snap.finished) break;
         const game = mapSnapshot(snap);
         let pendingResult: HandResult | null = null;
         if (snap.handOver && snap.lastHandResult) pendingResult = snap.lastHandResult;
@@ -227,11 +250,20 @@ export const useOnlineStore = create<OnlineState>((set, get) => {
     // onclose est l'unique point de décision (onerror est toujours suivi de onclose).
     ws.onclose = () => {
       ws = null;
+      set({ presence: null }); // chiffres périmés dès qu'on est déconnecté
       const st = get().status;
       if (st === 'playing' || st === 'found') {
         tryReconnect(); // partie en cours : le délai de grâce nous couvre
       } else if (st === 'searching') {
         set({ status: 'error', error: 'Connexion perdue.' });
+      } else {
+        // Connexion de présence : reprise silencieuse, sans urgence.
+        if (lastToken) {
+          reconnectTimer = setTimeout(() => {
+            reconnectTimer = null;
+            if (get().status === 'idle' && lastToken) ensureSocket(lastToken, () => {});
+          }, 30000);
+        }
       }
     };
   }
@@ -249,6 +281,22 @@ export const useOnlineStore = create<OnlineState>((set, get) => {
     opponentDeadline: null,
     reconnecting: false,
     forfeit: null,
+    presence: null,
+
+    // Présence : socket ouvert dès la connexion de l'utilisateur (#43). Sert
+    // aussi de canal de reprise si une partie était en cours (le serveur
+    // repousse l'état à la connexion).
+    connectPresence: (token) => {
+      ensureSocket(token, () => {});
+    },
+
+    // À la déconnexion de l'utilisateur — ne touche jamais à une partie en cours.
+    disconnectPresence: () => {
+      if (get().status !== 'idle') return;
+      lastToken = null;
+      closeSocket();
+      set({ presence: null });
+    },
 
     findOpponent: (variant, token) => {
       set({
@@ -259,9 +307,10 @@ export const useOnlineStore = create<OnlineState>((set, get) => {
       ensureSocket(token, () => send({ t: 'queue', action: 'join', variant }));
     },
 
+    // NB : depuis #43, annuler/quitter ne ferme plus le socket — il reste la
+    // connexion de présence (et le canal de reprise) tant qu'on est connecté.
     cancelSearch: () => {
       send({ t: 'queue', action: 'leave' });
-      closeSocket();
       set({ status: 'idle', searchStartedAt: null, opponent: null });
     },
 
@@ -286,12 +335,15 @@ export const useOnlineStore = create<OnlineState>((set, get) => {
 
     leave: () => {
       send({ t: 'queue', action: 'leave' });
-      closeSocket();
+      if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+      reconnectAttempts = 0;
       set({
         status: 'idle', game: null, pendingResult: null, opponent: null,
         searchStartedAt: null, error: null,
         opponentDisconnected: false, opponentDeadline: null, reconnecting: false, forfeit: null,
       });
+      // Le socket reste ouvert (présence) ; s'il était tombé, on le relance.
+      if (lastToken) ensureSocket(lastToken, () => {});
     },
   };
 });

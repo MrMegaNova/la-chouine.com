@@ -41,6 +41,13 @@ class Matchmaker {
     return this.queues.has(variant) ? this.queues.get(variant).size : 0;
   }
 
+  /** Joueurs en attente, toutes variantes confondues. */
+  totalSize() {
+    let n = 0;
+    for (const q of this.queues.values()) n += q.size;
+    return n;
+  }
+
   /** Demi-largeur de fenêtre d'Elo tolérée par un ticket selon son temps d'attente. */
   windowFor(ticket, now) {
     const elapsed = now - ticket.joinedAt;

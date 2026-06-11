@@ -10,6 +10,7 @@ const authRoutes    = require('./routes/auth');
 const usersRoutes   = require('./routes/users');
 const friendsRoutes = require('./routes/friends');
 const gamesRoutes   = require('./routes/games');
+const onlineRoutes  = require('./routes/online');
 
 const app = express();
 
@@ -42,6 +43,7 @@ app.use('/api/auth',    authLimiter, authRoutes);
 app.use('/api/users',   apiLimiter,  usersRoutes);
 app.use('/api/friends', apiLimiter,  friendsRoutes);
 app.use('/api/games',   apiLimiter,  gamesRoutes);
+app.use('/api/online',  apiLimiter,  onlineRoutes);
 
 // ─── 404 / erreur globale ─────────────────────────────────────────────────────
 
