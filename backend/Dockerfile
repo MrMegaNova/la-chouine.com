@@ -1,11 +1,11 @@
 # ─── Dépendances ──────────────────────────────────────────────────────────────
-FROM node:24-alpine AS deps
+FROM node:26-alpine AS deps
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci && npm cache clean --force
 
 # ─── Production ───────────────────────────────────────────────────────────────
-FROM node:24-alpine AS prod
+FROM node:26-alpine AS prod
 WORKDIR /app
 
 RUN apk add --no-cache dumb-init
