@@ -115,6 +115,12 @@ function attachWebSocketServer(httpServer, opts = {}) {
     inGame: registry.activeUserCount(),
   });
   presence.setProvider(presenceStats);
+  // Présence individuelle (#46) — consommée par GET /api/friends (amis acceptés
+  // uniquement) pour la pastille en ligne / en partie.
+  presence.setUserProvider((userId) => ({
+    online: sockets.has(userId),
+    inGame: !!registry.sessionForUser(userId),
+  }));
 
   let presenceTimer = null;
   function schedulePresence() {

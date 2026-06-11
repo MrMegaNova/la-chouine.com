@@ -8,6 +8,7 @@
 // Limite assumée : par process ; à agréger via Redis pour scaler (cf. #31).
 
 let provider = null;
+let userProvider = null;
 
 /** @param {() => {online:number,inQueue:number,inGame:number}} fn */
 function setProvider(fn) { provider = fn; }
@@ -16,6 +17,17 @@ function getPresence() {
   return provider ? provider() : { online: 0, inQueue: 0, inGame: 0 };
 }
 
-function reset() { provider = null; } // utilitaire de test
+/**
+ * Présence d'un utilisateur précis (#46). Réservé aux contextes où le lien
+ * est légitime (liste d'amis acceptés) — ne jamais l'exposer publiquement.
+ * @param {(userId: string) => {online:boolean,inGame:boolean}} fn
+ */
+function setUserProvider(fn) { userProvider = fn; }
 
-module.exports = { setProvider, getPresence, reset };
+function userPresence(userId) {
+  return userProvider ? userProvider(userId) : { online: false, inGame: false };
+}
+
+function reset() { provider = null; userProvider = null; } // utilitaire de test
+
+module.exports = { setProvider, getPresence, setUserProvider, userPresence, reset };

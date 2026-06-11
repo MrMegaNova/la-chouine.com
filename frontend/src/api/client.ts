@@ -104,6 +104,8 @@ export interface Friend {
   username: string;
   wins: number;
   plays: number;
+  online: boolean;
+  inGame: boolean;
 }
 export interface FriendRequest {
   id: string;
