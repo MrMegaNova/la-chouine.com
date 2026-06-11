@@ -24,7 +24,16 @@
 // partie, un délai de grâce démarre (l'adversaire est prévenu). S'il revient à
 // temps, la partie reprend ; sinon le match est clos par forfait (défaite Elo
 // pleine). L'action { type:'forfeit' } permet d'abandonner volontairement.
+//
+// Défis entre amis (#45/#47) :
+//   client → serveur : { t:'challenge', action:'invite', to, variant, rated } |
+//                       { t:'challenge', action:'accept'|'decline'|'cancel', challengeId }
+//   serveur → client : { t:'challenge', status:'sent'|'declined'|'expired'|'cancelled', ... }
+//                       + notification kind:'challenge' chez le destinataire.
+// L'invitation exige une amitié ACCEPTÉE ; l'acceptation crée la GameSession
+// directement, sans file d'attente. `rated:false` = amicale, sans Elo.
 
+const { randomUUID } = require('crypto');
 const { WebSocketServer } = require('ws');
 const { verifyToken } = require('../middleware/auth');
 const registry = require('./sessionRegistry');
@@ -52,6 +61,19 @@ function defaultGetRating(userId, variant) {
   return getRating(query, userId, variant);
 }
 
+// Un défi (#45) n'est permis qu'entre amis acceptés. Injectable dans les tests.
+async function defaultAreFriends(a, b) {
+  const { query } = require('../db');
+  const { rows } = await query(
+    `SELECT 1 FROM friendships
+     WHERE ((requester_id = $1 AND addressee_id = $2)
+         OR (requester_id = $2 AND addressee_id = $1))
+       AND status = 'accepted'`,
+    [a, b]
+  );
+  return rows.length > 0;
+}
+
 /**
  * @param {http.Server} httpServer
  * @param {object} [opts]
@@ -61,15 +83,19 @@ function defaultGetRating(userId, variant) {
  * @param {number} [opts.tickMs]       période de la boucle d'appariement
  * @param {number} [opts.graceMs]      délai de grâce avant forfait sur déconnexion
  * @param {number} [opts.heartbeatMs]  période du ping de vie (0 = désactivé)
+ * @param {(a,b)=>Promise<boolean>} [opts.areFriends]  contrôle d'amitié des défis
+ * @param {number} [opts.challengeTtlMs] durée de vie d'un défi avant expiration
  * @param {string} [opts.path]
  */
 function attachWebSocketServer(httpServer, opts = {}) {
   const onMatchComplete = opts.onMatchComplete || defaultOnMatchComplete;
   const getRating = opts.getRating || defaultGetRating;
+  const areFriends = opts.areFriends || defaultAreFriends;
   const matchmaker = new Matchmaker(opts.matchmaking || {});
   const tickMs = opts.tickMs ?? 1000;
   const graceMs = opts.graceMs ?? 60000;
   const heartbeatMs = opts.heartbeatMs ?? 30000;
+  const challengeTtlMs = opts.challengeTtlMs ?? 60000;
 
   const wss = new WebSocketServer({ server: httpServer, path: opts.path || '/ws' });
 
@@ -188,21 +214,30 @@ function attachWebSocketServer(httpServer, opts = {}) {
     removeSocket(userId, ws);
     if (sockets.has(userId)) return; // un autre onglet maintient la présence
     matchmaker.leave(userId);
+    dropChallengesOf(userId); // les défis en attente tombent avec la connexion
     startGrace(userId);
+    schedulePresence();
+  }
+
+  // ── Démarrage d'une partie (matchmaking ou défi accepté) ──
+  function startMatch(a, b, { variant, rated = true } = {}) {
+    matchmaker.leave(a.userId); // un défi accepté retire les deux joueurs de la file
+    matchmaker.leave(b.userId);
+    const session = registry.createSession({
+      players: [{ userId: a.userId, name: a.name }, { userId: b.userId, name: b.name }],
+      variant,
+      target: 3,
+      rated,
+    });
+    notify(a.userId, { t: 'matchFound', sessionId: session.id, opponent: b.name, rated });
+    notify(b.userId, { t: 'matchFound', sessionId: session.id, opponent: a.name, rated });
+    broadcast(session);
     schedulePresence();
   }
 
   // ── Boucle d'appariement ──
   function onPair(a, b) {
-    const session = registry.createSession({
-      players: [{ userId: a.userId, name: a.name }, { userId: b.userId, name: b.name }],
-      variant: a.variant,
-      target: 3,
-    });
-    notify(a.userId, { t: 'matchFound', sessionId: session.id, opponent: b.name });
-    notify(b.userId, { t: 'matchFound', sessionId: session.id, opponent: a.name });
-    broadcast(session);
-    schedulePresence();
+    startMatch(a, b, { variant: a.variant, rated: true });
   }
   const timer = setInterval(() => {
     let pairs;
@@ -235,6 +270,102 @@ function attachWebSocketServer(httpServer, opts = {}) {
       return;
     }
     send(ws, { t: 'error', error: 'Action de file inconnue.' });
+  }
+
+  // ── Défis entre amis (#45/#47) ──
+  // challengeId -> { id, from, fromName, to, variant, rated, timer, expiresAt }.
+  // En mémoire, comme la file (cf. #31 pour le multi-process).
+  const challenges = new Map();
+
+  const outgoingChallengeOf = (userId) => {
+    for (const c of challenges.values()) if (c.from === userId) return c;
+    return null;
+  };
+
+  function dropChallenge(c) {
+    clearTimeout(c.timer);
+    challenges.delete(c.id);
+  }
+
+  // Annule tout défi impliquant ce joueur (déconnexion totale) en prévenant l'autre.
+  function dropChallengesOf(userId) {
+    for (const c of [...challenges.values()]) {
+      if (c.from === userId) {
+        dropChallenge(c);
+        notifier.notifyUser(c.to, { kind: 'challengeCancelled', challengeId: c.id });
+      } else if (c.to === userId) {
+        dropChallenge(c);
+        notify(c.from, { t: 'challenge', status: 'cancelled', challengeId: c.id });
+      }
+    }
+  }
+
+  function handleChallenge(ws, user, msg) {
+    if (msg.action === 'invite') {
+      const to = typeof msg.to === 'string' ? msg.to : null;
+      if (!to || to === user.id) return send(ws, { t: 'error', error: 'Destinataire invalide.' });
+      if (registry.sessionForUser(user.id)) return send(ws, { t: 'error', error: 'Une partie est déjà en cours.' });
+      if (registry.sessionForUser(to)) return send(ws, { t: 'error', error: 'Cet ami est déjà en partie.' });
+      if (!sockets.has(to)) return send(ws, { t: 'error', error: 'Cet ami n’est pas en ligne.' });
+      if (outgoingChallengeOf(user.id)) return send(ws, { t: 'error', error: 'Vous avez déjà un défi en attente.' });
+
+      const variant = msg.variant === 'mondoubleau' ? 'mondoubleau' : 'classic';
+      const rated = msg.rated === true; // défaut : amicale (#47)
+
+      Promise.resolve()
+        .then(() => areFriends(user.id, to))
+        .then((ok) => {
+          if (!ok) return send(ws, { t: 'error', error: 'Vous ne pouvez défier que vos amis.' });
+          const id = randomUUID();
+          const expiresAt = Date.now() + challengeTtlMs;
+          const timer = setTimeout(() => {
+            const c = challenges.get(id);
+            if (!c) return;
+            dropChallenge(c);
+            notify(c.from, { t: 'challenge', status: 'expired', challengeId: id });
+            notifier.notifyUser(c.to, { kind: 'challengeCancelled', challengeId: id });
+          }, challengeTtlMs);
+          if (timer.unref) timer.unref();
+          challenges.set(id, { id, from: user.id, fromName: user.username || 'Joueur', to, variant, rated, timer, expiresAt });
+          send(ws, { t: 'challenge', status: 'sent', challengeId: id, expiresAt, variant, rated });
+          notifier.notifyUser(to, { kind: 'challenge', challengeId: id, from: user.username || 'Joueur', variant, rated, expiresAt });
+        })
+        .catch(() => send(ws, { t: 'error', error: 'Défi indisponible.' }));
+      return;
+    }
+
+    const c = challenges.get(typeof msg.challengeId === 'string' ? msg.challengeId : '');
+    if (!c) return send(ws, { t: 'error', error: 'Défi introuvable ou expiré.' });
+
+    if (msg.action === 'accept') {
+      if (c.to !== user.id) return send(ws, { t: 'error', error: 'Ce défi ne vous est pas destiné.' });
+      if (registry.sessionForUser(c.from) || registry.sessionForUser(c.to)) {
+        dropChallenge(c);
+        return send(ws, { t: 'error', error: 'Un des joueurs est déjà en partie.' });
+      }
+      if (!sockets.has(c.from)) {
+        dropChallenge(c);
+        return send(ws, { t: 'error', error: 'Votre ami s’est déconnecté.' });
+      }
+      dropChallenge(c);
+      startMatch(
+        { userId: c.from, name: c.fromName },
+        { userId: c.to, name: user.username || 'Joueur' },
+        { variant: c.variant, rated: c.rated }
+      );
+      return;
+    }
+    if (msg.action === 'decline') {
+      if (c.to !== user.id) return send(ws, { t: 'error', error: 'Ce défi ne vous est pas destiné.' });
+      dropChallenge(c);
+      return notify(c.from, { t: 'challenge', status: 'declined', challengeId: c.id });
+    }
+    if (msg.action === 'cancel') {
+      if (c.from !== user.id) return send(ws, { t: 'error', error: 'Ce défi n’est pas le vôtre.' });
+      dropChallenge(c);
+      return notifier.notifyUser(c.to, { kind: 'challengeCancelled', challengeId: c.id });
+    }
+    send(ws, { t: 'error', error: 'Action de défi inconnue.' });
   }
 
   // ── Connexions ──
@@ -271,6 +402,7 @@ function attachWebSocketServer(httpServer, opts = {}) {
       catch { return send(ws, { t: 'error', error: 'JSON invalide.' }); }
 
       if (msg.t === 'queue') return handleQueue(ws, user, msg);
+      if (msg.t === 'challenge') return handleChallenge(ws, user, msg);
 
       const session = registry.sessionForUser(user.id);
       if (!session) return send(ws, { t: 'error', error: 'Aucune partie en cours.' });
@@ -314,6 +446,8 @@ function attachWebSocketServer(httpServer, opts = {}) {
     if (presenceTimer) { clearTimeout(presenceTimer); presenceTimer = null; }
     for (const { timer: t } of graceTimers.values()) clearTimeout(t);
     graceTimers.clear();
+    for (const c of challenges.values()) clearTimeout(c.timer);
+    challenges.clear();
     for (const ws of wss.clients) ws.terminate(); // ne pas laisser de connexions pendantes
     wss.close();
   }
