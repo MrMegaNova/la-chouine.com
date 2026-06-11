@@ -13,18 +13,40 @@ const pwdRules = [
   { label: 'Un caractère spécial', test: (p: string) => /[^A-Za-z0-9]/.test(p) },
 ];
 
+// Bouton œil (#78) : bascule l'affichage du mot de passe en clair.
+function EyeToggle({ shown, onToggle }: { shown: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-label={shown ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+      aria-pressed={shown}
+      title={shown ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+      onClick={onToggle}
+      style={{
+        position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+        background: 'none', border: 'none', cursor: 'pointer', padding: 2,
+        color: 'var(--gold-soft)', fontSize: 16, lineHeight: 1,
+      }}
+    >
+      {shown ? '🙈' : '👁'}
+    </button>
+  );
+}
+
 export default function Login() {
   const [tab, setTab] = useState<Tab>('login');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const { login } = useAuthStore();
   const navigate = useNavigate();
 
-  const reset = () => { setError(''); setSuccess(''); };
+  // Au changement d'onglet : on remasque toujours le mot de passe (#78).
+  const reset = () => { setError(''); setSuccess(''); setShowPassword(false); };
 
   const handleLogin = async () => {
     reset();
@@ -96,8 +118,13 @@ export default function Login() {
         {tab !== 'forgot' && (
           <div className="field">
             <label>Mot de passe</label>
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••"
-              onKeyDown={e => e.key === 'Enter' && (tab === 'login' ? handleLogin() : handleRegister())} />
+            <div style={{ position: 'relative' }}>
+              <input type={showPassword ? 'text' : 'password'} value={password}
+                onChange={e => setPassword(e.target.value)} placeholder="••••••••"
+                style={{ paddingRight: 38, width: '100%' }}
+                onKeyDown={e => e.key === 'Enter' && (tab === 'login' ? handleLogin() : handleRegister())} />
+              <EyeToggle shown={showPassword} onToggle={() => setShowPassword(s => !s)} />
+            </div>
             {tab === 'register' && password.length > 0 && (
               <ul style={{ listStyle: 'none', margin: '6px 0 0', padding: 0, display: 'flex', flexWrap: 'wrap', gap: '4px 12px' }}>
                 {pwdRules.map(r => (
