@@ -103,7 +103,7 @@ export default function Home() {
     <>
       <section>
         <div className="wrap hero" style={{ padding: '46px 0 30px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1.15fr .85fr', gap: 40, alignItems: 'center' }}>
+          <div className="hero-grid">
             <div>
               <span className="kicker">◑ Jeu du Val de Loir · depuis le XVIᵉ siècle</span>
               <h1 style={{ fontFamily: 'var(--serif)', fontWeight: 900, fontSize: 'clamp(40px,7vw,76px)', lineHeight: .96, margin: '18px 0 14px', letterSpacing: -1 }}>
@@ -135,7 +135,7 @@ export default function Home() {
         <div className="wrap" style={{ paddingBottom: 50 }}>
           <h2 className="section-title">Trois façons de jouer</h2>
           <p className="section-sub">Aucune inscription n'est nécessaire pour jouer contre l'ordinateur.</p>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 18 }}>
+          <div className="cards-3">
             {[
               { icon: '🤖', tag: 'Sans inscription', title: 'Contre l\'ordinateur', desc: 'Trois niveaux de difficulté. Idéal pour apprendre les règles ou s\'entraîner.', link: '/jouer', cta: 'Affronter l\'ordinateur', primary: true },
               { icon: '👥', tag: 'Sur un même écran', title: 'À deux, en local', desc: 'Passez l\'appareil de main en main. Parfait pour une partie en famille.', link: '/jouer', cta: 'Partie locale', primary: false },
@@ -156,7 +156,7 @@ export default function Home() {
           </div>
 
           <h2 className="section-title" style={{ marginTop: 10 }}>Comment ça marche</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16, paddingBottom: 54 }}>
+          <div className="steps-4" style={{ paddingBottom: 54 }}>
             {[
               ['1','La donne','5 cartes chacun. La retourne fixe l\'atout. Le reste forme le talon.'],
               ['2','Les annonces','Mariage, tierce, quarteron, quinte… rapportent des points bonus en gagnant la main.'],
