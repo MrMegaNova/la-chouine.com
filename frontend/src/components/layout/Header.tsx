@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { useNotificationStore } from '@/store/notificationStore';
@@ -24,8 +25,34 @@ export function Header() {
   const { user } = useAuthStore();
   const pendingRequests = useNotificationStore(s => s.pendingRequests);
   const location = useLocation();
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const isActive = (path: string) => location.pathname === path;
+
+  // Le menu mobile se referme à chaque changement de page.
+  useEffect(() => { setMenuOpen(false); }, [location.pathname]);
+
+  const reqBadge = pendingRequests > 0 && (
+    <span aria-label={`${pendingRequests} invitation${pendingRequests > 1 ? 's' : ''} en attente`} className={styles.badge}>
+      {pendingRequests}
+    </span>
+  );
+
+  // Liens partagés entre la barre (desktop) et le menu déroulant (mobile).
+  const links = (
+    <>
+      <Link to="/" className={`${styles.navLink} ${isActive('/') ? styles.active : ''}`}>Accueil</Link>
+      <Link to="/jouer" className={`${styles.navLink} ${isActive('/jouer') ? styles.active : ''}`}>Jouer</Link>
+      {user && (
+        <Link to="/amis" className={`${styles.navLink} ${isActive('/amis') ? styles.active : ''}`}>
+          Amis{reqBadge}
+        </Link>
+      )}
+      {user && <Link to="/profil" className={`${styles.navLink} ${isActive('/profil') ? styles.active : ''}`}>Profil</Link>}
+      <Link to="/regles" className={`${styles.navLink} ${isActive('/regles') ? styles.active : ''}`}>Règles</Link>
+      {!user && <Link to="/connexion" className={`${styles.navLink} ${isActive('/connexion') ? styles.active : ''}`}>Se connecter</Link>}
+    </>
+  );
 
   return (
     <header className={styles.bar}>
@@ -39,28 +66,8 @@ export function Header() {
             </div>
           </Link>
 
-          <div className={styles.nav}>
-            <Link to="/" className={`${styles.navLink} ${isActive('/') ? styles.active : ''}`}>Accueil</Link>
-            <Link to="/jouer" className={`${styles.navLink} ${isActive('/jouer') ? styles.active : ''}`}>Jouer</Link>
-            {user && (
-              <Link to="/amis" className={`${styles.navLink} ${isActive('/amis') ? styles.active : ''}`}>
-                Amis
-                {pendingRequests > 0 && (
-                  <span
-                    aria-label={`${pendingRequests} invitation${pendingRequests > 1 ? 's' : ''} en attente`}
-                    style={{
-                      marginLeft: 5, padding: '1px 7px', borderRadius: 999, fontSize: 11.5,
-                      background: 'var(--gold)', color: '#16261d', fontWeight: 700, verticalAlign: 'middle',
-                    }}
-                  >
-                    {pendingRequests}
-                  </span>
-                )}
-              </Link>
-            )}
-            {user && <Link to="/profil" className={`${styles.navLink} ${isActive('/profil') ? styles.active : ''}`}>Profil</Link>}
-            <Link to="/regles" className={`${styles.navLink} ${isActive('/regles') ? styles.active : ''}`}>Règles</Link>
-          </div>
+          {/* Liens en barre — desktop */}
+          <div className={styles.nav}>{links}</div>
 
           <div className={styles.authArea}>
             {user ? (
@@ -72,8 +79,27 @@ export function Header() {
               <Link to="/connexion" className="btn btn--ghost btn--sm">Se connecter</Link>
             )}
           </div>
+
+          {/* Bouton menu — mobile */}
+          <button
+            type="button"
+            className={styles.menuBtn}
+            aria-label={menuOpen ? 'Fermer le menu' : 'Ouvrir le menu'}
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen(o => !o)}
+          >
+            {menuOpen ? '✕' : '☰'}
+            {!menuOpen && pendingRequests > 0 && <span className={styles.menuDot} aria-hidden="true" />}
+          </button>
         </nav>
       </div>
+
+      {/* Menu déroulant — mobile */}
+      {menuOpen && (
+        <div className={styles.mobileMenu}>
+          <div className="wrap">{links}</div>
+        </div>
+      )}
     </header>
   );
 }

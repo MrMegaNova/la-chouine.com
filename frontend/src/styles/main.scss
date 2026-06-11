@@ -19,12 +19,38 @@
   @media (max-width: 860px) { grid-template-columns: 1fr; }
 }
 
+// Grille héro : visuel à droite en desktop, empilé (texte seul) en mobile.
+.hero-grid {
+  display: grid;
+  grid-template-columns: 1.15fr .85fr;
+  gap: 40px;
+  align-items: center;
+  @media (max-width: 860px) { grid-template-columns: 1fr; gap: 24px; }
+}
+
+// Grille de cartes (3 → 2 → 1) et d'étapes (4 → 2 → 1) du Home.
+.cards-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+  @media (max-width: 860px) { grid-template-columns: 1fr 1fr; }
+  @media (max-width: 560px) { grid-template-columns: 1fr; }
+}
+.steps-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  @media (max-width: 860px) { grid-template-columns: 1fr 1fr; }
+  @media (max-width: 480px) { grid-template-columns: 1fr; }
+}
+
 // ─── Panels ───────────────────────────────────────────────────────────────────
 .panel {
   border: 1px solid var(--line);
   border-radius: var(--r);
   background: linear-gradient(180deg, rgba(247,240,223,.045), rgba(247,240,223,.02));
   padding: 24px;
+  @media (max-width: 520px) { padding: 17px; }
 }
 
 // ─── Typography ───────────────────────────────────────────────────────────────
@@ -224,4 +250,8 @@
 }
 @media (max-width: 520px) {
   .playing-card { --w: 62px; }
+  .wrap { padding: 0 14px; }
+}
+@media (max-width: 380px) {
+  .playing-card { --w: 52px; }
 }
