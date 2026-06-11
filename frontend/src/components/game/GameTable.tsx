@@ -5,16 +5,38 @@ import { getLegalMoves, getAvailableCombos } from '@/game/engine';
 import { SUIT_SYMBOL } from '@/game/constants';
 import { PlayingCard } from './PlayingCard';
 import { HandResult } from './HandResult';
-import type { Card } from '@/game/types';
+import type { Card, GameState, HandResult as HandResultType } from '@/game/types';
 import styles from './GameTable.module.scss';
+
+// Pilote la table : le store local (jeu IA/local) ou un contrôleur « online »
+// (jeu PvP via WebSocket). GameTable n'a pas à savoir lequel.
+export interface GameController {
+  game: GameState | null;
+  pendingResult: HandResultType | null;
+  toast: string | null;
+  playCard: (seat: number, card: Card) => void;
+  declareCombo: (seat: number, sig: string) => void;
+  exchangeSeven: (seat: number) => void;
+  revealForPlayer: (seat: number) => void;
+  quitGame: () => void;
+  clearPendingResult: () => void;
+  // Callbacks de fin de coup/match en mode online (sinon comportement local).
+  online?: {
+    nextHand: () => void;
+    rematch: () => void;
+    home: () => void;
+  };
+}
 
 function initials(name: string): string {
   return name.replace(/[^A-Za-zÀ-ÿ0-9]/g, '').slice(0, 2).toUpperCase();
 }
 
-export function GameTable() {
+export function GameTable({ controller }: { controller?: GameController } = {}) {
+  const localStore = useGameStore();
+  const ctrl: GameController = controller ?? localStore;
   const { game, pendingResult, toast, playCard, declareCombo, exchangeSeven,
-    revealForPlayer, quitGame, clearPendingResult } = useGameStore();
+    revealForPlayer, quitGame, clearPendingResult } = ctrl;
   const { user, token } = useAuthStore();
   const toastRef = useRef<HTMLDivElement>(null);
 
@@ -220,6 +242,7 @@ export function GameTable() {
           onNext={clearPendingResult}
           token={token}
           userId={user?.id ?? null}
+          online={ctrl.online}
         />
       )}
     </div>

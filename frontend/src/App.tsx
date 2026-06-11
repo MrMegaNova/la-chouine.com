@@ -2,9 +2,11 @@ import { useEffect } from 'react';
 import { Routes, Route, Navigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { useGameStore } from '@/store/gameStore';
+import { useOnlineStore } from '@/store/onlineStore';
 import { authApi } from '@/api/client';
 import { Header } from '@/components/layout/Header';
 import { GameTable } from '@/components/game/GameTable';
+import { OnlinePvP } from '@/components/game/OnlinePvP';
 import Home from '@/pages/Home';
 import Play from '@/pages/Play';
 import Login from '@/pages/Login';
@@ -30,12 +32,16 @@ function VerifyEmail() {
 export default function App() {
   const { restoreSession } = useAuthStore();
   const { game } = useGameStore();
+  const onlineStatus = useOnlineStore(s => s.status);
 
   useEffect(() => { restoreSession(); }, []);
 
+  // Le header est masqué dès qu'une table (locale ou en ligne) occupe l'écran.
+  const tableActive = !!game || onlineStatus !== 'idle';
+
   return (
     <>
-      {!game && <Header />}
+      {!tableActive && <Header />}
       <main style={{ flex: 1 }}>
         <Routes>
           <Route path="/" element={<Home />} />
@@ -50,6 +56,7 @@ export default function App() {
         </Routes>
       </main>
       {game && <GameTable />}
+      <OnlinePvP />
     </>
   );
 }
