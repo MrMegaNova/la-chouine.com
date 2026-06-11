@@ -19,8 +19,9 @@ class GameSession {
    * @param {Array}   o.players   [{ userId, name }] — index = siège (2 joueurs)
    * @param {string}  [o.variant] 'classic' | 'mondoubleau'
    * @param {number}  [o.target]  3 | 5
+   * @param {boolean} [o.rated]   false = partie amicale, sans incidence Elo (#47)
    */
-  constructor({ id, players, variant = 'classic', target = 3 }) {
+  constructor({ id, players, variant = 'classic', target = 3, rated = true }) {
     if (!Array.isArray(players) || players.length !== 2) {
       throw new Error('GameSession : exactement 2 joueurs requis (v1).');
     }
@@ -28,6 +29,7 @@ class GameSession {
     this.players = players;
     this.variant = variant;
     this.target = target;
+    this.rated = rated !== false;
 
     this.finished = false;
     this.matchResult = null;        // { winnerSeat, scores } à la fin du match
@@ -183,6 +185,7 @@ class GameSession {
     return {
       variant: this.variant,
       target: this.target,
+      rated: this.rated,
       players: this.players.map((p, seat) => ({
         userId: p.userId,
         name: p.name,
@@ -205,6 +208,7 @@ class GameSession {
       you: seat,
       variant: this.variant,
       target: this.target,
+      rated: this.rated,
       names: s.names,
       scores: s.scores,
       trump: s.trump,

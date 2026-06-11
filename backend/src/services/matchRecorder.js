@@ -41,8 +41,9 @@ async function recordMatch(outcome) {
     );
     const before = new Map(cur.rows.map(r => [r.id, r.rating]));
 
-    // Si l'un des comptes a disparu, on enregistre la partie sans toucher l'Elo.
-    const canRate = before.has(a.userId) && before.has(b.userId);
+    // Pas d'Elo si un compte a disparu, ni pour une partie AMICALE (#47) —
+    // la partie est enregistrée dans tous les cas (rating_before/after NULL).
+    const canRate = before.has(a.userId) && before.has(b.userId) && outcome.rated !== false;
     const updated = canRate
       ? computePairUpdate(before.get(a.userId), before.get(b.userId), a.won === true)
       : null;

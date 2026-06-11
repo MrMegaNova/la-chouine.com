@@ -22,6 +22,7 @@ interface ServerSnapshot {
   you: number;
   variant: Variant;
   target: 3 | 5;
+  rated?: boolean;
   names: string[];
   scores: number[];
   trump: Suit | null;
@@ -56,6 +57,22 @@ export interface Presence {
   inGame: number;
 }
 
+// Défi entre amis (#45/#47)
+export interface IncomingChallenge {
+  challengeId: string;
+  from: string;
+  variant: Variant;
+  rated: boolean;
+  expiresAt: number;
+}
+export interface OutgoingChallenge {
+  challengeId: string | null; // null tant que le serveur n'a pas accusé réception
+  to: string;
+  variant: Variant;
+  rated: boolean;
+  expiresAt: number | null;
+}
+
 interface OnlineState {
   status: OnlineStatus;
   variant: Variant;
@@ -72,9 +89,17 @@ interface OnlineState {
   forfeit: ForfeitInfo | null;     // issue du match si terminé par forfait
   // Présence (#43)
   presence: Presence | null;       // compteurs poussés par le serveur
+  // Défis entre amis (#45/#47)
+  incomingChallenge: IncomingChallenge | null;
+  outgoingChallenge: OutgoingChallenge | null;
+  gameRated: boolean | null;       // type de la partie en cours (true = classée)
 
   connectPresence: (token: string) => void;
   disconnectPresence: () => void;
+  challengeFriend: (friendId: string, friendName: string, variant: Variant, rated: boolean, token: string) => void;
+  cancelChallenge: () => void;
+  acceptChallenge: () => void;
+  declineChallenge: () => void;
   findOpponent: (variant: Variant, token: string) => void;
   cancelSearch: () => void;
   playCard: (seat: number, card: Card) => void;
@@ -174,8 +199,26 @@ export const useOnlineStore = create<OnlineState>((set, get) => {
         if (msg.status === 'searching') set({ status: 'searching' });
         break;
       case 'matchFound':
-        set({ status: 'found', opponent: (msg.opponent as string) ?? null });
+        set({
+          status: 'found',
+          opponent: (msg.opponent as string) ?? null,
+          gameRated: typeof msg.rated === 'boolean' ? msg.rated : null,
+          incomingChallenge: null,
+          outgoingChallenge: null,
+        });
         break;
+      case 'challenge': {
+        // Cycle de vie d'un défi SORTANT (le défi entrant arrive en notification).
+        const out = get().outgoingChallenge;
+        if (msg.status === 'sent') {
+          if (out) set({ outgoingChallenge: { ...out, challengeId: (msg.challengeId as string) ?? null, expiresAt: (msg.expiresAt as number) ?? null } });
+        } else if (msg.status === 'declined' || msg.status === 'expired' || msg.status === 'cancelled') {
+          const why = msg.status === 'declined' ? 'a refusé le défi' : 'n’a pas répondu au défi';
+          if (out) useNotificationStore.getState().showToast(`${out.to} ${why}.`);
+          set({ outgoingChallenge: null });
+        }
+        break;
+      }
       case 'presence':
         set({
           presence: {
@@ -202,6 +245,7 @@ export const useOnlineStore = create<OnlineState>((set, get) => {
           game,
           pendingResult,
           forfeit,
+          gameRated: snap.rated ?? get().gameRated,
           status: snap.finished ? 'over' : 'playing',
           opponent: snap.names[1 - snap.you] ?? get().opponent,
           // Un match clos (forfait compris) efface l'alerte de déconnexion adverse.
@@ -213,6 +257,22 @@ export const useOnlineStore = create<OnlineState>((set, get) => {
         // Reçues sur le socket de présence (#43) ; routage par `kind` (#44).
         if (msg.kind === 'friendRequest') {
           useNotificationStore.getState().onFriendRequest((msg.from as string) ?? 'Un joueur');
+        } else if (msg.kind === 'challenge') {
+          set({
+            incomingChallenge: {
+              challengeId: msg.challengeId as string,
+              from: (msg.from as string) ?? 'Un ami',
+              variant: (msg.variant as Variant) ?? 'classic',
+              rated: msg.rated === true,
+              expiresAt: (msg.expiresAt as number) ?? Date.now() + 60000,
+            },
+          });
+        } else if (msg.kind === 'challengeCancelled') {
+          const inc = get().incomingChallenge;
+          if (inc && inc.challengeId === msg.challengeId) {
+            useNotificationStore.getState().showToast(`Le défi de ${inc.from} a été annulé.`);
+            set({ incomingChallenge: null });
+          }
         }
         break;
       case 'opponentDisconnected':
@@ -221,9 +281,18 @@ export const useOnlineStore = create<OnlineState>((set, get) => {
       case 'opponentReconnected':
         set({ opponentDisconnected: false, opponentDeadline: null });
         break;
-      case 'error':
-        set({ toast: (msg.error as string) ?? 'Erreur réseau.' });
+      case 'error': {
+        const err = (msg.error as string) ?? 'Erreur réseau.';
+        if (get().status === 'idle') {
+          // Hors partie (ex. défi impossible) : toast global, et on referme
+          // l'attente d'un défi sortant jamais accusé par le serveur.
+          useNotificationStore.getState().showToast(err);
+          if (get().outgoingChallenge?.challengeId === null) set({ outgoingChallenge: null });
+        } else {
+          set({ toast: err });
+        }
         break;
+      }
     }
   }
 
@@ -289,12 +358,42 @@ export const useOnlineStore = create<OnlineState>((set, get) => {
     reconnecting: false,
     forfeit: null,
     presence: null,
+    incomingChallenge: null,
+    outgoingChallenge: null,
+    gameRated: null,
 
     // Présence : socket ouvert dès la connexion de l'utilisateur (#43). Sert
     // aussi de canal de reprise si une partie était en cours (le serveur
     // repousse l'état à la connexion).
     connectPresence: (token) => {
       ensureSocket(token, () => {});
+    },
+
+    // ── Défis entre amis (#45/#47) ──
+    challengeFriend: (friendId, friendName, variant, rated, token) => {
+      if (get().outgoingChallenge || get().status !== 'idle') return;
+      set({ outgoingChallenge: { challengeId: null, to: friendName, variant, rated, expiresAt: null } });
+      ensureSocket(token, () => send({ t: 'challenge', action: 'invite', to: friendId, variant, rated }));
+    },
+
+    cancelChallenge: () => {
+      const out = get().outgoingChallenge;
+      if (out?.challengeId) send({ t: 'challenge', action: 'cancel', challengeId: out.challengeId });
+      set({ outgoingChallenge: null });
+    },
+
+    acceptChallenge: () => {
+      const inc = get().incomingChallenge;
+      if (!inc) return;
+      send({ t: 'challenge', action: 'accept', challengeId: inc.challengeId });
+      set({ incomingChallenge: null }); // matchFound suivra ; sinon une erreur (toast)
+    },
+
+    declineChallenge: () => {
+      const inc = get().incomingChallenge;
+      if (!inc) return;
+      send({ t: 'challenge', action: 'decline', challengeId: inc.challengeId });
+      set({ incomingChallenge: null });
     },
 
     // À la déconnexion de l'utilisateur — ne touche jamais à une partie en cours.
@@ -346,7 +445,7 @@ export const useOnlineStore = create<OnlineState>((set, get) => {
       reconnectAttempts = 0;
       set({
         status: 'idle', game: null, pendingResult: null, opponent: null,
-        searchStartedAt: null, error: null,
+        searchStartedAt: null, error: null, gameRated: null,
         opponentDisconnected: false, opponentDeadline: null, reconnecting: false, forfeit: null,
       });
       // Le socket reste ouvert (présence) ; s'il était tombé, on le relance.

@@ -2,13 +2,12 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { friendsApi, usersApi, type Friend, type FriendRequest, type SearchUser } from '@/api/client';
-import { useGameStore } from '@/store/gameStore';
 import { useNotificationStore } from '@/store/notificationStore';
 import { PresenceDot } from '@/components/PresenceDot';
+import { ChallengeButtons } from '@/components/game/ChallengeButtons';
 
 export default function Friends() {
   const { user, token } = useAuthStore();
-  const { startGame } = useGameStore();
   const navigate = useNavigate();
 
   const [tab, setTab] = useState<'friends' | 'requests'>('friends');
@@ -63,12 +62,6 @@ export default function Friends() {
     if (!token) return;
     await friendsApi.decline(id, token);
     load();
-  };
-
-  const playFriend = (id: string, username: string) => {
-    if (!user) return;
-    startGame({ mode: 'friend', variant: 'classic', playerCount: 2, diff: 'hard', target: 3, names: [user.username, username], oppId: id });
-    navigate('/jeu');
   };
 
   const initials = (n: string) => n.replace(/[^A-Za-zÀ-ÿ0-9]/g, '').slice(0, 2).toUpperCase();
@@ -135,13 +128,8 @@ export default function Friends() {
                       </span>
                     </div>
                     <div className="list-row__actions">
-                      <button
-                        className="btn btn--gold btn--sm"
-                        disabled={!f.online || f.inGame}
-                        title={f.inGame ? `${f.username} est en partie` : f.online ? undefined : `${f.username} est hors ligne`}
-                        style={!f.online || f.inGame ? { opacity: 0.45, cursor: 'not-allowed' } : undefined}
-                        onClick={() => playFriend(f.id, f.username)}
-                      >Jouer</button>
+                      {/* Défi en ligne réel (#45) — amicale ou classée (#47) */}
+                      <ChallengeButtons friend={f} variant="classic" />
                     </div>
                   </div>
                 ))

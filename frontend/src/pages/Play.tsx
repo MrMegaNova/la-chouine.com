@@ -4,7 +4,8 @@ import { useGameStore } from '@/store/gameStore';
 import { useAuthStore } from '@/store/authStore';
 import { friendsApi, type Friend } from '@/api/client';
 import { PresenceDot } from '@/components/PresenceDot';
-import type { GameOpts, Difficulty } from '@/game/types';
+import { ChallengeButtons } from '@/components/game/ChallengeButtons';
+import type { GameOpts, Difficulty, Variant } from '@/game/types';
 
 function BtnGroup<T extends string>({
   options, value, onChange,
@@ -39,6 +40,7 @@ export default function Play() {
 
   const [friends, setFriends] = useState<Friend[]>([]);
   const [friendsLoaded, setFriendsLoaded] = useState(false);
+  const [friendVariant, setFriendVariant] = useState<Variant>('classic');
 
   // La présence des amis (#46) évolue sans nous : recharge au retour sur l'onglet.
   useEffect(() => {
@@ -157,9 +159,15 @@ export default function Play() {
         </div>
       </div>
 
-      {/* Friends panel */}
+      {/* Friends panel — défi en ligne réel (#45), amicale ou classée (#47) */}
       <div className="panel">
-        <h3 style={{ fontFamily: 'var(--serif)', fontSize: 22, marginBottom: 6 }}>🌐 Entre amis (2 joueurs)</h3>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 6 }}>
+          <h3 style={{ fontFamily: 'var(--serif)', fontSize: 22, margin: 0 }}>🌐 Entre amis (2 joueurs)</h3>
+          {user && friends.length > 0 && (
+            <BtnGroup options={[{label:'Classique',value:'classic'},{label:'Mondoubleau',value:'mondoubleau'}]}
+              value={friendVariant} onChange={setFriendVariant} />
+          )}
+        </div>
         {!user ? (
           <p className="section-sub">
             <a href="/connexion" style={{ color: 'var(--gold-soft)', textDecoration: 'underline' }}>Connectez-vous</a> pour jouer en ligne.
@@ -167,30 +175,25 @@ export default function Play() {
         ) : friends.length === 0 ? (
           <p className="section-sub">Ajoutez des amis depuis l'onglet <b>Amis</b>.</p>
         ) : (
-          <div className="list">
-            {friends.map(f => (
-              <div key={f.id} className="list-row">
-                <div className="list-row__avatar">{f.username.slice(0, 2).toUpperCase()}</div>
-                <div className="list-row__meta">
-                  <b className="list-row__name"><PresenceDot online={f.online} inGame={f.inGame} />{f.username}</b>
-                  <span className="list-row__sub">{f.inGame ? 'en partie' : f.online ? 'en ligne' : 'hors ligne'}</span>
+          <>
+            <p className="note" style={{ marginBottom: 10 }}>
+              🤝 amicale : juste pour le plaisir · ⚔ classée : l'Elo est en jeu
+            </p>
+            <div className="list">
+              {friends.map(f => (
+                <div key={f.id} className="list-row">
+                  <div className="list-row__avatar">{f.username.slice(0, 2).toUpperCase()}</div>
+                  <div className="list-row__meta">
+                    <b className="list-row__name"><PresenceDot online={f.online} inGame={f.inGame} />{f.username}</b>
+                    <span className="list-row__sub">{f.inGame ? 'en partie' : f.online ? 'en ligne' : 'hors ligne'}</span>
+                  </div>
+                  <div className="list-row__actions">
+                    <ChallengeButtons friend={f} variant={friendVariant} />
+                  </div>
                 </div>
-                <div className="list-row__actions">
-                  {/* Défier un ami injoignable n'a pas de sens (cf. #46) — et le
-                      vrai défi en ligne arrive avec #45. */}
-                  <button
-                    className="btn btn--gold btn--sm"
-                    disabled={!f.online || f.inGame}
-                    title={f.inGame ? `${f.username} est en partie` : f.online ? undefined : `${f.username} est hors ligne`}
-                    style={!f.online || f.inGame ? { opacity: 0.45, cursor: 'not-allowed' } : undefined}
-                    onClick={() =>
-                      launch({ mode: 'friend', variant: 'classic', playerCount: 2, diff: 'hard', target: 3, names: [user.username, f.username], oppId: f.id })
-                    }
-                  >Défier</button>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          </>
         )}
       </div>
     </div>

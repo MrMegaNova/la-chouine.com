@@ -8,6 +8,7 @@ import { authApi } from '@/api/client';
 import { Header } from '@/components/layout/Header';
 import { GameTable } from '@/components/game/GameTable';
 import { OnlinePvP } from '@/components/game/OnlinePvP';
+import { ChallengeOverlay } from '@/components/game/ChallengeOverlay';
 import Home from '@/pages/Home';
 import Play from '@/pages/Play';
 import Login from '@/pages/Login';
@@ -78,6 +79,7 @@ export default function App() {
       </main>
       {game && <GameTable />}
       <OnlinePvP />
+      <ChallengeOverlay />
       <NotificationToast />
     </>
   );

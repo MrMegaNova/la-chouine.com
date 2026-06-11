@@ -23,6 +23,7 @@ export function OnlinePvP() {
         status={o.status}
         opponent={o.opponent}
         error={o.error}
+        rated={o.gameRated}
         startedAt={o.searchStartedAt}
         onCancel={() => o.cancelSearch()}
         onHome={() => { o.leave(); navigate('/'); }}
@@ -152,11 +153,12 @@ function ForfeitEnd({
 }
 
 function Waiting({
-  status, opponent, error, startedAt, onCancel, onHome,
+  status, opponent, error, rated, startedAt, onCancel, onHome,
 }: {
   status: 'searching' | 'found' | 'error';
   opponent: string | null;
   error: string | null;
+  rated: boolean | null;
   startedAt: number | null;
   onCancel: () => void;
   onHome: () => void;
@@ -192,9 +194,12 @@ function Waiting({
         )}
         {status === 'found' && (
           <>
-            <div style={{ fontSize: 40, marginBottom: 10 }}>⚔️</div>
+            <div style={{ fontSize: 40, marginBottom: 10 }}>{rated === false ? '🤝' : '⚔️'}</div>
             <h2 style={{ fontFamily: 'var(--serif)', fontSize: 26, margin: '0 0 8px' }}>Adversaire trouvé&nbsp;!</h2>
-            <p className="note">{opponent ? `Face à ${opponent}` : 'Préparation de la partie…'}</p>
+            <p className="note">
+              {opponent ? `Face à ${opponent}` : 'Préparation de la partie…'}
+              {rated === false ? ' · partie amicale' : rated === true ? ' · partie classée' : ''}
+            </p>
           </>
         )}
         {status === 'error' && (
