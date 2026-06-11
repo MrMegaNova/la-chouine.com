@@ -204,6 +204,20 @@
   td:last-child { text-align: right; color: var(--gold-soft); font-weight: 700; }
 }
 
+// Encadré d'exemple de la page Règles
+.rules-example {
+  border-left: 3px solid var(--gold);
+  background: rgba(201, 161, 74, 0.07);
+  border-radius: 0 10px 10px 0;
+  padding: 10px 14px;
+  margin: 10px 0 14px;
+  break-inside: avoid;
+
+  b:first-child { color: var(--gold-soft); }
+  p { margin-bottom: 4px; font-size: 14px; }
+  p:last-child { margin-bottom: 0; }
+}
+
 // ─── Responsive ───────────────────────────────────────────────────────────────
 @media (max-width: 860px) {
   .hide-mobile { display: none !important; }
