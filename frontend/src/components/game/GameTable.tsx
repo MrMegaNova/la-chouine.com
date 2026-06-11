@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { useGameStore } from '@/store/gameStore';
 import { useAuthStore } from '@/store/authStore';
-import { getLegalMoves, getAvailableCombos, sortHand, isBrisque } from '@/game/engine';
+import { getLegalMoves, getAvailableCombos, sortHand, isBrisque, comboCards } from '@/game/engine';
 import { SUIT_SYMBOL } from '@/game/constants';
 import { PlayingCard } from './PlayingCard';
 import { HandResult } from './HandResult';
-import type { Card, GameState, HandResult as HandResultType } from '@/game/types';
+import type { Card, Combo, GameState, HandResult as HandResultType } from '@/game/types';
 import styles from './GameTable.module.scss';
 
 // Pilote la table : le store local (jeu IA/local) ou un contrôleur « online »
@@ -15,7 +15,7 @@ export interface GameController {
   pendingResult: HandResultType | null;
   toast: string | null;
   playCard: (seat: number, card: Card) => void;
-  declareCombo: (seat: number, sig: string) => void;
+  declareCombo: (seat: number, sig: string, card?: Card) => void;
   exchangeSeven: (seat: number) => void;
   revealForPlayer: (seat: number) => void;
   quitGame: () => void;
@@ -42,6 +42,12 @@ export function GameTable({ controller }: { controller?: GameController } = {}) 
   // Consultation des plis (#74) : 'mine' = ses propres plis, 'last' = le
   // dernier pli ramassé (seul pli adverse que la règle autorise à revoir).
   const [tricksView, setTricksView] = useState<'mine' | 'last' | null>(null);
+  // Annonce en attente (#77) : sélectionnée, elle se valide en jouant une
+  // carte qui la compose (la règle : annoncer = jouer en même temps).
+  const [pendingAnnounce, setPendingAnnounce] = useState<Combo | null>(null);
+  // Étalage de la dernière annonce (les cartes montrées à l'adversaire).
+  const [reveal, setReveal] = useState<GameState['lastAnnounce']>(null);
+  const revealKey = useRef<string | null>(null);
 
   useEffect(() => {
     if (!toast || !toastRef.current) return;
@@ -49,6 +55,24 @@ export function GameTable({ controller }: { controller?: GameController } = {}) 
     const t = setTimeout(() => toastRef.current?.classList.remove(styles.toastVisible), 2400);
     return () => clearTimeout(t);
   }, [toast]);
+
+  // Étalage de l'annonce (#77) : à chaque nouvelle annonce (la sienne comme
+  // celle de l'adversaire), montre ses cartes quelques secondes. Dédupliqué
+  // par main+siège+annonce (l'état online est repoussé à chaque action).
+  const announce = game?.lastAnnounce ?? null;
+  const announceKey = announce && game ? `${game.handNo}|${announce.seat}|${announce.sig}` : null;
+  useEffect(() => {
+    if (!announce || !announceKey || revealKey.current === announceKey) return;
+    revealKey.current = announceKey;
+    setReveal(announce);
+    const t = setTimeout(() => setReveal(null), 4500);
+    return () => clearTimeout(t);
+  }, [announceKey]);
+
+  // L'annonce en attente tombe si ce n'est plus notre entame.
+  const turnNow = game?.turn;
+  const trickLen = game?.trick.length;
+  useEffect(() => { setPendingAnnounce(null); }, [turnNow, trickLen]);
 
   if (!game) return null;
 
@@ -63,8 +87,18 @@ export function GameTable({ controller }: { controller?: GameController } = {}) 
   const legalMoves = myTurn ? getLegalMoves(game, me) : [];
   const combos = myTurn && game.trick.length === 0 ? getAvailableCombos(game, me) : [];
 
+  // Cartes jouables : pendant une annonce en attente, seules les cartes qui
+  // composent l'annonce sont jouables (#77) ; sinon, les coups légaux.
+  const announceCards = pendingAnnounce ? comboCards(game.players[me].hand, pendingAnnounce) : null;
+  const playableCards = announceCards ?? legalMoves;
+
   const onPlay = (card: Card) => {
-    if (!myTurn || !legalMoves.includes(card)) return;
+    if (!myTurn || !playableCards.includes(card)) return;
+    if (pendingAnnounce) {
+      declareCombo(me, pendingAnnounce.sig, card); // annonce + carte, d'un même geste
+      setPendingAnnounce(null);
+      return;
+    }
     playCard(me, card);
   };
 
@@ -168,12 +202,22 @@ export function GameTable({ controller }: { controller?: GameController } = {}) 
           {game.handOver ? (
             <span className="note">Coup terminé.</span>
           ) : game.gatePending ? null : myTurn && game.trick.length === 0 ? (
+            pendingAnnounce ? (
+              <>
+                <span className="note" style={{ alignSelf: 'center' }}>
+                  {pendingAnnounce.label} — jouez une carte de l'annonce pour la valider.
+                </span>
+                <button className="btn btn--ghost btn--sm" onClick={() => setPendingAnnounce(null)}>
+                  Annuler l'annonce
+                </button>
+              </>
+            ) : (
             <>
               {combos.map(c => (
                 <button
                   key={c.sig}
                   className={`btn ${c.type === 'chouine' ? 'btn--wine' : 'btn--gold'} btn--sm`}
-                  onClick={() => declareCombo(me, c.sig)}
+                  onClick={() => c.type === 'chouine' ? declareCombo(me, c.sig) : setPendingAnnounce(c)}
                 >
                   {c.type === 'chouine' ? '⚑ ' : c.setsTrump ? '♦ ' : `+${c.value} `}
                   {c.label}
@@ -187,9 +231,10 @@ export function GameTable({ controller }: { controller?: GameController } = {}) 
                   </button>
                 )}
               <span className="note" style={{ alignSelf: 'center' }}>
-                {combos.length > 0 ? 'Annoncez puis entamez.' : 'À vous d\'entamer.'}
+                {combos.length > 0 ? 'Annoncez (en jouant une carte de l\'annonce) ou entamez.' : 'À vous d\'entamer.'}
               </span>
             </>
+            )
           ) : myTurn ? (
             <span className="note" style={{ alignSelf: 'center' }}>
               À vous de répondre{game.phase === 'final' ? ' (fournir / monter / couper)' : ''}.
@@ -211,7 +256,7 @@ export function GameTable({ controller }: { controller?: GameController } = {}) 
             game.players[me].hand.map((_, i) => <PlayingCard key={i} back />)
           ) : (
             game.players[me].hand.map((card, i) => {
-              const playable = myTurn && legalMoves.includes(card);
+              const playable = myTurn && playableCards.includes(card);
               return (
                 <PlayingCard
                   key={i}
@@ -242,6 +287,25 @@ export function GameTable({ controller }: { controller?: GameController } = {}) 
             <button className="btn btn--gold btn--full" onClick={() => revealForPlayer(game.turn)}>
               Voir mon jeu
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Étalage de la dernière annonce (#77) : les cartes sont montrées,
+          comme la règle l'exige (« étalées sur le tapis »). */}
+      {reveal && (
+        <div style={{
+          position: 'fixed', top: 70, left: '50%', transform: 'translateX(-50%)', zIndex: 55,
+          padding: '12px 18px', borderRadius: 14, border: '1px solid var(--gold)',
+          background: '#102a20', textAlign: 'center', maxWidth: '92vw',
+        }}>
+          <div className="note" style={{ marginBottom: 8 }}>
+            {game.names[reveal.seat]} annonce <b>{reveal.label}</b>
+          </div>
+          <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+            {reveal.cards.map((c, i) => (
+              <PlayingCard key={i} card={c} size={52} trump={game.trump !== null && c.s === game.trump} />
+            ))}
           </div>
         </div>
       )}

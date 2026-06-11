@@ -57,6 +57,8 @@ export interface GameState {
   lastTrickWinner: number | null;
   // Dernier pli ramassé (cartes + vainqueur) : seul pli adverse consultable (#74).
   lastTrick: { cards: TrickEntry[]; winner: number } | null;
+  // Dernière annonce déclarée : ses cartes sont étalées sur le tapis (#77).
+  lastAnnounce: { seat: number; sig: string; label: string; cards: Card[] } | null;
   sevenAnnounced: boolean;
 }
 

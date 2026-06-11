@@ -3,7 +3,7 @@ import {
   buildDeck, shuffle, sortHand, isBrisque,
   createGame, dealHand,
   cardBeats, resolveTrickWinner,
-  getLegalMoves, getAvailableCombos,
+  getLegalMoves, getAvailableCombos, comboCards,
   applyDeclareCombo, applyExchangeSeven, applyPlayCard, applyResolveTrick,
   computeHandResult, applyHandResult, shouldAnnounceAuSept,
 } from './engine';
@@ -355,7 +355,35 @@ describe('getAvailableCombos (3-4 joueurs)', () => {
   });
 });
 
+describe('comboCards', () => {
+  it('renvoie les cartes de la main qui composent l’annonce', () => {
+    const hand = [c('pique', 'R'), c('pique', 'D'), c('pique', 'V'), c('coeur', 'R'), c('coeur', 'A')];
+    const mariage = { type: 'mariage' as const, suit: 'pique' as Suit, sig: 'mariage|pique', label: '', value: 20, setsTrump: false };
+    expect(comboCards(hand, mariage)).toEqual([c('pique', 'R'), c('pique', 'D')]);
+
+    const quinte = { type: 'quinte' as const, suit: null, sig: 'quinte', label: '', value: 50, setsTrump: false };
+    expect(comboCards(hand, quinte)).toEqual([c('coeur', 'A')]); // les brisques de la main
+
+    const chouine = { type: 'chouine' as const, suit: 'pique' as Suit, sig: 'chouine|pique', label: '', value: 0, setsTrump: false };
+    expect(comboCards(hand, chouine)).toEqual([c('pique', 'R'), c('pique', 'D'), c('pique', 'V')]);
+  });
+});
+
 describe('applyDeclareCombo', () => {
+  it('étale les cartes de l’annonce (lastAnnounce) pour l’adversaire', () => {
+    const g = game({ trump: 'coeur' });
+    g.players[0].hand = [c('pique', 'R'), c('pique', 'D'), c('trefle', '7')];
+    const combo = {
+      type: 'mariage' as const, suit: 'pique' as Suit, sig: 'mariage|pique',
+      label: 'Mariage ♠', value: 20, setsTrump: false,
+    };
+    const g2 = applyDeclareCombo(g, 0, combo);
+    expect(g2.lastAnnounce).toEqual({
+      seat: 0, sig: 'mariage|pique', label: 'Mariage ♠',
+      cards: [c('pique', 'R'), c('pique', 'D')],
+    });
+  });
+
   it('crédite l’annonce, la marque déclarée, et fixe l’atout si setsTrump', () => {
     const g = game({ variant: 'mondoubleau', trump: null });
     const combo = {

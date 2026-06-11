@@ -3,10 +3,10 @@ import {
   createGame, dealHand, applyPlayCard, applyResolveTrick,
   applyDeclareCombo, applyExchangeSeven, computeHandResult,
   applyHandResult, getAvailableCombos, getLegalMoves, shouldAnnounceAuSept,
-
+  comboCards,
 } from '@/game/engine';
 import { aiChooseLead, aiChooseResponse, aiChooseCombos } from '@/game/ai';
-import { SUIT_SYMBOL } from '@/game/constants';
+import { SUIT_SYMBOL, PTS, ORDER } from '@/game/constants';
 import { gamesApi } from '@/api/client';
 import type { GameState, GameOpts, Card, HandResult } from '@/game/types';
 
@@ -18,7 +18,7 @@ interface GameStore {
   startGame: (opts: GameOpts) => void;
   newHand: () => void;
   playCard: (seat: number, card: Card) => void;
-  declareCombo: (seat: number, sig: string) => void;
+  declareCombo: (seat: number, sig: string, card?: Card) => void;
   exchangeSeven: (seat: number) => void;
   quitGame: () => void;
   revealForPlayer: (seat: number) => void;
@@ -28,6 +28,9 @@ interface GameStore {
 }
 
 let aiTimer: ReturnType<typeof setTimeout> | null = null;
+
+// Valeur « à protéger » d'une carte (pour choisir laquelle jouer dans une annonce).
+const PTS_ORDER = (c: Card) => PTS[c.r] * 10 + ORDER[c.r];
 
 function clearAiTimer() {
   if (aiTimer != null) { clearTimeout(aiTimer); aiTimer = null; }
@@ -89,24 +92,35 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
   },
 
-  declareCombo: (seat, sig) => {
+  // Règle (#77) : une annonce se fait « en même temps qu'on joue sa carte »,
+  // et cette carte doit composer l'annonce. `card` est donc requise (sauf
+  // chouine, qui gagne le coup sans jouer).
+  declareCombo: (seat, sig, card) => {
     const { game } = get();
     if (!game || game.handOver) return;
     const combo = getAvailableCombos(game, seat).find(c => c.sig === sig);
     if (!combo) return;
 
     if (combo.type === 'chouine') {
-      const result = computeHandResult(game, seat);
-      const next = applyHandResult(game, result);
+      const cards = comboCards(game.players[seat].hand, combo);
+      const revealed: GameState = { ...game, lastAnnounce: { seat, sig, label: combo.label, cards } };
+      const result = computeHandResult(revealed, seat);
+      const next = applyHandResult(revealed, result);
       set({ game: next, pendingResult: result, toast: `${game.names[seat]} réalise une CHOUINE !` });
       return;
     }
+
+    if (!card) return;
+    const isComboCard = comboCards(game.players[seat].hand, combo)
+      .some(c2 => c2.s === card.s && c2.r === card.r);
+    if (!isComboCard) return;
 
     const next = applyDeclareCombo(game, seat, combo);
     const toastMsg = combo.setsTrump && combo.suit
       ? `${game.names[seat]} → ${combo.label} +${combo.value} · Atout : ${getSuitSymbol(combo.suit)}`
       : `${game.names[seat]} annonce ${combo.label}  +${combo.value}`;
     set({ game: next, toast: toastMsg });
+    get().playCard(seat, card); // l'annonce accompagne la carte
   },
 
   exchangeSeven: (seat) => {
@@ -178,24 +192,22 @@ function runAiTurn(seat: number) {
   if (!game || game.handOver || game.turn !== seat) return;
 
   if (game.trick.length === 0) {
-    // Annoces + optionnel échange du 7
+    // Règle #77 : UNE annonce par entame, déclarée en jouant une carte qui la
+    // compose (les autres annonces attendront une prochaine entame).
     const combos = aiChooseCombos(game, seat);
+    const combo = combos[0] ?? null;
     let current = game;
-    for (const combo of combos) {
-      if (combo.type === 'chouine') {
-        const result = computeHandResult(current, seat);
-        const next = applyHandResult(current, result);
-        useGameStore.setState({ game: next, pendingResult: result, toast: `${current.names[seat]} réalise une CHOUINE !` });
-        return;
-      }
-      current = applyDeclareCombo(current, seat, combo);
-      const toastMsg = combo.setsTrump && combo.suit
-        ? `${game.names[seat]} → ${combo.label} +${combo.value} · Atout : ${getSuitSymbol(combo.suit)}`
-        : `${game.names[seat]} annonce ${combo.label}  +${combo.value}`;
-      useGameStore.setState({ game: current, toast: toastMsg });
+
+    if (combo && combo.type === 'chouine') {
+      const cards = comboCards(current.players[seat].hand, combo);
+      const revealed: GameState = { ...current, lastAnnounce: { seat, sig: combo.sig, label: combo.label, cards } };
+      const result = computeHandResult(revealed, seat);
+      const next = applyHandResult(revealed, result);
+      useGameStore.setState({ game: next, pendingResult: result, toast: `${current.names[seat]} réalise une CHOUINE !` });
+      return;
     }
 
-    // Échange du 7
+    // Échange du 7 (avant d'entamer)
     if (current.turnUp && current.phase === 'draw' && current.trump &&
       current.players[seat].hand.some(c => c.s === current.trump && c.r === '7')) {
       const exchanged = applyExchangeSeven(current, seat);
@@ -208,6 +220,17 @@ function runAiTurn(seat: number) {
     aiTimer = setTimeout(() => {
       const { game: g } = useGameStore.getState();
       if (!g || g.handOver || g.turn !== seat) return;
+      if (combo) {
+        // L'annonce est toujours valable ? (l'échange du 7 a pu changer la main)
+        const stillThere = getAvailableCombos(g, seat).some(c => c.sig === combo.sig);
+        const cc = comboCards(g.players[seat].hand, combo);
+        if (stillThere && cc.length > 0) {
+          // Joue la moins précieuse des cartes de l'annonce.
+          const card = [...cc].sort((a, b) => PTS_ORDER(a) - PTS_ORDER(b))[0];
+          useGameStore.getState().declareCombo(seat, combo.sig, card);
+          return;
+        }
+      }
       const card = aiChooseLead(g, seat);
       useGameStore.getState().playCard(seat, card);
     }, 480);

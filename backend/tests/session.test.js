@@ -59,14 +59,31 @@ test('play : un pli complet est résolu de façon autoritaire', () => {
   assert.equal(sess.state.players[0].won.length, 2);
 });
 
-test('declare : un mariage ajoute la valeur d’annonce', () => {
+test('declare (#77) : l’annonce se valide en jouant une carte qui la compose', () => {
   const sess = mkSession({
     phase: 'draw', trump: 'coeur', turn: 0,
-    players: [p([c('pique', 'R'), c('pique', 'D')]), p([])],
+    players: [p([c('pique', 'R'), c('pique', 'D'), c('trefle', '7')]), p([c('coeur', '8')])],
   });
-  const res = sess.applyAction('u1', { type: 'declare', sig: 'mariage|pique' });
+
+  // (1) Sans carte : refusée.
+  assert.equal(sess.applyAction('u1', { type: 'declare', sig: 'mariage|pique' }).ok, false);
+  // (2) Avec une carte étrangère à l'annonce : refusée.
+  assert.equal(sess.applyAction('u1', { type: 'declare', sig: 'mariage|pique', card: c('trefle', '7') }).ok, false);
+  assert.equal(sess.state.players[0].annonce, 0, 'rien n’a été crédité');
+
+  // (3) Avec une carte de l'annonce : créditée ET la carte est jouée.
+  const res = sess.applyAction('u1', { type: 'declare', sig: 'mariage|pique', card: c('pique', 'D') });
   assert.ok(res.ok);
   assert.equal(sess.state.players[0].annonce, 20);
+  assert.deepEqual(sess.state.trick, [{ p: 0, card: c('pique', 'D') }], 'la carte accompagne l’annonce');
+  assert.equal(sess.state.players[0].hand.length, 2, 'la carte a quitté la main');
+
+  // (4) Les cartes de l'annonce sont étalées : visibles des deux joueurs.
+  const snapOpp = sess.snapshotFor('u2');
+  assert.deepEqual(snapOpp.lastAnnounce, {
+    seat: 0, sig: 'mariage|pique', label: 'Mariage ♠',
+    cards: [c('pique', 'R'), c('pique', 'D')],
+  });
 });
 
 test('nextHand : nécessite l’accord des deux joueurs avant de distribuer', () => {

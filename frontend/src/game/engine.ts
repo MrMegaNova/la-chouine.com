@@ -66,6 +66,7 @@ export function createGame(opts: GameOpts): GameState {
     handOver: false,
     lastTrickWinner: null,
     lastTrick: null,
+    lastAnnounce: null,
     sevenAnnounced: false,
   };
 }
@@ -128,6 +129,7 @@ export function dealHand(game: GameState): GameState {
     handOver: false,
     lastTrickWinner: null,
     lastTrick: null,
+    lastAnnounce: null,
     gatePending: false,
     sevenAnnounced: false,
   };
@@ -267,6 +269,21 @@ function getCombos34(game: GameState, seat: number): Combo[] {
 
 // ─── Apply moves (return new state) ───────────────────────────────────────────
 
+/** Cartes de la main qui composent une annonce (#77) — celles à étaler, et
+ *  parmi lesquelles la carte jouée avec l'annonce doit être choisie. */
+export function comboCards(hand: Card[], combo: Combo): Card[] {
+  if (combo.type === 'quinte' || combo.type === 'trente') return hand.filter(isBrisque);
+  if (!combo.suit) return [];
+  const ranks: Record<string, Rank[]> = {
+    mariage: ['R', 'D'],
+    tierce: ['R', 'D', 'V'],
+    quarteron: ['A', 'R', 'D', 'V'],
+    chouine: ['A', '10', 'R', 'D', 'V'], // à 3-4 joueurs la main n'en contient que R, D, V
+  };
+  const rs = ranks[combo.type] ?? [];
+  return hand.filter(c => c.s === combo.suit && rs.includes(c.r));
+}
+
 export function applyDeclareCombo(game: GameState, seat: number, combo: Combo): GameState {
   if (combo.type === 'chouine') return game; // handled separately
 
@@ -278,7 +295,13 @@ export function applyDeclareCombo(game: GameState, seat: number, combo: Combo): 
   });
 
   const trump = combo.setsTrump && combo.suit ? combo.suit : game.trump;
-  return { ...game, players, trump };
+  // Les cartes de l'annonce sont « étalées sur le tapis » (#77) : on les
+  // expose pour que l'adversaire puisse les voir.
+  const lastAnnounce = {
+    seat, sig: combo.sig, label: combo.label,
+    cards: comboCards(game.players[seat].hand, combo),
+  };
+  return { ...game, players, trump, lastAnnounce };
 }
 
 export function applyExchangeSeven(game: GameState, seat: number): GameState {

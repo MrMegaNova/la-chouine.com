@@ -10,6 +10,7 @@ const {
   createGame, dealHand, applyPlayCard, applyResolveTrick, applyDeclareCombo,
   applyExchangeSeven, computeHandResult, applyHandResult, getAvailableCombos,
   isLegalMove, resolveTrickWinner, shouldAnnounceAuSept, getLegalMoves,
+  comboCards, sameCard,
 } = require('./engine');
 
 class GameSession {
@@ -63,7 +64,7 @@ class GameSession {
 
     switch (action.type) {
       case 'play':         return this._play(seat, action.card);
-      case 'declare':      return this._declare(seat, action.sig);
+      case 'declare':      return this._declare(seat, action.sig, action.card);
       case 'exchangeSeven':return this._exchangeSeven(seat);
       case 'nextHand':     return this._nextHand(seat);
       case 'forfeit':      return this.forfeit(seat, 'abandon');
@@ -117,7 +118,10 @@ class GameSession {
     return { ok: true };
   }
 
-  _declare(seat, sig) {
+  // Règle (#77) : une annonce se fait « en même temps qu'on joue sa carte »,
+  // et la carte jouée doit composer l'annonce. Action atomique annonce + carte
+  // (sauf chouine, qui clôt le coup sans jouer).
+  _declare(seat, sig, card) {
     const s = this.state;
     if (s.handOver) return { ok: false, error: 'La main est terminée.' };
     if (s.turn !== seat || s.trick.length !== 0) {
@@ -127,13 +131,24 @@ class GameSession {
     if (!combo) return { ok: false, error: 'Annonce indisponible.' };
 
     if (combo.type === 'chouine') {
-      const result = computeHandResult(s, seat); // chouine → gagne la main
-      this.state = this._endHand(applyHandResult(s, result), result);
+      // Les cartes de la chouine sont étalées, puis le coup est gagné.
+      const cards = comboCards(s.players[seat].hand, combo);
+      const revealed = { ...s, lastAnnounce: { seat, sig, label: combo.label, cards } };
+      const result = computeHandResult(revealed, seat);
+      this.state = this._endHand(applyHandResult(revealed, result), result);
       this.lastHandResult = result;
       return { ok: true };
     }
 
-    this.state = applyDeclareCombo(s, seat, combo);
+    if (!card) return { ok: false, error: 'Annoncer impose de jouer une carte de l’annonce.' };
+    const cc = comboCards(s.players[seat].hand, combo);
+    if (!cc.some(c => sameCard(c, card))) {
+      return { ok: false, error: 'La carte jouée doit composer l’annonce.' };
+    }
+
+    this.state = applyDeclareCombo(s, seat, combo); // pose aussi lastAnnounce (étalée)
+    const res = this._play(seat, card);
+    if (!res.ok) { this.state = s; return res; } // rollback — ne devrait pas arriver (entame)
     return { ok: true };
   }
 
@@ -221,6 +236,7 @@ class GameSession {
       handOver: s.handOver,
       handNo: s.handNo,
       lastTrick: this.lastTrick,
+      lastAnnounce: s.lastAnnounce ?? null,
       lastHandResult: s.handOver ? this.lastHandResult : null,
       finished: this.finished,
       matchResult: this.matchResult,
