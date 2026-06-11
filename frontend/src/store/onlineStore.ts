@@ -36,6 +36,7 @@ interface ServerSnapshot {
   handOver: boolean;
   handNo: number;
   lastTrick: { cards: TrickEntry[]; winner: number } | null;
+  lastAnnounce: { seat: number; sig: string; label: string; cards: Card[] } | null;
   lastHandResult: HandResult | null;
   finished: boolean;
   matchResult: {
@@ -104,7 +105,7 @@ interface OnlineState {
   findOpponent: (variant: Variant, token: string) => void;
   cancelSearch: () => void;
   playCard: (seat: number, card: Card) => void;
-  declareCombo: (seat: number, sig: string) => void;
+  declareCombo: (seat: number, sig: string, card?: Card) => void;
   exchangeSeven: (seat: number) => void;
   nextHand: () => void;
   rematch: (token: string) => void;
@@ -165,6 +166,7 @@ function mapSnapshot(s: ServerSnapshot): GameState {
     handOver: s.handOver,
     lastTrickWinner: s.lastTrick ? s.lastTrick.winner : null,
     lastTrick: s.lastTrick,
+    lastAnnounce: s.lastAnnounce ?? null,
     sevenAnnounced: false,
   };
 }
@@ -425,7 +427,11 @@ export const useOnlineStore = create<OnlineState>((set, get) => {
     },
 
     playCard: (_seat, card) => send({ t: 'action', action: { type: 'play', card: { s: card.s, r: card.r } } }),
-    declareCombo: (_seat, sig) => send({ t: 'action', action: { type: 'declare', sig } }),
+    // L'annonce accompagne une carte de la combinaison (#77) — action atomique.
+    declareCombo: (_seat, sig, card) => send({
+      t: 'action',
+      action: { type: 'declare', sig, card: card ? { s: card.s, r: card.r } : undefined },
+    }),
     exchangeSeven: () => send({ t: 'action', action: { type: 'exchangeSeven' } }),
     nextHand: () => send({ t: 'action', action: { type: 'nextHand' } }),
 

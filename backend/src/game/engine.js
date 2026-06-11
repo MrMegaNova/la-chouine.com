@@ -81,6 +81,7 @@ function createGame(opts) {
     phase: 'draw',
     handOver: false,
     lastTrickWinner: null,
+    lastAnnounce: null,
     sevenAnnounced: false,
   };
 }
@@ -142,6 +143,7 @@ function dealHand(game) {
     phase: 'draw',
     handOver: false,
     lastTrickWinner: null,
+    lastAnnounce: null,
     gatePending: false,
     sevenAnnounced: false,
   };
@@ -285,6 +287,20 @@ function getCombos34(game, seat) {
 
 // ─── Application des coups (retournent un nouvel état) ─────────────────────────
 
+/** Cartes de la main qui composent une annonce (#77) — celles à étaler, et
+ *  parmi lesquelles la carte jouée avec l'annonce doit être choisie. */
+function comboCards(hand, combo) {
+  if (combo.type === 'quinte' || combo.type === 'trente') return hand.filter(isBrisque);
+  if (!combo.suit) return [];
+  const ranks = {
+    mariage: ['R', 'D'],
+    tierce: ['R', 'D', 'V'],
+    quarteron: ['A', 'R', 'D', 'V'],
+    chouine: ['A', '10', 'R', 'D', 'V'], // à 3-4 joueurs la main n'en contient que R, D, V
+  }[combo.type] || [];
+  return hand.filter(c => c.s === combo.suit && ranks.includes(c.r));
+}
+
 function applyDeclareCombo(game, seat, combo) {
   if (combo.type === 'chouine') return game; // géré séparément
 
@@ -296,7 +312,12 @@ function applyDeclareCombo(game, seat, combo) {
   });
 
   const trump = combo.setsTrump && combo.suit ? combo.suit : game.trump;
-  return { ...game, players, trump };
+  // Les cartes de l'annonce sont « étalées sur le tapis » (#77).
+  const lastAnnounce = {
+    seat, sig: combo.sig, label: combo.label,
+    cards: comboCards(game.players[seat].hand, combo),
+  };
+  return { ...game, players, trump, lastAnnounce };
 }
 
 function applyExchangeSeven(game, seat) {
@@ -455,6 +476,7 @@ module.exports = {
   getLegalMoves,
   isLegalMove,
   getAvailableCombos,
+  comboCards,
   applyDeclareCombo,
   applyExchangeSeven,
   applyPlayCard,
