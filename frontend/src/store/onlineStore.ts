@@ -16,6 +16,7 @@ interface SnapshotPlayer {
   annonce: number;
   wonCount: number;
   hand?: Card[];
+  won?: Card[]; // sa propre pile uniquement (#74)
 }
 interface ServerSnapshot {
   sessionId: string;
@@ -34,7 +35,7 @@ interface ServerSnapshot {
   phase: 'draw' | 'final';
   handOver: boolean;
   handNo: number;
-  lastTrick: { winner: number } | null;
+  lastTrick: { cards: TrickEntry[]; winner: number } | null;
   lastHandResult: HandResult | null;
   finished: boolean;
   matchResult: {
@@ -148,7 +149,9 @@ function mapSnapshot(s: ServerSnapshot): GameState {
     gatePending: false,
     players: s.players.map((p, i) => ({
       hand: i === s.you ? (p.hand ?? []) : Array.from({ length: p.handCount }, placeholder),
-      won: Array.from({ length: p.wonCount }, placeholder),
+      // Sa propre pile est réelle (consultation + brisques exactes, #74) ;
+      // l'adverse reste un décompte d'emplacements.
+      won: i === s.you ? (p.won ?? []) : Array.from({ length: p.wonCount }, placeholder),
       declared: new Set<string>(),
       annonce: p.annonce,
     })),
@@ -161,6 +164,7 @@ function mapSnapshot(s: ServerSnapshot): GameState {
     phase: s.phase,
     handOver: s.handOver,
     lastTrickWinner: s.lastTrick ? s.lastTrick.winner : null,
+    lastTrick: s.lastTrick,
     sevenAnnounced: false,
   };
 }

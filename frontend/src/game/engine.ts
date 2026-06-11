@@ -65,6 +65,7 @@ export function createGame(opts: GameOpts): GameState {
     phase: 'draw',
     handOver: false,
     lastTrickWinner: null,
+    lastTrick: null,
     sevenAnnounced: false,
   };
 }
@@ -126,6 +127,7 @@ export function dealHand(game: GameState): GameState {
     phase: 'draw',
     handOver: false,
     lastTrickWinner: null,
+    lastTrick: null,
     gatePending: false,
     sevenAnnounced: false,
   };
@@ -327,6 +329,7 @@ export function applyResolveTrick(game: GameState): GameState {
     leader: winner,
     turn: winner,
     lastTrickWinner: winner,
+    lastTrick: { cards: game.trick, winner },
   };
 
   if (game.phase === 'draw') {

@@ -240,6 +240,11 @@ describe('applyResolveTrick', () => {
     expect(g2.turn).toBe(1);
     expect(g2.trick).toEqual([]);
     expect(g2.players[1].won).toEqual([c('pique', 'R'), c('pique', '10')]);
+    // Le dernier pli reste consultable (cartes + vainqueur) — règle #74.
+    expect(g2.lastTrick).toEqual({
+      cards: [{ p: 0, card: c('pique', 'R') }, { p: 1, card: c('pique', '10') }],
+      winner: 1,
+    });
     expect(g2.players[1].hand).toContainEqual(c('carreau', '9')); // gagnant pioche en premier
     expect(g2.players[0].hand).toContainEqual(c('trefle', '9'));
   });
