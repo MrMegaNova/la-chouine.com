@@ -4,6 +4,7 @@ import { useAuthStore } from '@/store/authStore';
 import { friendsApi, usersApi, type Friend, type FriendRequest, type SearchUser } from '@/api/client';
 import { useGameStore } from '@/store/gameStore';
 import { useNotificationStore } from '@/store/notificationStore';
+import { PresenceDot } from '@/components/PresenceDot';
 
 export default function Friends() {
   const { user, token } = useAuthStore();
@@ -18,6 +19,13 @@ export default function Friends() {
   const [toastMsg, setToastMsg] = useState('');
 
   useEffect(() => { if (!user) { navigate('/connexion'); return; } load(); }, [user]);
+
+  // La présence (#46) évolue sans nous : recharge au retour sur l'onglet.
+  useEffect(() => {
+    const onFocus = () => load();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [token]);
 
   const load = async () => {
     if (!token) return;
@@ -121,11 +129,19 @@ export default function Friends() {
                   <div key={f.id} className="list-row">
                     <div className="list-row__avatar">{initials(f.username)}</div>
                     <div className="list-row__meta">
-                      <b className="list-row__name">{f.username}</b>
-                      <span className="list-row__sub">{f.wins} victoires</span>
+                      <b className="list-row__name"><PresenceDot online={f.online} inGame={f.inGame} />{f.username}</b>
+                      <span className="list-row__sub">
+                        {f.inGame ? 'en partie · ' : f.online ? 'en ligne · ' : ''}{f.wins} victoires
+                      </span>
                     </div>
                     <div className="list-row__actions">
-                      <button className="btn btn--gold btn--sm" onClick={() => playFriend(f.id, f.username)}>Jouer</button>
+                      <button
+                        className="btn btn--gold btn--sm"
+                        disabled={!f.online || f.inGame}
+                        title={f.inGame ? `${f.username} est en partie` : f.online ? undefined : `${f.username} est hors ligne`}
+                        style={!f.online || f.inGame ? { opacity: 0.45, cursor: 'not-allowed' } : undefined}
+                        onClick={() => playFriend(f.id, f.username)}
+                      >Jouer</button>
                     </div>
                   </div>
                 ))

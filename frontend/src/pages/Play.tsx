@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGameStore } from '@/store/gameStore';
 import { useAuthStore } from '@/store/authStore';
-import { friendsApi } from '@/api/client';
+import { friendsApi, type Friend } from '@/api/client';
+import { PresenceDot } from '@/components/PresenceDot';
 import type { GameOpts, Difficulty } from '@/game/types';
 
 function BtnGroup<T extends string>({
@@ -36,8 +37,16 @@ export default function Play() {
   const [localNames, setLocalNames]     = useState(['', '', '', '']);
   const [localTarget, setLocalTarget]   = useState<3 | 5>(3);
 
-  const [friends, setFriends] = useState<{ id: string; username: string }[]>([]);
+  const [friends, setFriends] = useState<Friend[]>([]);
   const [friendsLoaded, setFriendsLoaded] = useState(false);
+
+  // La présence des amis (#46) évolue sans nous : recharge au retour sur l'onglet.
+  useEffect(() => {
+    if (!token) return;
+    const onFocus = () => { friendsApi.list(token).then(({ ok, data }) => { if (ok) setFriends(data); }); };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [token]);
 
   const launch = (opts: GameOpts) => { startGame(opts); navigate('/jeu'); };
 
@@ -163,12 +172,21 @@ export default function Play() {
               <div key={f.id} className="list-row">
                 <div className="list-row__avatar">{f.username.slice(0, 2).toUpperCase()}</div>
                 <div className="list-row__meta">
-                  <b className="list-row__name">{f.username}</b>
+                  <b className="list-row__name"><PresenceDot online={f.online} inGame={f.inGame} />{f.username}</b>
+                  <span className="list-row__sub">{f.inGame ? 'en partie' : f.online ? 'en ligne' : 'hors ligne'}</span>
                 </div>
                 <div className="list-row__actions">
-                  <button className="btn btn--gold btn--sm" onClick={() =>
-                    launch({ mode: 'friend', variant: 'classic', playerCount: 2, diff: 'hard', target: 3, names: [user.username, f.username], oppId: f.id })
-                  }>Défier</button>
+                  {/* Défier un ami injoignable n'a pas de sens (cf. #46) — et le
+                      vrai défi en ligne arrive avec #45. */}
+                  <button
+                    className="btn btn--gold btn--sm"
+                    disabled={!f.online || f.inGame}
+                    title={f.inGame ? `${f.username} est en partie` : f.online ? undefined : `${f.username} est hors ligne`}
+                    style={!f.online || f.inGame ? { opacity: 0.45, cursor: 'not-allowed' } : undefined}
+                    onClick={() =>
+                      launch({ mode: 'friend', variant: 'classic', playerCount: 2, diff: 'hard', target: 3, names: [user.username, f.username], oppId: f.id })
+                    }
+                  >Défier</button>
                 </div>
               </div>
             ))}

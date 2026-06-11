@@ -4,6 +4,7 @@ const express = require('express');
 const { query } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { notifyUser } = require('../realtime/notifier');
+const { userPresence } = require('../realtime/presence');
 
 const router = express.Router();
 
@@ -31,11 +32,14 @@ router.get('/', requireAuth, async (req, res) => {
        ORDER BY u.username`,
       [req.user.id]
     );
+    // Pastille de présence (#46) : uniquement ici, entre amis acceptés —
+    // jamais dans la recherche d'utilisateurs ni le classement.
     res.json(rows.map(r => ({
       id: r.id,
       username: r.username,
       wins: Number(r.wins),
       plays: Number(r.plays),
+      ...userPresence(r.id),
     })));
   } catch (err) {
     console.error('GET /friends error:', err);

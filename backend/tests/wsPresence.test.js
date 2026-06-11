@@ -94,7 +94,33 @@ test('présence : file d’attente puis partie reflétées dans les compteurs', 
   assert.equal(lastPresence(c1.msgs).inGame, 2);
 });
 
+test('présence individuelle (#46) : en ligne, en partie, hors ligne', async (t) => {
+  const { connect } = await setup(t);
+  const c1 = await connect('u1', 'Alice');
+  await connect('u2', 'Bob');
+  await delay(40);
+
+  // (1) Connectés mais pas en partie.
+  assert.deepEqual(presence.userPresence('u1'), { online: true, inGame: false });
+  assert.deepEqual(presence.userPresence('absent'), { online: false, inGame: false });
+
+  // (2) En partie après appariement.
+  c1.ws.send(JSON.stringify({ t: 'queue', action: 'join', variant: 'classic' }));
+  await delay(100);
+  const c2bis = await connect('u2', 'Bob'); // déjà compté, juste pour envoyer
+  c2bis.ws.send(JSON.stringify({ t: 'queue', action: 'join', variant: 'classic' }));
+  await delay(1500);
+  assert.deepEqual(presence.userPresence('u1'), { online: true, inGame: true });
+
+  // (3) Déconnexion totale → hors ligne (même si la session de jeu persiste).
+  c1.ws.close();
+  await delay(60);
+  assert.equal(presence.userPresence('u1').online, false);
+  assert.equal(presence.userPresence('u1').inGame, true, 'la partie attend son retour (délai de grâce #30)');
+});
+
 test('présence : sans fournisseur (serveur WS arrêté/absent), des zéros sans erreur', () => {
   presence.reset();
   assert.deepEqual(presence.getPresence(), { online: 0, inQueue: 0, inGame: 0 });
+  assert.deepEqual(presence.userPresence('u1'), { online: false, inGame: false });
 });
