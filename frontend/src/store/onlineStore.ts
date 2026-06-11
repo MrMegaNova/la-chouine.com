@@ -35,8 +35,18 @@ interface ServerSnapshot {
   lastTrick: { winner: number } | null;
   lastHandResult: HandResult | null;
   finished: boolean;
-  matchResult: { winnerSeat: number; scores: number[] } | null;
+  matchResult: {
+    winnerSeat: number;
+    scores: number[];
+    forfeit?: { by: number; reason: 'abandon' | 'timeout' };
+  } | null;
   players: SnapshotPlayer[];
+}
+
+export interface ForfeitInfo {
+  by: number;                      // siège de l'abandonnant
+  reason: 'abandon' | 'timeout';
+  youWin: boolean;
 }
 
 interface OnlineState {
@@ -48,6 +58,11 @@ interface OnlineState {
   game: GameState | null;
   pendingResult: HandResult | null;
   toast: string | null;
+  // Abandon / reconnexion (#30)
+  opponentDisconnected: boolean;
+  opponentDeadline: number | null; // échéance (ms epoch) avant forfait adverse
+  reconnecting: boolean;           // notre propre connexion est en cours de reprise
+  forfeit: ForfeitInfo | null;     // issue du match si terminé par forfait
 
   findOpponent: (variant: Variant, token: string) => void;
   cancelSearch: () => void;
@@ -56,10 +71,16 @@ interface OnlineState {
   exchangeSeven: (seat: number) => void;
   nextHand: () => void;
   rematch: (token: string) => void;
+  forfeitGame: () => void;
   leave: () => void;
 }
 
 let ws: WebSocket | null = null;
+let lastToken: string | null = null;
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let reconnectAttempts = 0;
+const RECONNECT_DELAY_MS = 2000;
+const RECONNECT_MAX = 14; // ~28 s d'essais, sous le délai de grâce serveur (60 s)
 
 function wsUrl(token: string): string {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
@@ -113,6 +134,8 @@ function send(obj: unknown) {
 }
 
 function closeSocket() {
+  if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+  reconnectAttempts = 0;
   if (ws) {
     try { ws.onclose = null; ws.close(); } catch { /* ignore */ }
     ws = null;
@@ -125,6 +148,17 @@ export const useOnlineStore = create<OnlineState>((set, get) => {
     try { msg = JSON.parse(raw); } catch { return; }
 
     switch (msg.t) {
+      case 'hello':
+        // Reconnexion alors que la partie s'est terminée pendant notre absence
+        // (forfait déjà prononcé côté serveur) : inutile d'attendre un état.
+        if (msg.inSession === false && get().status === 'playing') {
+          set({
+            status: 'error',
+            error: 'La partie s’est terminée pendant votre déconnexion (forfait).',
+            opponentDisconnected: false, opponentDeadline: null,
+          });
+        }
+        break;
       case 'queue':
         if (msg.status === 'searching') set({ status: 'searching' });
         break;
@@ -136,31 +170,67 @@ export const useOnlineStore = create<OnlineState>((set, get) => {
         const game = mapSnapshot(snap);
         let pendingResult: HandResult | null = null;
         if (snap.handOver && snap.lastHandResult) pendingResult = snap.lastHandResult;
+        const mr = snap.matchResult;
+        const forfeit: ForfeitInfo | null = snap.finished && mr?.forfeit
+          ? { by: mr.forfeit.by, reason: mr.forfeit.reason, youWin: mr.winnerSeat === snap.you }
+          : null;
         set({
           game,
           pendingResult,
+          forfeit,
           status: snap.finished ? 'over' : 'playing',
           opponent: snap.names[1 - snap.you] ?? get().opponent,
+          // Un match clos (forfait compris) efface l'alerte de déconnexion adverse.
+          ...(snap.finished ? { opponentDisconnected: false, opponentDeadline: null } : {}),
         });
         break;
       }
+      case 'opponentDisconnected':
+        set({ opponentDisconnected: true, opponentDeadline: (msg.deadline as number) ?? null });
+        break;
+      case 'opponentReconnected':
+        set({ opponentDisconnected: false, opponentDeadline: null });
+        break;
       case 'error':
         set({ toast: (msg.error as string) ?? 'Erreur réseau.' });
         break;
     }
   }
 
+  // Reprise de NOTRE connexion : le serveur accorde un délai de grâce avant
+  // forfait ; on retente donc en boucle (le serveur repousse l'état complet à
+  // la reconnexion). Au-delà de RECONNECT_MAX, on abandonne et on l'affiche.
+  function tryReconnect() {
+    if (!lastToken || reconnectAttempts >= RECONNECT_MAX) {
+      set({ reconnecting: false, status: 'error', error: 'Connexion perdue.' });
+      return;
+    }
+    reconnectAttempts++;
+    set({ reconnecting: true });
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      ensureSocket(lastToken!, () => {
+        reconnectAttempts = 0;
+        set({ reconnecting: false });
+      });
+    }, RECONNECT_DELAY_MS);
+  }
+
   function ensureSocket(token: string, onOpen: () => void) {
+    lastToken = token;
     if (ws && ws.readyState === WebSocket.OPEN) { onOpen(); return; }
-    closeSocket();
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+    if (ws) { try { ws.onclose = null; ws.close(); } catch { /* ignore */ } }
     ws = new WebSocket(wsUrl(token));
     ws.onopen = onOpen;
     ws.onmessage = (e) => handleMessage(typeof e.data === 'string' ? e.data : '');
-    ws.onerror = () => set({ status: 'error', error: 'Connexion au serveur impossible.' });
+    // onclose est l'unique point de décision (onerror est toujours suivi de onclose).
     ws.onclose = () => {
-      // Si on était en recherche/jeu, on signale la déconnexion.
+      ws = null;
       const st = get().status;
-      if (st === 'searching' || st === 'playing' || st === 'found') {
+      if (st === 'playing' || st === 'found') {
+        tryReconnect(); // partie en cours : le délai de grâce nous couvre
+      } else if (st === 'searching') {
         set({ status: 'error', error: 'Connexion perdue.' });
       }
     };
@@ -175,9 +245,17 @@ export const useOnlineStore = create<OnlineState>((set, get) => {
     game: null,
     pendingResult: null,
     toast: null,
+    opponentDisconnected: false,
+    opponentDeadline: null,
+    reconnecting: false,
+    forfeit: null,
 
     findOpponent: (variant, token) => {
-      set({ status: 'searching', variant, opponent: null, error: null, game: null, pendingResult: null, searchStartedAt: Date.now() });
+      set({
+        status: 'searching', variant, opponent: null, error: null, game: null,
+        pendingResult: null, searchStartedAt: Date.now(),
+        opponentDisconnected: false, opponentDeadline: null, reconnecting: false, forfeit: null,
+      });
       ensureSocket(token, () => send({ t: 'queue', action: 'join', variant }));
     },
 
@@ -194,14 +272,26 @@ export const useOnlineStore = create<OnlineState>((set, get) => {
 
     rematch: (token) => {
       const variant = get().variant;
-      set({ status: 'searching', opponent: null, game: null, pendingResult: null, error: null, searchStartedAt: Date.now() });
+      set({
+        status: 'searching', opponent: null, game: null, pendingResult: null, error: null,
+        searchStartedAt: Date.now(),
+        opponentDisconnected: false, opponentDeadline: null, reconnecting: false, forfeit: null,
+      });
       ensureSocket(token, () => send({ t: 'queue', action: 'join', variant }));
     },
+
+    // Abandon volontaire : le serveur clôt le match (victoire adverse) et
+    // renverra l'état final ; l'appelant décide ensuite de quitter ou non.
+    forfeitGame: () => send({ t: 'action', action: { type: 'forfeit' } }),
 
     leave: () => {
       send({ t: 'queue', action: 'leave' });
       closeSocket();
-      set({ status: 'idle', game: null, pendingResult: null, opponent: null, searchStartedAt: null, error: null });
+      set({
+        status: 'idle', game: null, pendingResult: null, opponent: null,
+        searchStartedAt: null, error: null,
+        opponentDisconnected: false, opponentDeadline: null, reconnecting: false, forfeit: null,
+      });
     },
   };
 });

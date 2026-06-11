@@ -16,7 +16,14 @@
 //                       { t:'action', action:{...} } | { t:'sync' }
 //   serveur → client : { t:'hello', userId } | { t:'queue', status, ... } |
 //                       { t:'matchFound', sessionId, opponent } |
-//                       { t:'state', state } | { t:'error', error }
+//                       { t:'state', state } | { t:'error', error } |
+//                       { t:'opponentDisconnected', deadline, graceMs } |
+//                       { t:'opponentReconnected' }
+//
+// Abandon / reconnexion (#30) : à la fermeture du DERNIER socket d'un joueur en
+// partie, un délai de grâce démarre (l'adversaire est prévenu). S'il revient à
+// temps, la partie reprend ; sinon le match est clos par forfait (défaite Elo
+// pleine). L'action { type:'forfeit' } permet d'abandonner volontairement.
 
 const { WebSocketServer } = require('ws');
 const { verifyToken } = require('../middleware/auth');
@@ -50,6 +57,8 @@ function defaultGetRating(userId, variant) {
  * @param {(userId,variant)=>Promise<number>} [opts.getRating]
  * @param {object} [opts.matchmaking]  options du Matchmaker
  * @param {number} [opts.tickMs]       période de la boucle d'appariement
+ * @param {number} [opts.graceMs]      délai de grâce avant forfait sur déconnexion
+ * @param {number} [opts.heartbeatMs]  période du ping de vie (0 = désactivé)
  * @param {string} [opts.path]
  */
 function attachWebSocketServer(httpServer, opts = {}) {
@@ -57,6 +66,8 @@ function attachWebSocketServer(httpServer, opts = {}) {
   const getRating = opts.getRating || defaultGetRating;
   const matchmaker = new Matchmaker(opts.matchmaking || {});
   const tickMs = opts.tickMs ?? 1000;
+  const graceMs = opts.graceMs ?? 60000;
+  const heartbeatMs = opts.heartbeatMs ?? 30000;
 
   const wss = new WebSocketServer({ server: httpServer, path: opts.path || '/ws' });
 
@@ -86,6 +97,66 @@ function attachWebSocketServer(httpServer, opts = {}) {
   const broadcast = (session) => {
     for (const p of session.players) pushStateTo(p.userId, session);
   };
+
+  const opponentOf = (session, userId) =>
+    session.players.find(p => p.userId !== userId) || null;
+
+  // ── Clôture de match (victoire normale ou forfait) ──
+  function finishSession(session) {
+    for (const p of session.players) cancelGrace(p.userId, { silent: true });
+    const outcome = { sessionId: session.id, ...session.getMatchOutcome() };
+    try { onMatchComplete(outcome); }
+    catch (e) { console.error('[ws] onMatchComplete a échoué :', e.message); }
+    registry.endSession(session.id);
+  }
+
+  // ── Délai de grâce sur déconnexion (#30) ──
+  // userId -> { timer, deadline } ; armé seulement quand le DERNIER socket d'un
+  // joueur en partie se ferme (multi-onglets : les autres onglets le maintiennent).
+  const graceTimers = new Map();
+  let stopped = false; // après stop(), plus aucun forfait ne doit être armé
+
+  function startGrace(userId) {
+    if (stopped || graceTimers.has(userId)) return;
+    const session = registry.sessionForUser(userId);
+    if (!session || session.finished) return;
+
+    const deadline = Date.now() + graceMs;
+    const timer = setTimeout(() => {
+      graceTimers.delete(userId);
+      const s = registry.sessionForUser(userId);
+      if (!s || s.finished || sockets.has(userId)) return;
+      const res = s.forfeit(s.seatOf(userId), 'timeout');
+      if (!res.ok) return;
+      broadcast(s);
+      finishSession(s);
+    }, graceMs);
+    if (timer.unref) timer.unref();
+    graceTimers.set(userId, { timer, deadline });
+
+    const opp = opponentOf(session, userId);
+    if (opp) notify(opp.userId, { t: 'opponentDisconnected', deadline, graceMs });
+  }
+
+  function cancelGrace(userId, { silent = false } = {}) {
+    const pending = graceTimers.get(userId);
+    if (!pending) return;
+    clearTimeout(pending.timer);
+    graceTimers.delete(userId);
+    if (silent) return;
+    const session = registry.sessionForUser(userId);
+    const opp = session ? opponentOf(session, userId) : null;
+    if (opp) notify(opp.userId, { t: 'opponentReconnected' });
+  }
+
+  // Fermeture d'un socket : retrait de la file, et si c'était le dernier onglet
+  // d'un joueur en partie, démarrage du délai de grâce avant forfait.
+  function handleSocketGone(userId, ws) {
+    removeSocket(userId, ws);
+    if (sockets.has(userId)) return; // un autre onglet maintient la présence
+    matchmaker.leave(userId);
+    startGrace(userId);
+  }
 
   // ── Boucle d'appariement ──
   function onPair(a, b) {
@@ -142,11 +213,17 @@ function attachWebSocketServer(httpServer, opts = {}) {
       return;
     }
     ws.userId = user.id;
+    ws.isAlive = true;
+    ws.on('pong', () => { ws.isAlive = true; });
     addSocket(user.id, ws);
-    send(ws, { t: 'hello', userId: user.id });
 
-    // Reprise : si une partie est en cours pour ce joueur, on lui renvoie l'état.
+    // Reprise : si une partie est en cours pour ce joueur, on lui renvoie l'état
+    // et on désarme l'éventuel forfait en attente (l'adversaire est prévenu).
+    // `inSession` permet à un client qui se croyait en partie de découvrir
+    // qu'elle s'est terminée pendant son absence (forfait déjà prononcé).
+    cancelGrace(user.id);
     const existing = registry.sessionForUser(user.id);
+    send(ws, { t: 'hello', userId: user.id, inSession: !!existing });
     if (existing) pushStateTo(user.id, existing);
 
     ws.on('message', (raw) => {
@@ -165,23 +242,39 @@ function attachWebSocketServer(httpServer, opts = {}) {
         const res = session.applyAction(user.id, msg.action);
         if (!res.ok) send(ws, { t: 'error', error: res.error });
         broadcast(session); // rediffuse l'état (à jour ou inchangé) aux deux joueurs
-        if (session.finished) {
-          const outcome = { sessionId: session.id, ...session.getMatchOutcome() };
-          try { onMatchComplete(outcome); }
-          catch (e) { console.error('[ws] onMatchComplete a échoué :', e.message); }
-          registry.endSession(session.id);
-        }
+        if (session.finished) finishSession(session);
         return;
       }
       send(ws, { t: 'error', error: 'Message inconnu.' });
     });
 
-    ws.on('close', () => { removeSocket(user.id, ws); matchmaker.leave(user.id); });
-    ws.on('error', () => { removeSocket(user.id, ws); matchmaker.leave(user.id); });
+    ws.on('close', () => handleSocketGone(user.id, ws));
+    ws.on('error', () => handleSocketGone(user.id, ws));
   });
 
+  // ── Heartbeat ──
+  // Détecte les connexions mortes que TCP ne signale pas (mobile, veille) : un
+  // socket qui ne répond pas au ping est terminé, ce qui déclenche le délai de
+  // grâce comme une déconnexion ordinaire.
+  let heartbeat = null;
+  if (heartbeatMs > 0) {
+    heartbeat = setInterval(() => {
+      for (const ws of wss.clients) {
+        if (ws.isAlive === false) { ws.terminate(); continue; }
+        ws.isAlive = false;
+        ws.ping();
+      }
+    }, heartbeatMs);
+    if (heartbeat.unref) heartbeat.unref();
+  }
+
   function stop() {
+    stopped = true;
     clearInterval(timer);
+    if (heartbeat) clearInterval(heartbeat);
+    for (const { timer: t } of graceTimers.values()) clearTimeout(t);
+    graceTimers.clear();
+    for (const ws of wss.clients) ws.terminate(); // ne pas laisser de connexions pendantes
     wss.close();
   }
 
