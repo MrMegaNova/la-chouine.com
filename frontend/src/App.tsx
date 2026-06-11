@@ -9,7 +9,9 @@ import { Header } from '@/components/layout/Header';
 import { GameTable } from '@/components/game/GameTable';
 import { OnlinePvP } from '@/components/game/OnlinePvP';
 import { ChallengeOverlay } from '@/components/game/ChallengeOverlay';
+import { Footer } from '@/components/layout/Footer';
 import Home from '@/pages/Home';
+import About from '@/pages/About';
 import Play from '@/pages/Play';
 import Login from '@/pages/Login';
 import Friends from '@/pages/Friends';
@@ -73,10 +75,13 @@ export default function App() {
           <Route path="/amis" element={<Friends />} />
           <Route path="/profil" element={<Profile />} />
           <Route path="/regles" element={<Rules />} />
+          <Route path="/a-propos" element={<About />} />
           <Route path="/verify-email" element={<VerifyEmail />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
+      {/* Footer global (#88) — masqué pendant une partie (overlay plein écran). */}
+      {!tableActive && <Footer />}
       {game && <GameTable />}
       <OnlinePvP />
       <ChallengeOverlay />

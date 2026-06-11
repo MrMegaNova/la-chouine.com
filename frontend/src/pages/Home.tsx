@@ -172,13 +172,6 @@ export default function Home() {
           </div>
         </div>
       </section>
-
-      <footer style={{ borderTop: '1px solid var(--line)', padding: '30px 0', marginTop: 30, color: 'var(--cream-2)' }}>
-        <div className="wrap" style={{ display: 'flex', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap', fontSize: 13.5, opacity: .8 }}>
-          <span>◑ La Chouine — hébergé sur <b>la-chouine.com</b></span>
-          <span>Jeu historique de la Vallée du Loir · Championnat du monde à Lavardin</span>
-        </div>
-      </footer>
     </>
   );
 }
