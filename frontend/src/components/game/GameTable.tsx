@@ -1,7 +1,7 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useGameStore } from '@/store/gameStore';
 import { useAuthStore } from '@/store/authStore';
-import { getLegalMoves, getAvailableCombos } from '@/game/engine';
+import { getLegalMoves, getAvailableCombos, sortHand, isBrisque } from '@/game/engine';
 import { SUIT_SYMBOL } from '@/game/constants';
 import { PlayingCard } from './PlayingCard';
 import { HandResult } from './HandResult';
@@ -39,6 +39,9 @@ export function GameTable({ controller }: { controller?: GameController } = {}) 
     revealForPlayer, quitGame, clearPendingResult } = ctrl;
   const { user, token } = useAuthStore();
   const toastRef = useRef<HTMLDivElement>(null);
+  // Consultation des plis (#74) : 'mine' = ses propres plis, 'last' = le
+  // dernier pli ramassé (seul pli adverse que la règle autorise à revoir).
+  const [tricksView, setTricksView] = useState<'mine' | 'last' | null>(null);
 
   useEffect(() => {
     if (!toast || !toastRef.current) return;
@@ -136,18 +139,27 @@ export function GameTable({ controller }: { controller?: GameController } = {}) 
             ))}
           </div>
 
-          {/* Capture info */}
+          {/* Capture info — les brisques adverses ne sont pas affichées : la
+              règle ne donne droit qu'au dernier pli adverse (#74), à chacun
+              de retenir les cartes tombées. */}
           <div className={styles.captureInfo}>
             {game.names.map((name, p) => {
               const pl = game.players[p];
               const plis = Math.floor(pl.won.length / n);
-              const briq = pl.won.filter(c => c.r === 'A' || c.r === '10').length;
+              const briq = pl.won.filter(isBrisque).length;
               return (
                 <span key={p} className={`${styles.captLine} ${p === me ? styles.captMe : ''}`}>
-                  {name} — plis {plis} · briq {briq}{pl.annonce ? ` · ann ${pl.annonce}` : ''}
+                  {name} — plis {plis}{p === me ? ` · briq ${briq}` : ''}{pl.annonce ? ` · ann ${pl.annonce}` : ''}
                 </span>
               );
             })}
+            <span>
+              <button className="btn btn--ghost btn--sm" disabled={game.players[me].won.length === 0}
+                onClick={() => setTricksView('mine')}>Mes plis</button>
+              {' '}
+              <button className="btn btn--ghost btn--sm" disabled={!game.lastTrick}
+                onClick={() => setTricksView('last')}>Dernier pli</button>
+            </span>
           </div>
         </div>
 
@@ -234,6 +246,11 @@ export function GameTable({ controller }: { controller?: GameController } = {}) 
         </div>
       )}
 
+      {/* Consultation des plis (#74) */}
+      {tricksView && (
+        <TricksPanel game={game} me={me} view={tricksView} onClose={() => setTricksView(null)} />
+      )}
+
       {/* End of hand result */}
       {pendingResult && (
         <HandResult
@@ -245,6 +262,55 @@ export function GameTable({ controller }: { controller?: GameController } = {}) 
           online={ctrl.online}
         />
       )}
+    </div>
+  );
+}
+
+// Panneau de consultation (#74) : ses propres plis à volonté, ou le dernier
+// pli ramassé (cartes + vainqueur) — conformément à la règle de Lavardin.
+function TricksPanel({ game, me, view, onClose }: {
+  game: GameState; me: number; view: 'mine' | 'last'; onClose: () => void;
+}) {
+  const mine = view === 'mine';
+  const myCards = mine ? sortHand(game.players[me].won) : [];
+  const briq = mine ? game.players[me].won.filter(isBrisque).length : 0;
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(8,23,16,.75)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 18,
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          maxWidth: 520, maxHeight: '80vh', overflowY: 'auto', padding: 22,
+          border: '1px solid var(--gold)', borderRadius: 18, background: '#102a20', textAlign: 'center',
+        }}
+      >
+        <h3 style={{ fontFamily: 'var(--serif)', fontSize: 22, margin: '0 0 4px' }}>
+          {mine ? 'Mes plis' : 'Dernier pli'}
+        </h3>
+        <p className="note" style={{ marginBottom: 14 }}>
+          {mine
+            ? `${Math.floor(myCards.length / game.playerCount)} pli${myCards.length >= game.playerCount * 2 ? 's' : ''} · ${briq} brisque${briq > 1 ? 's' : ''}`
+            : game.lastTrick ? `Ramassé par ${game.names[game.lastTrick.winner]}` : ''}
+        </p>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
+          {mine
+            ? myCards.map((c, i) => (
+                <PlayingCard key={i} card={c} size={64} trump={game.trump !== null && c.s === game.trump} />
+              ))
+            : (game.lastTrick?.cards ?? []).map((t, i) => (
+                <div key={i} style={{ textAlign: 'center' }}>
+                  <div className="note" style={{ fontSize: 11.5, marginBottom: 3 }}>{game.names[t.p]}</div>
+                  <PlayingCard card={t.card} size={64} trump={game.trump !== null && t.card.s === game.trump} />
+                </div>
+              ))}
+        </div>
+        <button className="btn btn--ghost btn--full" style={{ marginTop: 18 }} onClick={onClose}>Fermer</button>
+      </div>
     </div>
   );
 }

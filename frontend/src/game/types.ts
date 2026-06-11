@@ -55,6 +55,8 @@ export interface GameState {
   phase: Phase;
   handOver: boolean;
   lastTrickWinner: number | null;
+  // Dernier pli ramassé (cartes + vainqueur) : seul pli adverse consultable (#74).
+  lastTrick: { cards: TrickEntry[]; winner: number } | null;
   sevenAnnounced: boolean;
 }
 

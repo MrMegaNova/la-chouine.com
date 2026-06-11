@@ -118,6 +118,19 @@ test('forfeit : refusé si la partie est déjà terminée ; aucun coup après fo
   assert.equal(sess.applyAction('u1', { type: 'play', card: c('pique', 'A') }).ok, false);
 });
 
+test('snapshotFor : ses propres plis visibles, ceux de l’adversaire en décompte seul (#74)', () => {
+  const sess = mkSession({
+    players: [
+      p([c('pique', 'A')], [c('coeur', 'A'), c('coeur', '9')]),
+      p([c('pique', 'R')], [c('trefle', '7'), c('trefle', '8')]),
+    ],
+  });
+  const snap = sess.snapshotFor('u1');
+  assert.deepEqual(snap.players[0].won, [c('coeur', 'A'), c('coeur', '9')], 'sa pile est consultable');
+  assert.equal(snap.players[1].won, undefined, 'la pile adverse reste masquée');
+  assert.equal(snap.players[1].wonCount, 2, 'seul le décompte adverse est public');
+});
+
 test('snapshotFor : ne fournit pas les coups légaux au joueur dont ce n’est pas le tour', () => {
   const sess = mkSession({
     turn: 0, players: [p([c('pique', 'A')]), p([c('pique', 'R')])],

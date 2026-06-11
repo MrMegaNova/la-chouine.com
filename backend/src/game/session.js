@@ -231,6 +231,9 @@ class GameSession {
         wonCount: p.won.length,
         // Main visible uniquement pour le joueur destinataire de ce snapshot.
         hand: i === seat ? p.hand : undefined,
+        // Ses propres plis sont consultables à tout moment (#74) ; ceux de
+        // l'adversaire restent un simple décompte (seul lastTrick est public).
+        won: i === seat ? p.won : undefined,
         // Coups légaux fournis seulement au joueur dont c'est le tour.
         legalMoves: i === seat && s.turn === seat && !s.handOver
           ? getLegalMoves(s, seat)
