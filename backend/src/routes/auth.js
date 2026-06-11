@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const { query, withTransaction } = require('../db');
 const { signToken } = require('../middleware/auth');
 const { sendVerificationEmail, sendPasswordResetEmail, logMailError } = require('../services/email');
+const { isUsernameAllowed } = require('../services/usernameFilter');
 const config = require('../config');
 
 const router = express.Router();
@@ -36,6 +37,9 @@ function validateRegister(body) {
   const { username, email, password } = body;
   if (!username || !USERNAME_RE.test(username))
     errors.push('Le pseudo doit contenir 2 à 30 caractères (lettres, chiffres, _ ou -).');
+  else if (!isUsernameAllowed(username))
+    // Message volontairement neutre : ne pas révéler la liste ni la règle (#72).
+    errors.push('Ce pseudo n\'est pas disponible.');
   if (!email || !EMAIL_RE.test(email))
     errors.push('Adresse email invalide.');
   const pwdError = validatePassword(password);
