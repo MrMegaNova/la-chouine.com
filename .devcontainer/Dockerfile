@@ -43,8 +43,10 @@ RUN SNIPPET="export PROMPT_COMMAND='history -a' && export HISTFILE=/commandhisto
 ENV DEVCONTAINER=true
 
 # Create workspace and config directories and set permissions
-RUN mkdir -p /workspace /home/node/.claude && \
-  chown -R node:node /workspace /home/node/.claude
+# (.config/gh est monté en volume : le créer ici garantit que le volume vierge
+# hérite du propriétaire node et que `gh auth login` puisse y écrire)
+RUN mkdir -p /workspace /home/node/.claude /home/node/.config/gh && \
+  chown -R node:node /workspace /home/node/.claude /home/node/.config
 
 WORKDIR /workspace
 
