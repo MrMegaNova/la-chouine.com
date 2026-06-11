@@ -29,6 +29,7 @@ const { WebSocketServer } = require('ws');
 const { verifyToken } = require('../middleware/auth');
 const registry = require('./sessionRegistry');
 const { Matchmaker } = require('./matchmaking');
+const presence = require('./presence');
 
 function send(ws, obj) {
   if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(obj));
@@ -101,6 +102,29 @@ function attachWebSocketServer(httpServer, opts = {}) {
   const opponentOf = (session, userId) =>
     session.players.find(p => p.userId !== userId) || null;
 
+  // ── Présence (#43) ──
+  // Compteurs (jamais de noms) : joueurs connectés (dédupliqués par userId,
+  // multi-onglets = 1), en file d'attente, en partie. Exposés aux routes via
+  // le module presence, et diffusés aux connectés à chaque changement
+  // (debounce court : une rafale de connexions ne produit qu'un message).
+  const presenceStats = () => ({
+    online: sockets.size,
+    inQueue: matchmaker.totalSize(),
+    inGame: registry.activeUserCount(),
+  });
+  presence.setProvider(presenceStats);
+
+  let presenceTimer = null;
+  function schedulePresence() {
+    if (stopped || presenceTimer) return;
+    presenceTimer = setTimeout(() => {
+      presenceTimer = null;
+      const msg = { t: 'presence', ...presenceStats() };
+      for (const set of sockets.values()) for (const ws of set) send(ws, msg);
+    }, 250);
+    if (presenceTimer.unref) presenceTimer.unref();
+  }
+
   // ── Clôture de match (victoire normale ou forfait) ──
   function finishSession(session) {
     for (const p of session.players) cancelGrace(p.userId, { silent: true });
@@ -108,6 +132,7 @@ function attachWebSocketServer(httpServer, opts = {}) {
     try { onMatchComplete(outcome); }
     catch (e) { console.error('[ws] onMatchComplete a échoué :', e.message); }
     registry.endSession(session.id);
+    schedulePresence();
   }
 
   // ── Délai de grâce sur déconnexion (#30) ──
@@ -156,6 +181,7 @@ function attachWebSocketServer(httpServer, opts = {}) {
     if (sockets.has(userId)) return; // un autre onglet maintient la présence
     matchmaker.leave(userId);
     startGrace(userId);
+    schedulePresence();
   }
 
   // ── Boucle d'appariement ──
@@ -168,6 +194,7 @@ function attachWebSocketServer(httpServer, opts = {}) {
     notify(a.userId, { t: 'matchFound', sessionId: session.id, opponent: b.name });
     notify(b.userId, { t: 'matchFound', sessionId: session.id, opponent: a.name });
     broadcast(session);
+    schedulePresence();
   }
   const timer = setInterval(() => {
     let pairs;
@@ -181,6 +208,7 @@ function attachWebSocketServer(httpServer, opts = {}) {
   function handleQueue(ws, user, msg) {
     if (msg.action === 'leave') {
       matchmaker.leave(user.id);
+      schedulePresence();
       return send(ws, { t: 'queue', status: 'left' });
     }
     if (msg.action === 'join') {
@@ -193,6 +221,7 @@ function attachWebSocketServer(httpServer, opts = {}) {
         .then((rating) => {
           matchmaker.join({ userId: user.id, name: user.username || 'Joueur', rating, variant });
           send(ws, { t: 'queue', status: 'searching', variant, rating });
+          schedulePresence();
         })
         .catch(() => send(ws, { t: 'error', error: 'File d’attente indisponible.' }));
       return;
@@ -224,7 +253,9 @@ function attachWebSocketServer(httpServer, opts = {}) {
     cancelGrace(user.id);
     const existing = registry.sessionForUser(user.id);
     send(ws, { t: 'hello', userId: user.id, inSession: !!existing });
+    send(ws, { t: 'presence', ...presenceStats() }); // état immédiat, sans attendre la diffusion
     if (existing) pushStateTo(user.id, existing);
+    schedulePresence();
 
     ws.on('message', (raw) => {
       let msg;
@@ -272,6 +303,7 @@ function attachWebSocketServer(httpServer, opts = {}) {
     stopped = true;
     clearInterval(timer);
     if (heartbeat) clearInterval(heartbeat);
+    if (presenceTimer) { clearTimeout(presenceTimer); presenceTimer = null; }
     for (const { timer: t } of graceTimers.values()) clearTimeout(t);
     graceTimers.clear();
     for (const ws of wss.clients) ws.terminate(); // ne pas laisser de connexions pendantes

@@ -35,9 +35,14 @@ function endSession(id) {
   sessions.delete(id);
 }
 
+/** Nombre de joueurs actuellement en partie (toutes sessions confondues). */
+function activeUserCount() {
+  return userSession.size;
+}
+
 function reset() { // utilitaire de test
   sessions.clear();
   userSession.clear();
 }
 
-module.exports = { createSession, getSession, sessionForUser, endSession, reset };
+module.exports = { createSession, getSession, sessionForUser, endSession, activeUserCount, reset };

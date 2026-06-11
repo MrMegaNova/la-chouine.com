@@ -150,3 +150,12 @@ export const gamesApi = {
   save: (payload: SaveGamePayload, token: string) =>
     apiCall<{ id: string }>('POST', '/games', payload, token),
 };
+
+// ─── Présence ─────────────────────────────────────────────────────────────────
+
+export const onlineApi = {
+  // Compteurs publics de joueurs en ligne (#43) — pour les visiteurs sans
+  // connexion WebSocket ; les connectés reçoivent les mêmes chiffres en push.
+  get: () =>
+    apiCall<{ online: number; inQueue: number; inGame: number }>('GET', '/online'),
+};

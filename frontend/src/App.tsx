@@ -30,11 +30,20 @@ function VerifyEmail() {
 }
 
 export default function App() {
-  const { restoreSession } = useAuthStore();
+  const { restoreSession, token } = useAuthStore();
   const { game } = useGameStore();
   const onlineStatus = useOnlineStore(s => s.status);
+  const { connectPresence, disconnectPresence } = useOnlineStore();
 
   useEffect(() => { restoreSession(); }, []);
+
+  // Présence (#43) : socket ouvert tant que l'utilisateur est connecté — il
+  // alimente le compteur de joueurs en ligne et sert de canal de reprise si
+  // une partie était en cours (le serveur repousse l'état à la connexion).
+  useEffect(() => {
+    if (token) connectPresence(token);
+    else disconnectPresence();
+  }, [token]);
 
   // Le header est masqué dès qu'une table (locale ou en ligne) occupe l'écran.
   const tableActive = !!game || onlineStatus !== 'idle';
