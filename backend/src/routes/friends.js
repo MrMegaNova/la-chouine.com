@@ -3,6 +3,7 @@
 const express = require('express');
 const { query } = require('../db');
 const { requireAuth } = require('../middleware/auth');
+const { notifyUser } = require('../realtime/notifier');
 
 const router = express.Router();
 
@@ -109,6 +110,9 @@ router.post('/request', requireAuth, async (req, res) => {
       `INSERT INTO friendships (requester_id, addressee_id) VALUES ($1, $2)`,
       [req.user.id, targetId]
     );
+    // Temps réel (#44) : prévient le destinataire s'il est connecté ; sinon le
+    // badge alimenté par GET /friends/requests prendra le relais.
+    notifyUser(targetId, { kind: 'friendRequest', from: req.user.username });
     res.status(201).json({ message: 'Demande d\'ami envoyée.' });
   } catch (err) {
     console.error('POST /friends/request error:', err);

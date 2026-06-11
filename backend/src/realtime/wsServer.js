@@ -30,6 +30,7 @@ const { verifyToken } = require('../middleware/auth');
 const registry = require('./sessionRegistry');
 const { Matchmaker } = require('./matchmaking');
 const presence = require('./presence');
+const notifier = require('./notifier');
 
 function send(ws, obj) {
   if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(obj));
@@ -89,6 +90,7 @@ function attachWebSocketServer(httpServer, opts = {}) {
     const set = sockets.get(userId);
     if (set) for (const ws of set) send(ws, obj);
   };
+  notifier.setSender(notify); // les routes Express peuvent notifier (#44)
   const pushStateTo = (userId, session) => {
     const set = sockets.get(userId);
     if (!set) return;

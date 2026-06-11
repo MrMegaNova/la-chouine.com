@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { useNotificationStore } from '@/store/notificationStore';
 import type { Card, GameState, HandResult, Variant, Suit, TrickEntry } from '@/game/types';
 
 // ─── Store PvP en ligne ───────────────────────────────────────────────────────
@@ -208,6 +209,12 @@ export const useOnlineStore = create<OnlineState>((set, get) => {
         });
         break;
       }
+      case 'notification':
+        // Reçues sur le socket de présence (#43) ; routage par `kind` (#44).
+        if (msg.kind === 'friendRequest') {
+          useNotificationStore.getState().onFriendRequest((msg.from as string) ?? 'Un joueur');
+        }
+        break;
       case 'opponentDisconnected':
         set({ opponentDisconnected: true, opponentDeadline: (msg.deadline as number) ?? null });
         break;
