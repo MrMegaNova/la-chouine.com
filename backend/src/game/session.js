@@ -64,8 +64,27 @@ class GameSession {
       case 'declare':      return this._declare(seat, action.sig);
       case 'exchangeSeven':return this._exchangeSeven(seat);
       case 'nextHand':     return this._nextHand(seat);
+      case 'forfeit':      return this.forfeit(seat, 'abandon');
       default:             return { ok: false, error: 'Type d’action inconnu.' };
     }
+  }
+
+  /**
+   * Clôt le match par forfait du siège donné : l'adversaire gagne, le résultat
+   * est enregistré comme une défaite Elo pleine (sinon abandonner permettrait
+   * de fuir les défaites). `reason` : 'abandon' (volontaire) | 'timeout'
+   * (déconnexion non revenue avant la fin du délai de grâce).
+   */
+  forfeit(seat, reason = 'abandon') {
+    if (this.finished) return { ok: false, error: 'Partie terminée.' };
+    if (seat !== 0 && seat !== 1) return { ok: false, error: 'Siège invalide.' };
+    this.finished = true;
+    this.matchResult = {
+      winnerSeat: 1 - seat,
+      scores: [...this.state.scores],
+      forfeit: { by: seat, reason },
+    };
+    return { ok: true };
   }
 
   _play(seat, card) {

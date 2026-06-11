@@ -7,7 +7,9 @@ import { GameTable, type GameController } from './GameTable';
 // Pilote l'expérience PvP en ligne, rendue en overlay plein écran :
 //   - recherche d'adversaire (file d'attente) → écran d'attente,
 //   - match trouvé → bref écran de transition,
-//   - partie en cours → GameTable alimentée par le serveur (via contrôleur).
+//   - partie en cours → GameTable alimentée par le serveur (via contrôleur),
+//     avec bannières de déconnexion (la nôtre ou celle de l'adversaire) et
+//     écran de fin si le match se conclut par forfait (#30).
 export function OnlinePvP() {
   const navigate = useNavigate();
   const { token } = useAuthStore();
@@ -31,6 +33,8 @@ export function OnlinePvP() {
   // status 'playing' | 'over' : la partie (ou son résultat) est affichée par GameTable.
   if (!o.game) return null;
 
+  const goHome = () => { o.leave(); navigate('/'); };
+
   const controller: GameController = {
     game: o.game,
     pendingResult: o.pendingResult,
@@ -39,16 +43,112 @@ export function OnlinePvP() {
     declareCombo: o.declareCombo,
     exchangeSeven: o.exchangeSeven,
     revealForPlayer: () => {},
-    quitGame: () => { o.leave(); navigate('/'); },
+    quitGame: () => {
+      // Quitter en pleine partie = abandon : l'adversaire gagne par forfait.
+      if (o.status === 'playing') {
+        if (!window.confirm('Abandonner la partie ? Votre adversaire gagnera par forfait.')) return;
+        o.forfeitGame();
+      }
+      goHome();
+    },
     clearPendingResult: () => {},
     online: {
       nextHand: o.nextHand,
       rematch: () => { if (token) o.rematch(token); },
-      home: () => { o.leave(); navigate('/'); },
+      home: goHome,
     },
   };
 
-  return <GameTable controller={controller} />;
+  return (
+    <>
+      <GameTable controller={controller} />
+      {o.status === 'playing' && o.reconnecting && (
+        <Banner text="Connexion perdue — tentative de reconnexion…" />
+      )}
+      {o.status === 'playing' && !o.reconnecting && o.opponentDisconnected && (
+        <OpponentGoneBanner opponent={o.opponent} deadline={o.opponentDeadline} />
+      )}
+      {o.status === 'over' && o.forfeit && (
+        <ForfeitEnd
+          youWin={o.forfeit.youWin}
+          reason={o.forfeit.reason}
+          opponent={o.opponent}
+          onRematch={token ? () => o.rematch(token) : null}
+          onHome={goHome}
+        />
+      )}
+    </>
+  );
+}
+
+function Banner({ text }: { text: string }) {
+  return (
+    <div style={{
+      position: 'fixed', top: 14, left: '50%', transform: 'translateX(-50%)', zIndex: 80,
+      padding: '10px 18px', borderRadius: 12, border: '1px solid var(--gold)',
+      background: '#102a20', color: 'var(--cream)', fontSize: 14, maxWidth: '92vw',
+    }}>
+      {text}
+    </div>
+  );
+}
+
+// L'adversaire a perdu la connexion : compte à rebours avant sa défaite par
+// forfait (il peut revenir à temps, le serveur nous le signalera).
+function OpponentGoneBanner({ opponent, deadline }: { opponent: string | null; deadline: number | null }) {
+  const [left, setLeft] = useState(() =>
+    deadline ? Math.max(0, Math.ceil((deadline - Date.now()) / 1000)) : null);
+  useEffect(() => {
+    if (!deadline) return;
+    const id = setInterval(
+      () => setLeft(Math.max(0, Math.ceil((deadline - Date.now()) / 1000))), 500);
+    return () => clearInterval(id);
+  }, [deadline]);
+
+  const who = opponent ?? 'Votre adversaire';
+  return (
+    <Banner text={left !== null
+      ? `⚠️ ${who} est déconnecté — victoire par forfait dans ${left}s s'il ne revient pas.`
+      : `⚠️ ${who} est déconnecté — en attente de son retour…`}
+    />
+  );
+}
+
+// Fin de match par forfait (abandon volontaire ou déconnexion prolongée).
+function ForfeitEnd({
+  youWin, reason, opponent, onRematch, onHome,
+}: {
+  youWin: boolean;
+  reason: 'abandon' | 'timeout';
+  opponent: string | null;
+  onRematch: (() => void) | null;
+  onHome: () => void;
+}) {
+  const who = opponent ?? 'Votre adversaire';
+  const detail = youWin
+    ? (reason === 'timeout'
+        ? `${who} ne s'est pas reconnecté à temps.`
+        : `${who} a abandonné la partie.`)
+    : 'Vous avez abandonné la partie.';
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 80,
+      background: 'rgba(8, 23, 16, .82)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 18,
+    }}>
+      <div style={{ textAlign: 'center', maxWidth: 380, padding: 32, border: '1px solid var(--gold)', borderRadius: 20, background: '#102a20' }}>
+        <div style={{ fontSize: 40, marginBottom: 10 }}>{youWin ? '🏆' : '🏳️'}</div>
+        <h2 style={{ fontFamily: 'var(--serif)', fontSize: 26, margin: '0 0 8px' }}>
+          {youWin ? 'Victoire par forfait !' : 'Défaite par forfait'}
+        </h2>
+        <p className="note" style={{ marginBottom: 20 }}>{detail} Votre classement Elo a été mis à jour.</p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {onRematch && <button className="btn btn--gold btn--full" onClick={onRematch}>⚔ Rejouer</button>}
+          <button className="btn btn--ghost btn--full" onClick={onHome}>Retour à l'accueil</button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function Waiting({

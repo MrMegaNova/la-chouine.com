@@ -95,6 +95,29 @@ test('chouine gagnante qui atteint l’objectif → match terminé + outcome', (
   assert.equal(outcome.players.find(x => x.userId === 'u1').score, 3);
 });
 
+test('forfeit : l’adversaire gagne, défaite Elo pleine pour l’abandonnant', () => {
+  const sess = mkSession({ scores: [1, 0] });
+  const res = sess.applyAction('u1', { type: 'forfeit' });
+  assert.ok(res.ok);
+  assert.equal(sess.finished, true);
+  assert.deepEqual(sess.matchResult.forfeit, { by: 0, reason: 'abandon' });
+
+  const outcome = sess.getMatchOutcome();
+  assert.equal(outcome.players.find(x => x.userId === 'u1').won, false);
+  assert.equal(outcome.players.find(x => x.userId === 'u2').won, true);
+
+  // L'issue par forfait est visible dans le snapshot des deux joueurs.
+  assert.equal(sess.snapshotFor('u2').matchResult.forfeit.by, 0);
+});
+
+test('forfeit : refusé si la partie est déjà terminée ; aucun coup après forfait', () => {
+  const sess = mkSession({ players: [p([c('pique', 'A')]), p([c('pique', 'R')])] });
+  assert.ok(sess.forfeit(1, 'timeout').ok);
+  assert.deepEqual(sess.matchResult.forfeit, { by: 1, reason: 'timeout' });
+  assert.equal(sess.forfeit(0).ok, false);
+  assert.equal(sess.applyAction('u1', { type: 'play', card: c('pique', 'A') }).ok, false);
+});
+
 test('snapshotFor : ne fournit pas les coups légaux au joueur dont ce n’est pas le tour', () => {
   const sess = mkSession({
     turn: 0, players: [p([c('pique', 'A')]), p([c('pique', 'R')])],
