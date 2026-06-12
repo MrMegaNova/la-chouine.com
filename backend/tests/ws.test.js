@@ -83,3 +83,30 @@ test('WebSocket : auth, état filtré par joueur, validation et diffusion des co
   assert.equal(after2.state.turn, 1, 'c’est maintenant au joueur 2');
   assert.ok(after2.state.players[1].hand, 'le joueur 2 voit toujours sa propre main');
 });
+
+test('WebSocket : validateUser rejette un token révoqué (#117)', async (t) => {
+  registry.reset();
+  const server = http.createServer();
+  // En production, validateUser compare la version embarquée dans le JWT à
+  // celle du compte (token_version). Ici : tout token de version 0 est révoqué.
+  attachWebSocketServer(server, { validateUser: async (u) => (u.ver ?? 0) >= 1 });
+  await new Promise(r => server.listen(0, r));
+  const port = server.address().port;
+  t.after(() => server.close());
+
+  // Token « ancien » (ver 0 par défaut) → refusé comme une signature invalide.
+  const oldToken = signToken({ id: 'u1', username: 'Alice' });
+  const wsOld = new WebSocket(`ws://localhost:${port}/ws?token=${oldToken}`);
+  const closeCode = await new Promise(res => wsOld.on('close', code => res(code)));
+  assert.equal(closeCode, 4001, 'token révoqué → connexion refusée');
+
+  // Token « frais » (ver 1) → accepté.
+  const freshToken = signToken({ id: 'u1', username: 'Alice', token_version: 1 });
+  const wsFresh = new WebSocket(`ws://localhost:${port}/ws?token=${freshToken}`);
+  const msgs = [];
+  wsFresh.on('message', d => msgs.push(JSON.parse(d.toString())));
+  await once(wsFresh, 'open');
+  await delay(60);
+  assert.ok(msgs.some(m => m.t === 'hello'), 'token à jour → connexion acceptée');
+  wsFresh.close();
+});

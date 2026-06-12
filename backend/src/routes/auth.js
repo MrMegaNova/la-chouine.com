@@ -153,7 +153,7 @@ router.post('/login', async (req, res) => {
 
   try {
     const { rows } = await query(
-      `SELECT id, username, email, password_hash, email_verified
+      `SELECT id, username, email, password_hash, email_verified, token_version
        FROM users WHERE username = $1`,
       [username]
     );
@@ -257,9 +257,11 @@ router.post('/reset-password', async (req, res) => {
 
   try {
     const passwordHash = await bcrypt.hash(password, config.auth.bcryptRounds);
+    // token_version + 1 : révoque tous les JWT émis avant le reset (#117).
     const { rows } = await query(
       `UPDATE users
-       SET password_hash = $1, reset_token = NULL, reset_expires = NULL, updated_at = NOW()
+       SET password_hash = $1, reset_token = NULL, reset_expires = NULL,
+           token_version = token_version + 1, updated_at = NOW()
        WHERE reset_token = $2 AND reset_expires > NOW()
        RETURNING id`,
       [passwordHash, token]

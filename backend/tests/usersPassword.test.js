@@ -73,4 +73,11 @@ test('POST /api/users/me/password — succès : l’ancien ne marche plus, le no
   const fresh = await request.post('/api/auth/login').send({ username: 'PwdChangeUser', password: NEW });
   assert.equal(fresh.status, 200);
   assert.ok(fresh.body.token);
+
+  // Révocation (#117) : l'ancien JWT est rejeté, le token frais réémis marche.
+  const oldJwt = await request.get('/api/users/me').set('Authorization', `Bearer ${token}`);
+  assert.equal(oldJwt.status, 401, 'les JWT antérieurs au changement sont révoqués');
+  assert.ok(res.body.token, 'un token frais est réémis dans la réponse');
+  const freshJwt = await request.get('/api/users/me').set('Authorization', `Bearer ${res.body.token}`);
+  assert.equal(freshJwt.status, 200, 'la session courante reste utilisable');
 });

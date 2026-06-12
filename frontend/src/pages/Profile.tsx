@@ -116,6 +116,9 @@ function ChangePasswordSection() {
     const { ok, data } = await usersApi.changePassword(current, next, token);
     setLoading(false);
     if (!ok) { setError(data.error ?? 'Erreur.'); return; }
+    // Le changement révoque tous les anciens tokens (#117) : adopter le token
+    // frais réémis par le serveur pour rester connecté.
+    if (data.token) useAuthStore.setState({ token: data.token });
     setSuccess('Mot de passe modifié.');
     setCurrent(''); setNext(''); setShowCurrent(false); setShowNext(false);
   };
