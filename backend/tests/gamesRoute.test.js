@@ -16,8 +16,25 @@ const DOMAIN = '@gamesroute.invalid';
 let alice;     // { id, token }
 let bobId;     // victime potentielle (#116) — un autre vrai utilisateur
 
-before(async () => {
+// Supprime les parties des utilisateurs de test PUIS les utilisateurs : la FK
+// game_players.user_id est ON DELETE SET NULL, et un siège (user_id NULL,
+// guest_name NULL) violerait la contrainte must_have_identity (défaut de
+// schéma tracké à part — toute suppression d'un utilisateur ayant des parties
+// déclencherait la même erreur).
+async function cleanup() {
+  await pool.query(
+    `DELETE FROM games WHERE id IN (
+       SELECT gp.game_id FROM game_players gp
+       JOIN users u ON u.id = gp.user_id
+       WHERE u.email LIKE '%' || $1
+     )`,
+    [DOMAIN]
+  );
   await pool.query(`DELETE FROM users WHERE email LIKE '%' || $1`, [DOMAIN]);
+}
+
+before(async () => {
+  await cleanup();
   const hash = await bcrypt.hash('Motdepasse123!', 12);
   const ins = async (name) => (await pool.query(
     `INSERT INTO users (username, email, password_hash, email_verified)
@@ -31,7 +48,7 @@ before(async () => {
 });
 
 after(async () => {
-  await pool.query(`DELETE FROM users WHERE email LIKE '%' || $1`, [DOMAIN]);
+  await cleanup();
   await pool.end();
 });
 
