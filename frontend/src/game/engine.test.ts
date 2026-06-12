@@ -249,6 +249,29 @@ describe('applyResolveTrick', () => {
     expect(g2.players[0].hand).toContainEqual(c('trefle', '9'));
   });
 
+  it('mémorise le dernier pli ramassé par chaque siège (#95)', () => {
+    // Pli 1 remporté par le siège 1.
+    const g1 = applyResolveTrick(game({
+      trump: 'coeur', phase: 'final',
+      trick: [{ p: 0, card: c('pique', 'R') }, { p: 1, card: c('pique', '10') }],
+    }));
+    expect(g1.lastTrickBySeat[1]).toEqual({
+      cards: [{ p: 0, card: c('pique', 'R') }, { p: 1, card: c('pique', '10') }],
+      seq: 1,
+    });
+    expect(g1.lastTrickBySeat[0]).toBeNull();
+
+    // Pli 2 remporté par le siège 0 : le pli du siège 1 reste consultable —
+    // c'est tout l'objet de #95 (lastTrick global ne suffit pas).
+    const g2 = applyResolveTrick({
+      ...g1,
+      trick: [{ p: 1, card: c('carreau', '8') }, { p: 0, card: c('carreau', 'A') }],
+    });
+    expect(g2.lastTrickBySeat[0]?.seq).toBe(2);
+    expect(g2.lastTrickBySeat[1]?.seq).toBe(1);
+    expect(g2.lastTrickBySeat[1]?.cards[0].card).toEqual(c('pique', 'R'));
+  });
+
   it('talon vide : la retourne est piochée, puis phase finale', () => {
     const g = game({
       trump: 'coeur',

@@ -55,8 +55,12 @@ export interface GameState {
   phase: Phase;
   handOver: boolean;
   lastTrickWinner: number | null;
-  // Dernier pli ramassé (cartes + vainqueur) : seul pli adverse consultable (#74).
+  // Dernier pli ramassé (cartes + vainqueur) — sert au maintien d'affichage.
   lastTrick: { cards: TrickEntry[]; winner: number } | null;
+  // Dernier pli ramassé PAR CHAQUE SIÈGE (#95) : la règle n'autorise à
+  // consulter de l'adversaire que son dernier pli ramassé — même si on a
+  // remporté des plis depuis. `seq` ordonne les ramassages (utile à 3-4 j.).
+  lastTrickBySeat: ({ cards: TrickEntry[]; seq: number } | null)[];
   // Dernière annonce déclarée : ses cartes sont étalées sur le tapis (#77).
   lastAnnounce: { seat: number; sig: string; label: string; cards: Card[] } | null;
   sevenAnnounced: boolean;

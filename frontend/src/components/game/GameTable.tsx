@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useGameStore } from '@/store/gameStore';
 import { useAuthStore } from '@/store/authStore';
-import { getLegalMoves, getAvailableCombos, sortHand, isBrisque, comboCards } from '@/game/engine';
+import { getLegalMoves, getAvailableCombos, isBrisque, comboCards } from '@/game/engine';
 import { SUIT_SYMBOL } from '@/game/constants';
 import { PlayingCard } from './PlayingCard';
 import { HandResult } from './HandResult';
@@ -39,9 +39,10 @@ export function GameTable({ controller }: { controller?: GameController } = {}) 
     revealForPlayer, quitGame, clearPendingResult } = ctrl;
   const { user, token } = useAuthStore();
   const toastRef = useRef<HTMLDivElement>(null);
-  // Consultation des plis (#74) : 'mine' = ses propres plis, 'last' = le
-  // dernier pli ramassé (seul pli adverse que la règle autorise à revoir).
-  const [tricksView, setTricksView] = useState<'mine' | 'last' | null>(null);
+  // Consultation des plis (#74/#95) : 'mine' = ses propres plis, 'opp' = le
+  // dernier pli ramassé par l'adversaire (seul pli adverse que la règle
+  // autorise à revoir — même si on a ramassé des plis depuis).
+  const [tricksView, setTricksView] = useState<'mine' | 'opp' | null>(null);
   // Annonce en attente (#77) : sélectionnée, elle se valide en jouant une
   // carte qui la compose (la règle : annoncer = jouer en même temps).
   const [pendingAnnounce, setPendingAnnounce] = useState<Combo | null>(null);
@@ -205,8 +206,8 @@ export function GameTable({ controller }: { controller?: GameController } = {}) 
               <button className="btn btn--ghost btn--sm" disabled={game.players[me].won.length === 0}
                 onClick={() => setTricksView('mine')}>Mes plis</button>
               {' '}
-              <button className="btn btn--ghost btn--sm" disabled={!game.lastTrick}
-                onClick={() => setTricksView('last')}>Dernier pli</button>
+              <button className="btn btn--ghost btn--sm" disabled={!opponentLastTrick(game, me)}
+                onClick={() => setTricksView('opp')}>Pli adverse</button>
             </span>
           </div>
         </div>
@@ -348,14 +349,34 @@ export function GameTable({ controller }: { controller?: GameController } = {}) 
   );
 }
 
-// Panneau de consultation (#74) : ses propres plis à volonté, ou le dernier
-// pli ramassé (cartes + vainqueur) — conformément à la règle de Lavardin.
+// Dernier pli ramassé par un adversaire (#95) — le plus récent si plusieurs.
+function opponentLastTrick(game: GameState, me: number) {
+  let best: { cards: GameState['trick']; seq: number; p: number } | null = null;
+  for (let p = 0; p < game.lastTrickBySeat.length; p++) {
+    const t = game.lastTrickBySeat[p];
+    if (p !== me && t && (best === null || t.seq > best.seq)) {
+      best = { cards: t.cards, seq: t.seq, p };
+    }
+  }
+  return best;
+}
+
+// Panneau de consultation (#74/#95) : ses propres plis à volonté (groupés pli
+// par pli), ou le dernier pli ramassé par l'adversaire — conformément à la
+// règle de Lavardin.
 function TricksPanel({ game, me, view, onClose }: {
-  game: GameState; me: number; view: 'mine' | 'last'; onClose: () => void;
+  game: GameState; me: number; view: 'mine' | 'opp'; onClose: () => void;
 }) {
   const mine = view === 'mine';
-  const myCards = mine ? sortHand(game.players[me].won) : [];
-  const briq = mine ? game.players[me].won.filter(isBrisque).length : 0;
+  const n = game.playerCount;
+  // Les cartes sont empochées pli après pli, dans l'ordre : on les regroupe
+  // par tranches de N pour retrouver chaque pli (#95).
+  const won = game.players[me].won;
+  const myTricks = mine
+    ? Array.from({ length: Math.floor(won.length / n) }, (_, k) => won.slice(k * n, k * n + n))
+    : [];
+  const briq = mine ? won.filter(isBrisque).length : 0;
+  const oppLast = mine ? null : opponentLastTrick(game, me);
   return (
     <div
       onClick={onClose}
@@ -372,25 +393,34 @@ function TricksPanel({ game, me, view, onClose }: {
         }}
       >
         <h3 style={{ fontFamily: 'var(--serif)', fontSize: 22, margin: '0 0 4px' }}>
-          {mine ? 'Mes plis' : 'Dernier pli'}
+          {mine ? 'Mes plis' : 'Pli adverse'}
         </h3>
         <p className="note" style={{ marginBottom: 14 }}>
           {mine
-            ? `${Math.floor(myCards.length / game.playerCount)} pli${myCards.length >= game.playerCount * 2 ? 's' : ''} · ${briq} brisque${briq > 1 ? 's' : ''}`
-            : game.lastTrick ? `Ramassé par ${game.names[game.lastTrick.winner]}` : ''}
+            ? `${myTricks.length} pli${myTricks.length > 1 ? 's' : ''} · ${briq} brisque${briq > 1 ? 's' : ''}`
+            : oppLast ? `Dernier pli ramassé par ${game.names[oppLast.p]}` : 'Aucun pli adverse pour l\'instant.'}
         </p>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
-          {mine
-            ? myCards.map((c, i) => (
-                <PlayingCard key={i} card={c} size={64} trump={game.trump !== null && c.s === game.trump} />
-              ))
-            : (game.lastTrick?.cards ?? []).map((t, i) => (
-                <div key={i} style={{ textAlign: 'center' }}>
-                  <div className="note" style={{ fontSize: 11.5, marginBottom: 3 }}>{game.names[t.p]}</div>
-                  <PlayingCard card={t.card} size={64} trump={game.trump !== null && t.card.s === game.trump} />
-                </div>
-              ))}
-        </div>
+        {mine ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {myTricks.map((cards, k) => (
+              <div key={k} style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'center' }}>
+                <span className="note" style={{ fontSize: 11.5, minWidth: 38, textAlign: 'right' }}>Pli {k + 1}</span>
+                {cards.map((c, i) => (
+                  <PlayingCard key={i} card={c} size={64} trump={game.trump !== null && c.s === game.trump} />
+                ))}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
+            {(oppLast?.cards ?? []).map((t, i) => (
+              <div key={i} style={{ textAlign: 'center' }}>
+                <div className="note" style={{ fontSize: 11.5, marginBottom: 3 }}>{game.names[t.p]}</div>
+                <PlayingCard card={t.card} size={64} trump={game.trump !== null && t.card.s === game.trump} />
+              </div>
+            ))}
+          </div>
+        )}
         <button className="btn btn--ghost btn--full" style={{ marginTop: 18 }} onClick={onClose}>Fermer</button>
       </div>
     </div>

@@ -214,6 +214,33 @@ test('snapshotFor : ses propres plis visibles, ceux de l’adversaire en décomp
   assert.equal(snap.players[1].wonCount, 2, 'seul le décompte adverse est public');
 });
 
+test('snapshotFor (#95) : expose le dernier pli ramassé par l’adversaire, même après un pli à soi', () => {
+  const sess = mkSession({
+    trump: 'pique', turn: 1,
+    players: [
+      p([c('coeur', 'R'), c('trefle', '8')]),
+      p([c('coeur', '9'), c('carreau', '7'), c('carreau', '8')]),
+    ],
+  });
+  // Pli 1 : Bob (siège 1) entame et le remporte.
+  assert.ok(sess.applyAction('u2', { type: 'play', card: c('carreau', '8') }).ok);
+  assert.ok(sess.applyAction('u1', { type: 'play', card: c('trefle', '8') }).ok);
+  assert.equal(sess.lastTrick.winner, 1);
+  // Pli 2 : Alice remporte le sien — lastTrick global devient le sien.
+  assert.ok(sess.applyAction('u2', { type: 'play', card: c('coeur', '9') }).ok);
+  assert.ok(sess.applyAction('u1', { type: 'play', card: c('coeur', 'R') }).ok);
+  assert.equal(sess.lastTrick.winner, 0);
+
+  // Alice voit toujours le dernier pli de Bob (pli 1), pas le sien.
+  const snapAlice = sess.snapshotFor('u1');
+  assert.equal(snapAlice.opponentLastTrick.winner, 1);
+  assert.deepEqual(snapAlice.opponentLastTrick.cards.map(t => t.card),
+    [c('carreau', '8'), c('trefle', '8')]);
+  // Bob voit le dernier pli d'Alice (pli 2).
+  const snapBob = sess.snapshotFor('u2');
+  assert.equal(snapBob.opponentLastTrick.winner, 0);
+});
+
 test('snapshotFor : ne fournit pas les coups légaux au joueur dont ce n’est pas le tour', () => {
   const sess = mkSession({
     turn: 0, players: [p([c('pique', 'A')]), p([c('pique', 'R')])],

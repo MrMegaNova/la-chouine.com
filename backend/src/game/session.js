@@ -35,6 +35,7 @@ class GameSession {
     this.finished = false;
     this.matchResult = null;        // { winnerSeat, scores } à la fin du match
     this.lastTrick = null;          // { cards:[{p,card}], winner } pour l'animation
+    this.lastTrickBySeat = [null, null]; // dernier pli ramassé par chaque siège (#95)
     this.lastHandResult = null;     // HandResult de la dernière main terminée
     this.nextHandAcks = new Set();  // sièges ayant validé « main suivante »
 
@@ -105,6 +106,7 @@ class GameSession {
       // côté client à partir de `lastTrick`).
       const winner = resolveTrickWinner(next.trick, next.trump);
       this.lastTrick = { cards: next.trick.map(t => ({ p: t.p, card: t.card })), winner };
+      this.lastTrickBySeat[winner] = this.lastTrick; // consultation adverse (#95)
       next = applyResolveTrick(next);
 
       if (next.players.some(p => p.hand.length === 0)) {
@@ -182,6 +184,7 @@ class GameSession {
     if (this.nextHandAcks.size >= this.state.playerCount) {
       this.nextHandAcks.clear();
       this.lastTrick = null;
+      this.lastTrickBySeat = [null, null];
       this.lastHandResult = null;
       this.state = dealHand(this.state);
     }
@@ -247,6 +250,9 @@ class GameSession {
       handOver: s.handOver,
       handNo: s.handNo,
       lastTrick: this.lastTrick,
+      // Dernier pli ramassé par l'adversaire (#95) : seul pli adverse que la
+      // règle autorise à consulter — même si on a ramassé des plis depuis.
+      opponentLastTrick: seat >= 0 ? this.lastTrickBySeat[1 - seat] : null,
       lastAnnounce: s.lastAnnounce ?? null,
       lastHandResult: s.handOver ? this.lastHandResult : null,
       finished: this.finished,
