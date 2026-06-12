@@ -5,6 +5,7 @@ import { useAuthStore } from '@/store/authStore';
 import { friendsApi, type Friend } from '@/api/client';
 import { PresenceDot } from '@/components/PresenceDot';
 import { ChallengeButtons } from '@/components/game/ChallengeButtons';
+import { OnlineCta } from '@/components/online/OnlineCta';
 import type { GameOpts, Difficulty, Variant } from '@/game/types';
 
 function BtnGroup<T extends string>({
@@ -82,6 +83,17 @@ export default function Play() {
     <div className="wrap" style={{ padding: '36px 0 60px' }}>
       <h2 className="section-title">Lancer une partie</h2>
       <p className="section-sub">Choisissez votre mode, votre format et c'est parti.</p>
+
+      {/* Recherche d'adversaire en ligne (#91) — mise en avant en tête de page. */}
+      <div className="panel" style={{ marginBottom: 18, borderColor: 'var(--gold)' }}>
+        <h3 style={{ fontFamily: 'var(--serif)', fontSize: 22, marginTop: 0, marginBottom: 8 }}>
+          ⚔ Trouver un adversaire
+        </h3>
+        <p className="section-sub" style={{ marginTop: 0, marginBottom: 0 }}>
+          Lancez une partie classée contre un joueur au hasard, sans attendre.
+        </p>
+        <OnlineCta style={{ marginTop: 14 }} />
+      </div>
 
       <div className="grid2" style={{ marginBottom: 18 }}>
         {/* AI panel */}
