@@ -217,7 +217,7 @@ export function GameTable({ controller }: { controller?: GameController } = {}) 
             pendingAnnounce ? (
               <>
                 <span className="note" style={{ alignSelf: 'center' }}>
-                  {pendingAnnounce.label} — jouez une carte de l'annonce pour la valider.
+                  {pendingAnnounce.label} — jouez maintenant une des cartes surlignées pour valider l'annonce.
                 </span>
                 <button className="btn btn--ghost btn--sm" onClick={() => setPendingAnnounce(null)}>
                   Annuler l'annonce
@@ -244,9 +244,11 @@ export function GameTable({ controller }: { controller?: GameController } = {}) 
                 )}
               <span className="note" style={{ alignSelf: 'center' }}>
                 {game.trick.length === 0
-                  ? (combos.length > 0 ? 'Annoncez (en jouant une carte de l\'annonce) ou entamez.' : 'À vous d\'entamer.')
+                  ? (combos.length > 0
+                      ? 'Pour annoncer : cliquez sur l\'annonce, puis jouez une de ses cartes — ou entamez directement.'
+                      : 'À vous d\'entamer.')
                   : combos.length > 0
-                    ? 'Annoncez (en jouant une carte de l\'annonce) ou répondez.'
+                    ? 'Pour annoncer : cliquez sur l\'annonce, puis jouez une de ses cartes — ou répondez directement.'
                     : `À vous de répondre${game.phase === 'final' ? ' (fournir / monter / couper)' : ''}.`}
               </span>
             </>
