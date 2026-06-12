@@ -15,6 +15,7 @@ const DEFAULTS = {
   loginBlockMs: 15 * 60_000,      // durée du blocage
   registerMaxPerWindow: 5,        // inscriptions réussies par IP…
   registerWindowMs: 24 * 3_600_000, // …par 24 h
+  resetEmailCooldownMs: 5 * 60_000, // 1 email de reset/activation par adresse / 5 min (#121)
   maxEntries: 50_000,             // borne mémoire (purge paresseuse)
 };
 
@@ -22,6 +23,7 @@ function createAuthGuard(opts = {}) {
   const cfg = { ...DEFAULTS, ...opts };
   const loginFailures = new Map(); // "ip|pseudo" → { count, firstAt, blockedUntil }
   const registrations = new Map(); // ip → [timestamps des inscriptions réussies]
+  const resetEmails = new Map();   // email (lowercase) → timestamp du dernier envoi
 
   const loginKey = (ip, username) => `${ip}|${String(username).toLowerCase()}`;
 
@@ -36,6 +38,11 @@ function createAuthGuard(opts = {}) {
     if (registrations.size > cfg.maxEntries) {
       for (const [ip, times] of registrations) {
         if (times.every(t => now - t > cfg.registerWindowMs)) registrations.delete(ip);
+      }
+    }
+    if (resetEmails.size > cfg.maxEntries) {
+      for (const [email, at] of resetEmails) {
+        if (now - at > cfg.resetEmailCooldownMs) resetEmails.delete(email);
       }
     }
   }
@@ -82,6 +89,24 @@ function createAuthGuard(opts = {}) {
       const times = (registrations.get(ip) ?? []).filter(t => now - t <= cfg.registerWindowMs);
       times.push(now);
       registrations.set(ip, times);
+    },
+
+    /**
+     * Peut-on envoyer un email de reset/activation à cette adresse ? (#121)
+     * Anti-mail-bombing : 1 envoi par adresse et par fenêtre. À n'appeler que
+     * lorsqu'un envoi est sur le point d'avoir lieu (compte existant) — sinon
+     * l'absence de cooldown révélerait qu'aucun compte n'existe.
+     */
+    resetEmailAllowed(email, now = Date.now()) {
+      const key = String(email).toLowerCase();
+      const last = resetEmails.get(key);
+      return !last || now - last >= cfg.resetEmailCooldownMs;
+    },
+
+    /** À appeler juste après avoir déclenché l'envoi d'un email de reset/activation. */
+    resetEmailSent(email, now = Date.now()) {
+      pruneIfNeeded(now);
+      resetEmails.set(String(email).toLowerCase(), now);
     },
   };
 }
