@@ -159,9 +159,13 @@ class GameSession {
     return { ok: true };
   }
 
+  // L'échange du 7 d'atout est permis à son tour de jeu, y compris en
+  // réponse à un pli (#76) — la règle n'exige pas d'avoir la main, seulement
+  // que la retourne soit encore là (garanti par applyExchangeSeven).
   _exchangeSeven(seat) {
     const s = this.state;
-    if (s.turn !== seat || s.trick.length !== 0) {
+    if (s.handOver) return { ok: false, error: 'La main est terminée.' };
+    if (s.turn !== seat || s.trick.length >= s.playerCount) {
       return { ok: false, error: 'Échange impossible maintenant.' };
     }
     const next = applyExchangeSeven(s, seat);

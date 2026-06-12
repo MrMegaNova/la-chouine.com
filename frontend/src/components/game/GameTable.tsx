@@ -238,7 +238,9 @@ export function GameTable({ controller }: { controller?: GameController } = {}) 
                   {c.setsTrump ? ' (fixe atout)' : ''}
                 </button>
               ))}
-              {game.trick.length === 0 && game.turnUp && game.phase === 'draw' && game.trump &&
+              {/* L'échange du 7 est permis aussi en réponse (#76) : la règle
+                  n'exige que la présence de la retourne, pas d'avoir la main. */}
+              {game.turnUp && game.phase === 'draw' && game.trump &&
                 game.players[me].hand.some(c => c.s === game.trump && c.r === '7') && (
                   <button className="btn btn--ghost btn--sm" onClick={() => exchangeSeven(me)}>
                     Échanger le 7 d'atout
