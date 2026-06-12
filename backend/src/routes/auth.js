@@ -213,6 +213,13 @@ router.post('/forgot-password', async (req, res) => {
 
     const user = rows[0];
 
+    // Anti-mail-bombing (#121) : un seul email de reset/activation par adresse
+    // et par fenêtre. La garde n'est consultée que pour un compte existant (ne
+    // pas créer de signal d'énumération), et la réponse reste générique.
+    if (!guardsOff && !authGuard.resetEmailAllowed(user.email)) {
+      return res.json(generic);
+    }
+
     // Compte non activé (#105) : le formulaire « mot de passe oublié » sert
     // aussi à renvoyer un lien d'activation — sans quoi un compte dont le
     // lien initial a expiré (24 h) resterait définitivement inactivable.
@@ -226,6 +233,7 @@ router.post('/forgot-password', async (req, res) => {
         [hashToken(verifyToken), verifyExpires, user.id]
       );
 
+      if (!guardsOff) authGuard.resetEmailSent(user.email); // cooldown (#121)
       sendVerificationEmail(user.email, verifyToken, user.username).catch(err =>
         logMailError('email de vérification (renvoi)', err)
       );
@@ -242,6 +250,7 @@ router.post('/forgot-password', async (req, res) => {
       [hashToken(resetToken), resetExpires, user.id]
     );
 
+    if (!guardsOff) authGuard.resetEmailSent(user.email); // cooldown (#121)
     sendPasswordResetEmail(user.email, resetToken, user.username).catch(err =>
       logMailError('email reset', err)
     );

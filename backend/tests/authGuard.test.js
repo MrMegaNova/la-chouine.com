@@ -85,3 +85,22 @@ test('register : le plafond se libère après 24 h', () => {
   assert.equal(g.registerAllowed('1.2.3.4', t0 + 23 * HOUR), false);
   assert.equal(g.registerAllowed('1.2.3.4', t0 + 25 * HOUR), true);
 });
+
+// ─── Cooldown email de reset/activation (#121) ────────────────────────────────
+
+test('reset email : 1 envoi par adresse / 5 min (anti-mail-bombing)', () => {
+  const g = createAuthGuard();
+  const t0 = 1_000_000;
+  assert.equal(g.resetEmailAllowed('a@b.co', t0), true);
+  g.resetEmailSent('a@b.co', t0);
+  assert.equal(g.resetEmailAllowed('a@b.co', t0 + MIN), false, 'bloqué dans la fenêtre');
+  assert.equal(g.resetEmailAllowed('a@b.co', t0 + 6 * MIN), true, 'libéré après 5 min');
+});
+
+test('reset email : insensible à la casse, isolé par adresse', () => {
+  const g = createAuthGuard();
+  const t0 = 1_000_000;
+  g.resetEmailSent('Alice@Example.com', t0);
+  assert.equal(g.resetEmailAllowed('alice@example.com', t0 + MIN), false, 'même adresse, casse différente');
+  assert.equal(g.resetEmailAllowed('bob@example.com', t0 + MIN), true, 'autre adresse non affectée');
+});
