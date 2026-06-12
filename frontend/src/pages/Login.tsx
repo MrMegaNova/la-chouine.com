@@ -43,13 +43,15 @@ export default function Login() {
   // normal — les bots de spam le remplissent et sont écartés côté serveur.
   const [website, setWebsite] = useState('');
   const [error, setError] = useState('');
+  // Compte non activé au login (#105) : on propose le renvoi d'un lien.
+  const [notActivated, setNotActivated] = useState(false);
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const { login } = useAuthStore();
   const navigate = useNavigate();
 
   // Au changement d'onglet : on remasque toujours le mot de passe (#78).
-  const reset = () => { setError(''); setSuccess(''); setShowPassword(false); };
+  const reset = () => { setError(''); setNotActivated(false); setSuccess(''); setShowPassword(false); };
 
   const handleLogin = async () => {
     reset();
@@ -59,6 +61,7 @@ export default function Login() {
     if (err) {
       if (err.includes('EMAIL_NOT_VERIFIED') || err.includes('non activé')) {
         setError('Compte non activé — vérifiez vos emails.');
+        setNotActivated(true); // lien d'activation peut-être expiré → renvoi possible
       } else {
         setError(err);
       }
@@ -93,7 +96,7 @@ export default function Login() {
           {tab === 'login' ? 'Content de vous revoir' : tab === 'register' ? 'Rejoindre la table' : 'Mot de passe oublié'}
         </h2>
         <p className="note" style={{ marginBottom: 20 }}>
-          {tab === 'login' ? 'Connectez-vous pour retrouver vos amis.' : tab === 'register' ? 'Créez un compte gratuit pour jouer en ligne.' : 'Recevez un lien par email.'}
+          {tab === 'login' ? 'Connectez-vous pour retrouver vos amis.' : tab === 'register' ? 'Créez un compte gratuit pour jouer en ligne.' : 'Recevez par email un lien pour réinitialiser votre mot de passe — ou, si votre compte n\'est pas encore activé, un nouveau lien d\'activation.'}
         </p>
 
         {tab !== 'forgot' && (
@@ -156,6 +159,15 @@ export default function Login() {
         )}
 
         {error && <p className="form-error">{error}</p>}
+        {notActivated && tab === 'login' && (
+          <p className="note" style={{ marginTop: -4, marginBottom: 8 }}>
+            Lien d'activation expiré ?{' '}
+            <button style={{ background: 'none', border: 'none', color: 'var(--gold-soft)', cursor: 'pointer', textDecoration: 'underline', fontSize: 'inherit' }}
+              onClick={() => { setEmail(''); setTab('forgot'); reset(); }}>
+              Recevez-en un nouveau
+            </button>.
+          </p>
+        )}
         {success && <p className="form-ok" style={{ marginBottom: 8 }}>{success}</p>}
 
         <button

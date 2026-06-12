@@ -212,13 +212,34 @@ router.post('/forgot-password', async (req, res) => {
 
   try {
     const { rows } = await query(
-      `SELECT id, username, email FROM users
-       WHERE LOWER(email) = LOWER($1) AND email_verified = TRUE`,
+      `SELECT id, username, email, email_verified FROM users
+       WHERE LOWER(email) = LOWER($1)`,
       [email]
     );
     if (!rows.length) return res.json(generic);
 
     const user = rows[0];
+
+    // Compte non activé (#105) : le formulaire « mot de passe oublié » sert
+    // aussi à renvoyer un lien d'activation — sans quoi un compte dont le
+    // lien initial a expiré (24 h) resterait définitivement inactivable.
+    if (!user.email_verified) {
+      const verifyToken = generateToken();
+      const verifyExpires = new Date(Date.now() + config.auth.verifyTokenTtlMs);
+
+      await query(
+        `UPDATE users SET verify_token = $1, verify_expires = $2, updated_at = NOW()
+         WHERE id = $3`,
+        [verifyToken, verifyExpires, user.id]
+      );
+
+      sendVerificationEmail(user.email, verifyToken, user.username).catch(err =>
+        logMailError('email de vérification (renvoi)', err)
+      );
+
+      return res.json(generic);
+    }
+
     const resetToken = generateToken();
     const resetExpires = new Date(Date.now() + 3_600_000); // 1 h
 
