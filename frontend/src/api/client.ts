@@ -33,6 +33,8 @@ export interface RegisterPayload {
   username: string;
   email: string;
   password: string;
+  // Champ-piège anti-bot (#86) : caché aux humains, vide en usage normal.
+  website?: string;
 }
 export interface LoginResponse {
   token: string;
