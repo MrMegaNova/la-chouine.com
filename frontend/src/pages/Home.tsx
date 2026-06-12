@@ -1,10 +1,7 @@
-import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PlayingCard } from '@/components/game/PlayingCard';
-import { useAuthStore } from '@/store/authStore';
-import { useOnlineStore, type Presence } from '@/store/onlineStore';
-import { onlineApi } from '@/api/client';
-import type { Card, Variant } from '@/game/types';
+import { OnlineCta } from '@/components/online/OnlineCta';
+import type { Card } from '@/game/types';
 
 const FAN_CARDS: Card[] = [
   { s: 'pique', r: 'A' },
@@ -34,66 +31,6 @@ function HeroFan() {
           />
         );
       })}
-    </div>
-  );
-}
-
-// Compteur de joueurs en ligne (#43). Connecté : chiffres poussés par le
-// serveur via le socket de présence. Anonyme : repli sur GET /api/online.
-function OnlineBadge() {
-  const { token } = useAuthStore();
-  const live = useOnlineStore(s => s.presence);
-  const [fetched, setFetched] = useState<Presence | null>(null);
-
-  useEffect(() => {
-    if (token) return; // les connectés reçoivent la présence en push
-    let cancelled = false;
-    onlineApi.get().then(({ ok, data }) => {
-      if (ok && !cancelled) setFetched(data);
-    });
-    return () => { cancelled = true; };
-  }, [token]);
-
-  const p = token ? live : fetched;
-  if (!p || p.online === 0) return null;
-
-  return (
-    <span className="note" style={{ fontSize: 12.5 }}>
-      🟢 {p.online} joueur{p.online > 1 ? 's' : ''} en ligne
-      {p.inGame > 0 && ` · ${p.inGame} en partie`}
-    </span>
-  );
-}
-
-function OnlineCta() {
-  const { user, token } = useAuthStore();
-  const findOpponent = useOnlineStore(s => s.findOpponent);
-  const [variant, setVariant] = useState<Variant>('classic');
-
-  if (!user || !token) {
-    return (
-      <p className="note" style={{ marginTop: 14 }}>
-        🌐 <Link to="/connexion" style={{ color: 'var(--gold-soft)' }}>Connectez-vous</Link> pour jouer en ligne et grimper au classement Elo. <OnlineBadge />
-      </p>
-    );
-  }
-
-  return (
-    <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginTop: 16 }}>
-      <button className="btn btn--wine" onClick={() => findOpponent(variant, token)}>
-        ⚔ Trouver un adversaire
-      </button>
-      <select
-        value={variant}
-        onChange={e => setVariant(e.target.value as Variant)}
-        aria-label="Variante"
-        style={{ padding: '9px 12px', borderRadius: 10, background: 'rgba(247,240,223,.06)', color: 'var(--cream)', border: '1px solid var(--line)' }}
-      >
-        <option value="classic">Classique</option>
-        <option value="mondoubleau">Mondoubleau</option>
-      </select>
-      <span className="note" style={{ fontSize: 12.5 }}>partie classée en ligne</span>
-      <OnlineBadge />
     </div>
   );
 }
