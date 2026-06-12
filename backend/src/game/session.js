@@ -120,17 +120,22 @@ class GameSession {
 
   // Règle (#77) : une annonce se fait « en même temps qu'on joue sa carte »,
   // et la carte jouée doit composer l'annonce. Action atomique annonce + carte
-  // (sauf chouine, qui clôt le coup sans jouer).
+  // (sauf chouine, qui clôt le coup sans jouer). L'annonce est permise aussi
+  // en réponse (#90) — « lorsque son adversaire a abattu sa carte, il doit
+  // montrer son annonce » — tant que la carte jouée reste légale.
   _declare(seat, sig, card) {
     const s = this.state;
     if (s.handOver) return { ok: false, error: 'La main est terminée.' };
-    if (s.turn !== seat || s.trick.length !== 0) {
+    if (s.turn !== seat || s.trick.length >= s.playerCount) {
       return { ok: false, error: 'Annonce impossible maintenant.' };
     }
     const combo = getAvailableCombos(s, seat).find(c => c.sig === sig);
     if (!combo) return { ok: false, error: 'Annonce indisponible.' };
 
     if (combo.type === 'chouine') {
+      // La chouine clôt le coup sans jouer de carte : on ne peut pas la
+      // déclarer au milieu d'un pli entamé.
+      if (s.trick.length !== 0) return { ok: false, error: 'Annonce impossible maintenant.' };
       // Les cartes de la chouine sont étalées, puis le coup est gagné.
       const cards = comboCards(s.players[seat].hand, combo);
       const revealed = { ...s, lastAnnounce: { seat, sig, label: combo.label, cards } };
@@ -148,7 +153,9 @@ class GameSession {
 
     this.state = applyDeclareCombo(s, seat, combo); // pose aussi lastAnnounce (étalée)
     const res = this._play(seat, card);
-    if (!res.ok) { this.state = s; return res; } // rollback — ne devrait pas arriver (entame)
+    // Rollback si la carte est illégale (ex. en réponse de phase finale, la
+    // carte de l'annonce doit fournir/monter/couper) : rien n'est crédité.
+    if (!res.ok) { this.state = s; return res; }
     return { ok: true };
   }
 
