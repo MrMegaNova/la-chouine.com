@@ -46,6 +46,7 @@ export interface MeResponse {
   username: string;
   email: string;
   joined: string;
+  avatar: string | null;
   stats: { wins: number; losses: number; plays: number };
   ratings: { classic: number; mondoubleau: number };
 }
@@ -72,6 +73,7 @@ export const authApi = {
 export interface SearchUser {
   id: string;
   username: string;
+  avatar: string | null;
   wins: number;
   plays: number;
   friendshipStatus: string | null;
@@ -103,6 +105,12 @@ export const usersApi = {
   changePassword: (currentPassword: string, newPassword: string, token: string) =>
     apiCall<{ message: string; token?: string; error?: string }>(
       'POST', '/users/me/password', { currentPassword, newPassword }, token),
+
+  // Avatar (#87) : data URL (base64) d'une image redimensionnée côté client.
+  setAvatar: (avatar: string, token: string) =>
+    apiCall<{ avatar: string; error?: string }>('POST', '/users/me/avatar', { avatar }, token),
+  removeAvatar: (token: string) =>
+    apiCall<{ avatar: null }>('DELETE', '/users/me/avatar', undefined, token),
 };
 
 // ─── Friends ──────────────────────────────────────────────────────────────────
@@ -110,6 +118,7 @@ export const usersApi = {
 export interface Friend {
   id: string;
   username: string;
+  avatar: string | null;
   wins: number;
   plays: number;
   online: boolean;

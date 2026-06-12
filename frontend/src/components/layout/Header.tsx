@@ -2,11 +2,8 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { useNotificationStore } from '@/store/notificationStore';
+import { AvatarContent } from '@/components/Avatar';
 import styles from './Header.module.scss';
-
-function initials(name: string): string {
-  return name.replace(/[^A-Za-zÀ-ÿ0-9]/g, '').slice(0, 2).toUpperCase();
-}
 
 const OWL = (
   <svg className={styles.owl} viewBox="0 0 64 64" fill="none" aria-hidden="true">
@@ -74,7 +71,7 @@ export function Header() {
           <div className={styles.authArea}>
             {user ? (
               <Link to="/profil" className={styles.userChip} style={{ textDecoration: 'none' }}>
-                <div className={styles.avatar}>{initials(user.username)}</div>
+                <div className={styles.avatar}><AvatarContent src={user.avatar} name={user.username} /></div>
                 <span className={styles.userName}>{user.username}</span>
               </Link>
             ) : (
