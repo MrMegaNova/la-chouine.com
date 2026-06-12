@@ -133,6 +133,25 @@ test('declare (#90) : la chouine reste réservée à l’entame', () => {
   assert.equal(sess.finished, false);
 });
 
+test('exchangeSeven (#76) : l’échange du 7 d’atout est permis en réponse à un pli', () => {
+  // Bob a entamé ; Alice, qui détient le 7 d'atout, l'échange contre la
+  // retourne avant de répondre.
+  const sess = mkSession({
+    phase: 'draw', trump: 'coeur', turnUp: c('coeur', 'D'), turn: 0,
+    talon: [c('trefle', '9')],
+    trick: [{ p: 1, card: c('pique', '8') }],
+    players: [
+      p([c('coeur', '7'), c('carreau', 'A')]),
+      p([c('trefle', '7')]),
+    ],
+  });
+  const res = sess.applyAction('u1', { type: 'exchangeSeven' });
+  assert.ok(res.ok, res.error);
+  assert.deepEqual(sess.state.turnUp, c('coeur', '7'), 'le 7 devient la retourne');
+  assert.ok(sess.state.players[0].hand.some(x => x.s === 'coeur' && x.r === 'D'), 'la Dame est en main');
+  assert.deepEqual(sess.state.trick, [{ p: 1, card: c('pique', '8') }], 'le pli en cours est intact');
+});
+
 test('nextHand : nécessite l’accord des deux joueurs avant de distribuer', () => {
   const sess = mkSession({ handOver: true });
   assert.ok(sess.applyAction('u1', { type: 'nextHand' }).ok);
