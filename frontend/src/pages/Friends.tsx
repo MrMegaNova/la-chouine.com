@@ -5,6 +5,7 @@ import { friendsApi, usersApi, type Friend, type FriendRequest, type SearchUser 
 import { useNotificationStore } from '@/store/notificationStore';
 import { PresenceDot } from '@/components/PresenceDot';
 import { ChallengeButtons } from '@/components/game/ChallengeButtons';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 
 export default function Friends() {
   const { user, token } = useAuthStore();
@@ -16,6 +17,8 @@ export default function Friends() {
   const [friends, setFriends] = useState<Friend[]>([]);
   const [requests, setRequests] = useState<FriendRequest[]>([]);
   const [toastMsg, setToastMsg] = useState('');
+  // Ami en attente de confirmation de retrait (#68).
+  const [toRemove, setToRemove] = useState<Friend | null>(null);
 
   useEffect(() => { if (!user) { navigate('/connexion'); return; } load(); }, [user]);
 
@@ -62,6 +65,16 @@ export default function Friends() {
     if (!token) return;
     await friendsApi.decline(id, token);
     load();
+  };
+
+  // Retrait d'un ami (#68) — confirmé via la modale. Silencieux pour l'autre.
+  const confirmRemove = async () => {
+    if (!token || !toRemove) return;
+    const friend = toRemove;
+    setToRemove(null);
+    const { ok } = await friendsApi.remove(friend.id, token);
+    toast(ok ? `${friend.username} retiré de vos amis.` : 'Erreur lors du retrait.');
+    if (ok) load();
   };
 
   const initials = (n: string) => n.replace(/[^A-Za-zÀ-ÿ0-9]/g, '').slice(0, 2).toUpperCase();
@@ -130,6 +143,14 @@ export default function Friends() {
                     <div className="list-row__actions">
                       {/* Défi en ligne réel (#45) — amicale ou classée (#47) */}
                       <ChallengeButtons friend={f} variant="classic" />
+                      <button
+                        className="btn btn--ghost btn--sm"
+                        aria-label={`Retirer ${f.username} de vos amis`}
+                        title="Retirer cet ami"
+                        onClick={() => setToRemove(f)}
+                      >
+                        Retirer
+                      </button>
                     </div>
                   </div>
                 ))
@@ -153,6 +174,18 @@ export default function Friends() {
           </div>
         </div>
       </div>
+
+      {toRemove && (
+        <ConfirmDialog
+          title="Retirer cet ami ?"
+          message={<>Retirer <b>{toRemove.username}</b> de vos amis ? Vous ne pourrez plus le défier directement.</>}
+          confirmLabel="Retirer"
+          cancelLabel="Annuler"
+          danger
+          onConfirm={confirmRemove}
+          onCancel={() => setToRemove(null)}
+        />
+      )}
     </div>
   );
 }
