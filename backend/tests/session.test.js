@@ -150,6 +150,10 @@ test('exchangeSeven (#76) : l’échange du 7 d’atout est permis en réponse �
   assert.deepEqual(sess.state.turnUp, c('coeur', '7'), 'le 7 devient la retourne');
   assert.ok(sess.state.players[0].hand.some(x => x.s === 'coeur' && x.r === 'D'), 'la Dame est en main');
   assert.deepEqual(sess.state.trick, [{ p: 1, card: c('pique', '8') }], 'le pli en cours est intact');
+
+  // L'échange est signalé aux DEUX joueurs via le snapshot (#76).
+  assert.deepEqual(sess.snapshotFor('u1').lastExchange, { seat: 0, handNo: sess.state.handNo });
+  assert.deepEqual(sess.snapshotFor('u2').lastExchange, { seat: 0, handNo: sess.state.handNo });
 });
 
 test('nextHand : nécessite l’accord des deux joueurs avant de distribuer', () => {
