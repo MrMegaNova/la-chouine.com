@@ -14,7 +14,7 @@
     "test": "sh -c 'if [ -f .env.test ]; then set -a; . ./.env.test; set +a; fi; node --test tests/*.test.js'"
   },
   "dependencies": {
-    "bcryptjs": "^2.4.3",
+    "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "express": "^4.19.2",
     "express-rate-limit": "^7.3.1",
