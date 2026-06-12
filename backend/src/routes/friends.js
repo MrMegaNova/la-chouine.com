@@ -13,7 +13,7 @@ const router = express.Router();
 router.get('/', requireAuth, async (req, res) => {
   try {
     const { rows } = await query(
-      `SELECT u.id, u.username,
+      `SELECT u.id, u.username, u.avatar,
               COALESCE(stats.wins, 0)  AS wins,
               COALESCE(stats.plays, 0) AS plays
        FROM friendships f
@@ -37,6 +37,7 @@ router.get('/', requireAuth, async (req, res) => {
     res.json(rows.map(r => ({
       id: r.id,
       username: r.username,
+      avatar: r.avatar || null,
       wins: Number(r.wins),
       plays: Number(r.plays),
       ...userPresence(r.id),

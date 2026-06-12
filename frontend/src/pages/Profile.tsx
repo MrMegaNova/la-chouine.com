@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { usersApi, type HistoryEntry } from '@/api/client';
 import { EyeToggle, PasswordChecklist, passwordValid } from '@/components/auth/password';
+import { AvatarContent } from '@/components/Avatar';
 
 export default function Profile() {
   const { user, token, logout, refreshUser } = useAuthStore();
@@ -25,9 +26,7 @@ export default function Profile() {
   return (
     <div className="wrap" style={{ padding: '36px 0 60px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 18, marginBottom: 26 }}>
-        <div className="list-row__avatar" style={{ width: 64, height: 64, fontSize: 26, borderRadius: '50%', display: 'grid', placeItems: 'center' }}>
-          {user.username.replace(/[^A-Za-zÀ-ÿ0-9]/g, '').slice(0, 2).toUpperCase()}
-        </div>
+        <AvatarEditor />
         <div>
           <h2 className="section-title" style={{ margin: 0 }}>{user.username}</h2>
           <p className="section-sub" style={{ margin: 0 }}>Membre depuis {joined}</p>
@@ -90,6 +89,84 @@ export default function Profile() {
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+// Redimensionne une image en carré 128×128 (recadrage centré) et l'encode en
+// data URL JPEG — petit, sans EXIF (ré-encodage canvas), prêt à stocker (#87).
+function fileToAvatar(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const SIZE = 128;
+      const canvas = document.createElement('canvas');
+      canvas.width = SIZE; canvas.height = SIZE;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { reject(new Error('Canvas indisponible.')); return; }
+      const min = Math.min(img.width, img.height);
+      const sx = (img.width - min) / 2;
+      const sy = (img.height - min) / 2;
+      ctx.drawImage(img, sx, sy, min, min, 0, 0, SIZE, SIZE);
+      URL.revokeObjectURL(img.src);
+      resolve(canvas.toDataURL('image/jpeg', 0.82));
+    };
+    img.onerror = () => { URL.revokeObjectURL(img.src); reject(new Error('Image illisible.')); };
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+// Avatar de l'utilisateur (#87) : aperçu + upload (redimensionné côté client)
+// + retrait. La mise à jour du store propage l'avatar au header instantanément.
+function AvatarEditor() {
+  const { user, token } = useAuthStore();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  if (!user) return null;
+
+  const onPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // permet de reprendre le même fichier après un retrait
+    if (!file || !token) return;
+    if (!/^image\/(png|jpe?g|webp)$/.test(file.type)) { setError('Format non supporté (png, jpg, webp).'); return; }
+    setError(''); setBusy(true);
+    try {
+      const avatar = await fileToAvatar(file);
+      const { ok, data } = await usersApi.setAvatar(avatar, token);
+      if (!ok) { setError(data.error ?? 'Échec de l’envoi.'); return; }
+      useAuthStore.setState(s => ({ user: s.user ? { ...s.user, avatar: data.avatar } : s.user }));
+    } catch {
+      setError('Image illisible.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onRemove = async () => {
+    if (!token) return;
+    setBusy(true); setError('');
+    const { ok } = await usersApi.removeAvatar(token);
+    if (ok) useAuthStore.setState(s => ({ user: s.user ? { ...s.user, avatar: null } : s.user }));
+    setBusy(false);
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+      <div className="list-row__avatar" style={{ width: 64, height: 64, fontSize: 26, borderRadius: '50%' }}>
+        <AvatarContent src={user.avatar} name={user.username} />
+      </div>
+      <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={onPick} style={{ display: 'none' }} />
+      <div style={{ display: 'flex', gap: 6 }}>
+        <button className="btn btn--ghost btn--sm" disabled={busy} onClick={() => fileRef.current?.click()}>
+          {busy ? '…' : user.avatar ? 'Changer' : 'Ajouter une photo'}
+        </button>
+        {user.avatar && (
+          <button className="btn btn--ghost btn--sm" disabled={busy} onClick={onRemove} aria-label="Retirer la photo de profil">✕</button>
+        )}
+      </div>
+      {error && <span className="form-error" style={{ fontSize: 11.5, margin: 0 }}>{error}</span>}
     </div>
   );
 }

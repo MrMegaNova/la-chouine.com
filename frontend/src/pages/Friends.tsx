@@ -6,6 +6,7 @@ import { useNotificationStore } from '@/store/notificationStore';
 import { PresenceDot } from '@/components/PresenceDot';
 import { ChallengeButtons } from '@/components/game/ChallengeButtons';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { AvatarContent } from '@/components/Avatar';
 
 export default function Friends() {
   const { user, token } = useAuthStore();
@@ -102,7 +103,7 @@ export default function Friends() {
                 ? <div className="list-empty">Aucun joueur trouvé.</div>
                 : results.map(u => (
                   <div key={u.id} className="list-row">
-                    <div className="list-row__avatar">{initials(u.username)}</div>
+                    <div className="list-row__avatar"><AvatarContent src={u.avatar} name={u.username} /></div>
                     <div className="list-row__meta">
                       <b className="list-row__name">{u.username}</b>
                       <span className="list-row__sub">{u.wins} victoires · {u.plays} parties</span>
@@ -133,7 +134,7 @@ export default function Friends() {
                 ? <div className="list-empty">Pas encore d'amis.</div>
                 : friends.map(f => (
                   <div key={f.id} className="list-row">
-                    <div className="list-row__avatar">{initials(f.username)}</div>
+                    <div className="list-row__avatar"><AvatarContent src={f.avatar} name={f.username} /></div>
                     <div className="list-row__meta">
                       <b className="list-row__name"><PresenceDot online={f.online} inGame={f.inGame} />{f.username}</b>
                       <span className="list-row__sub">

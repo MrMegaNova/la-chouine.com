@@ -14,7 +14,7 @@ const router = express.Router();
 router.get('/me', requireAuth, async (req, res) => {
   try {
     const { rows } = await query(
-      `SELECT u.id, u.username, u.email, u.created_at,
+      `SELECT u.id, u.username, u.email, u.created_at, u.avatar,
               u.rating_classic, u.rating_mondoubleau,
               COALESCE(stats.wins, 0)   AS wins,
               COALESCE(stats.losses, 0) AS losses,
@@ -39,6 +39,7 @@ router.get('/me', requireAuth, async (req, res) => {
       username: u.username,
       email: u.email,
       joined: u.created_at,
+      avatar: u.avatar || null,
       stats: {
         wins: Number(u.wins),
         losses: Number(u.losses),
@@ -65,7 +66,7 @@ router.get('/search', requireAuth, async (req, res) => {
 
   try {
     const { rows } = await query(
-      `SELECT u.id, u.username,
+      `SELECT u.id, u.username, u.avatar,
               COALESCE(stats.wins, 0) AS wins,
               COALESCE(stats.plays, 0) AS plays,
               f.status AS friendship_status,
@@ -91,6 +92,7 @@ router.get('/search', requireAuth, async (req, res) => {
     res.json(rows.map(u => ({
       id: u.id,
       username: u.username,
+      avatar: u.avatar || null,
       wins: Number(u.wins),
       plays: Number(u.plays),
       friendshipStatus: u.friendship_status || null,
@@ -177,6 +179,43 @@ router.post('/me/password', requireAuth, async (req, res) => {
     res.json({ message: 'Mot de passe modifié.', token: fresh });
   } catch (err) {
     console.error('POST /users/me/password error:', err);
+    res.status(500).json({ error: 'Erreur interne.' });
+  }
+});
+
+// ─── Avatar (#87) ─────────────────────────────────────────────────────────────
+// Stocké en data URL (base64) : image petite et carrée redimensionnée côté
+// client. Validation stricte du format et de la taille (le ré-encodage canvas
+// côté client retire aussi l'EXIF).
+
+const AVATAR_RE = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
+const AVATAR_MAX = 60_000; // ~44 Ko binaire, sous la limite JSON globale (64 Ko)
+
+router.post('/me/avatar', requireAuth, async (req, res) => {
+  const { avatar } = req.body || {};
+  if (typeof avatar !== 'string' || !AVATAR_RE.test(avatar)) {
+    return res.status(422).json({ error: 'Image invalide (png, jpeg ou webp attendu).' });
+  }
+  if (avatar.length > AVATAR_MAX) {
+    return res.status(413).json({ error: 'Image trop lourde (réduisez sa taille).' });
+  }
+  try {
+    await query(`UPDATE users SET avatar = $1, updated_at = NOW() WHERE id = $2`,
+      [avatar, req.user.id]);
+    res.json({ avatar });
+  } catch (err) {
+    console.error('POST /users/me/avatar error:', err);
+    res.status(500).json({ error: 'Erreur interne.' });
+  }
+});
+
+router.delete('/me/avatar', requireAuth, async (req, res) => {
+  try {
+    await query(`UPDATE users SET avatar = NULL, updated_at = NOW() WHERE id = $1`,
+      [req.user.id]);
+    res.json({ avatar: null });
+  } catch (err) {
+    console.error('DELETE /users/me/avatar error:', err);
     res.status(500).json({ error: 'Erreur interne.' });
   }
 });
