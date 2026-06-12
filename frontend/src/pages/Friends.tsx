@@ -9,7 +9,7 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { AvatarContent } from '@/components/Avatar';
 
 export default function Friends() {
-  const { user, token } = useAuthStore();
+  const { token } = useAuthStore();
   const navigate = useNavigate();
 
   const [tab, setTab] = useState<'friends' | 'requests'>('friends');
@@ -21,7 +21,12 @@ export default function Friends() {
   // Ami en attente de confirmation de retrait (#68).
   const [toRemove, setToRemove] = useState<Friend | null>(null);
 
-  useEffect(() => { if (!user) { navigate('/connexion'); return; } load(); }, [user]);
+  // Garde sur `token` (rehydraté de façon synchrone), pas sur `user` qui se
+  // charge en asynchrone : sinon, au rafraîchissement, `user` est null le temps
+  // de restaurer la session → redirection vers /connexion qui, token présent,
+  // renvoie à l'accueil (#112). On ne redirige que si l'on est vraiment
+  // déconnecté (pas de token).
+  useEffect(() => { if (!token) { navigate('/connexion'); return; } load(); }, [token]);
 
   // La présence (#46) évolue sans nous : recharge au retour sur l'onglet.
   useEffect(() => {
