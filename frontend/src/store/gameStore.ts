@@ -29,6 +29,10 @@ interface GameStore {
 
 let aiTimer: ReturnType<typeof setTimeout> | null = null;
 
+// Maintien du pli résolu (#97) : le pli complet reste affiché ce temps-là
+// avant d'être ramassé, pour qu'on lise la dernière carte jouée.
+const TRICK_HOLD_MS = 2000;
+
 // Valeur « à protéger » d'une carte (pour choisir laquelle jouer dans une annonce).
 const PTS_ORDER = (c: Card) => PTS[c.r] * 10 + ORDER[c.r];
 
@@ -75,7 +79,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     if (next.trick.length === next.playerCount) {
       set({ game: next });
-      // Résoudre le pli après un délai pour l'animation
+      // Résoudre le pli après un délai : le pli complet reste lisible (#97)
       aiTimer = setTimeout(() => {
         const { game: current } = get();
         if (!current) return;
@@ -85,7 +89,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         } else {
           checkAuSept(resolved);
         }
-      }, 680);
+      }, TRICK_HOLD_MS);
     } else {
       set({ game: next });
       scheduleAiIfNeeded(next);

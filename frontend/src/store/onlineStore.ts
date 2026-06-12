@@ -120,6 +120,20 @@ let reconnectAttempts = 0;
 const RECONNECT_DELAY_MS = 2000;
 const RECONNECT_MAX = 14; // ~28 s d'essais, sous le délai de grâce serveur (60 s)
 
+// Maintien du pli résolu (#97) : le serveur résout un pli complet
+// immédiatement (le snapshot arrive avec `trick: []` et `lastTrick` posé) —
+// sans temporisation côté client, la dernière carte ne serait jamais vue.
+// Pendant le maintien, le pli complet reste affiché et le snapshot réel est
+// mis en attente (seul le plus récent compte, l'état serveur est complet).
+const TRICK_HOLD_MS = 2000;
+let trickHoldTimer: ReturnType<typeof setTimeout> | null = null;
+let heldSnapshot: unknown | null = null;
+
+function clearTrickHold() {
+  if (trickHoldTimer) { clearTimeout(trickHoldTimer); trickHoldTimer = null; }
+  heldSnapshot = null;
+}
+
 function wsUrl(token: string): string {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   return `${proto}://${location.host}/ws?token=${encodeURIComponent(token)}`;
@@ -185,6 +199,27 @@ function closeSocket() {
 }
 
 export const useOnlineStore = create<OnlineState>((set, get) => {
+  // Applique un snapshot serveur à l'état du store (état autoritaire).
+  function applySnapshot(snap: ServerSnapshot) {
+    const game = mapSnapshot(snap);
+    let pendingResult: HandResult | null = null;
+    if (snap.handOver && snap.lastHandResult) pendingResult = snap.lastHandResult;
+    const mr = snap.matchResult;
+    const forfeit: ForfeitInfo | null = snap.finished && mr?.forfeit
+      ? { by: mr.forfeit.by, reason: mr.forfeit.reason, youWin: mr.winnerSeat === snap.you }
+      : null;
+    set({
+      game,
+      pendingResult,
+      forfeit,
+      gameRated: snap.rated ?? get().gameRated,
+      status: snap.finished ? 'over' : 'playing',
+      opponent: snap.names[1 - snap.you] ?? get().opponent,
+      // Un match clos (forfait compris) efface l'alerte de déconnexion adverse.
+      ...(snap.finished ? { opponentDisconnected: false, opponentDeadline: null } : {}),
+    });
+  }
+
   function handleMessage(raw: string) {
     let msg: { t: string; [k: string]: unknown };
     try { msg = JSON.parse(raw); } catch { return; }
@@ -205,6 +240,7 @@ export const useOnlineStore = create<OnlineState>((set, get) => {
         if (msg.status === 'searching') set({ status: 'searching' });
         break;
       case 'matchFound':
+        clearTrickHold();
         set({
           status: 'found',
           opponent: (msg.opponent as string) ?? null,
@@ -240,23 +276,29 @@ export const useOnlineStore = create<OnlineState>((set, get) => {
         // de fin de match après leave() → à ignorer. Un état *en cours* est une
         // reprise (partie retrouvée après rechargement de la page) → on rentre.
         if (get().status === 'idle' && snap.finished) break;
-        const game = mapSnapshot(snap);
-        let pendingResult: HandResult | null = null;
-        if (snap.handOver && snap.lastHandResult) pendingResult = snap.lastHandResult;
-        const mr = snap.matchResult;
-        const forfeit: ForfeitInfo | null = snap.finished && mr?.forfeit
-          ? { by: mr.forfeit.by, reason: mr.forfeit.reason, youWin: mr.winnerSeat === snap.you }
-          : null;
-        set({
-          game,
-          pendingResult,
-          forfeit,
-          gameRated: snap.rated ?? get().gameRated,
-          status: snap.finished ? 'over' : 'playing',
-          opponent: snap.names[1 - snap.you] ?? get().opponent,
-          // Un match clos (forfait compris) efface l'alerte de déconnexion adverse.
-          ...(snap.finished ? { opponentDisconnected: false, opponentDeadline: null } : {}),
-        });
+
+        // Maintien du pli (#97) : déjà en cours → on ne garde que le dernier
+        // snapshot, appliqué à la fin du maintien.
+        if (trickHoldTimer) { heldSnapshot = snap; break; }
+
+        // Un pli vient d'être résolu (nous affichions un pli partiel, le
+        // serveur renvoie un pli vide avec ses cartes dans `lastTrick`) :
+        // montrer le pli complet ~2 s avant d'appliquer l'état réel. Le pli
+        // complet (length === playerCount) bloque déjà toute entrée côté UI.
+        const cur = get().game;
+        if (cur && cur.trick.length > 0 && snap.trick.length === 0 && snap.lastTrick
+            && snap.lastTrick.cards.length > cur.trick.length && snap.handNo === cur.handNo) {
+          set({ game: { ...cur, trick: snap.lastTrick.cards } });
+          trickHoldTimer = setTimeout(() => {
+            trickHoldTimer = null;
+            const next = (heldSnapshot as ServerSnapshot | null) ?? snap;
+            heldSnapshot = null;
+            applySnapshot(next);
+          }, TRICK_HOLD_MS);
+          break;
+        }
+
+        applySnapshot(snap);
         break;
       }
       case 'notification':
@@ -411,6 +453,7 @@ export const useOnlineStore = create<OnlineState>((set, get) => {
     },
 
     findOpponent: (variant, token) => {
+      clearTrickHold();
       set({
         status: 'searching', variant, opponent: null, error: null, game: null,
         pendingResult: null, searchStartedAt: Date.now(),
@@ -437,6 +480,7 @@ export const useOnlineStore = create<OnlineState>((set, get) => {
 
     rematch: (token) => {
       const variant = get().variant;
+      clearTrickHold();
       set({
         status: 'searching', opponent: null, game: null, pendingResult: null, error: null,
         searchStartedAt: Date.now(),
@@ -451,6 +495,7 @@ export const useOnlineStore = create<OnlineState>((set, get) => {
 
     leave: () => {
       send({ t: 'queue', action: 'leave' });
+      clearTrickHold();
       if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
       reconnectAttempts = 0;
       set({
