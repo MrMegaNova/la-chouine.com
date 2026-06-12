@@ -72,7 +72,8 @@ export default function App() {
           <Route path="/" element={<Home />} />
           <Route path="/jouer" element={<Play />} />
           <Route path="/jeu" element={game ? null : <Navigate to="/jouer" replace />} />
-          <Route path="/connexion" element={<Login />} />
+          {/* Déjà connecté → pas de page de connexion (#112), retour à l'accueil. */}
+          <Route path="/connexion" element={token ? <Navigate to="/" replace /> : <Login />} />
           <Route path="/amis" element={<Friends />} />
           <Route path="/profil" element={<Profile />} />
           <Route path="/regles" element={<Rules />} />
