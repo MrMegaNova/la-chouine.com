@@ -80,7 +80,7 @@ export default function Play() {
     : 'La retourne fixe l\'atout dès la donne.';
 
   return (
-    <div className="wrap" style={{ padding: '36px 0 60px' }}>
+    <div className="wrap" style={{ paddingTop: 36, paddingBottom: 60 }}>
       <h2 className="section-title">Lancer une partie</h2>
       <p className="section-sub">Choisissez votre mode, votre format et c'est parti.</p>
 

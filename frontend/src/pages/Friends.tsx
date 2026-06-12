@@ -81,7 +81,7 @@ export default function Friends() {
   const initials = (n: string) => n.replace(/[^A-Za-zÀ-ÿ0-9]/g, '').slice(0, 2).toUpperCase();
 
   return (
-    <div className="wrap" style={{ padding: '36px 0 60px' }}>
+    <div className="wrap" style={{ paddingTop: 36, paddingBottom: 60 }}>
       {toastMsg && (
         <div style={{ position: 'fixed', top: 80, left: '50%', transform: 'translateX(-50%)', background: 'rgba(8,18,13,.9)', border: '1px solid var(--gold)', color: 'var(--cream)', padding: '9px 16px', borderRadius: 30, fontWeight: 700, fontSize: 14, zIndex: 100 }}>
           {toastMsg}
