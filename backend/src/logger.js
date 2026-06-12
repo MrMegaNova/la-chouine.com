@@ -31,10 +31,19 @@ const logger = pino({
   level,
   redact,
   base: { service: 'la-chouine' },
-  // En dev : sortie lisible via pino-pretty (devDependency, absent en prod).
-  ...(config.isProd || config.isTest
-    ? {}
-    : { transport: { target: 'pino-pretty', options: { colorize: true, translateTime: 'SYS:HH:MM:ss', ignore: 'pid,hostname,service' } } }),
+  // Sortie lisible (pino-pretty) dans tous les environnements sauf test —
+  // jamais de JSON brut. Couleurs en dev ; sans couleur en prod (sortie
+  // capturée par Docker, pas de TTY).
+  ...(config.isTest ? {} : {
+    transport: {
+      target: 'pino-pretty',
+      options: {
+        colorize: !config.isProd,
+        translateTime: 'SYS:standard',
+        ignore: 'pid,hostname,service',
+      },
+    },
+  }),
 });
 
 module.exports = { logger, redact };

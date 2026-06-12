@@ -7,12 +7,14 @@ const { pool } = require('./index');
 
 // Logger dédié au CLI de migration : toujours actif (le logger applicatif est
 // silencieux en NODE_ENV=test, or les migrations CI tournent justement en test
-// et leur sortie doit rester visible). Joli en TTY, JSON sinon.
+// et leur sortie doit rester visible). Format lisible (jamais JSON) ; couleurs
+// seulement en TTY.
 const logger = require('pino')({
   level: 'info',
-  ...(process.stdout.isTTY
-    ? { transport: { target: 'pino-pretty', options: { colorize: true, ignore: 'pid,hostname,time' } } }
-    : {}),
+  transport: {
+    target: 'pino-pretty',
+    options: { colorize: !!process.stdout.isTTY, ignore: 'pid,hostname,time' },
+  },
 });
 
 async function migrate() {
