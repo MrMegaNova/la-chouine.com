@@ -114,6 +114,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const isComboCard = comboCards(game.players[seat].hand, combo)
       .some(c2 => c2.s === card.s && c2.r === card.r);
     if (!isComboCard) return;
+    // En réponse (#90), la carte de l'annonce doit aussi être un coup légal
+    // (fournir/monter/couper en phase finale) — sinon l'annonce serait
+    // créditée sans que la carte ne soit jouée.
+    const isLegal = getLegalMoves(game, seat).some(c2 => c2.s === card.s && c2.r === card.r);
+    if (!isLegal) return;
 
     const next = applyDeclareCombo(game, seat, combo);
     const toastMsg = combo.setsTrump && combo.suit

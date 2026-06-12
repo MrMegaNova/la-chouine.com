@@ -85,11 +85,23 @@ export function GameTable({ controller }: { controller?: GameController } = {}) 
   const trickPending = game.trick.length >= n;
   const myTurn = game.turn === me && !((game.mode === 'ai' || game.mode === 'friend') && me > 0) && !game.handOver && !game.gatePending && !trickPending;
   const legalMoves = myTurn ? getLegalMoves(game, me) : [];
-  const combos = myTurn && game.trick.length === 0 ? getAvailableCombos(game, me) : [];
+  // Annonces (#90) : possibles à l'entame comme en réponse (« lorsque son
+  // adversaire a abattu sa carte, il doit montrer son annonce »). En réponse
+  // de phase finale, une annonce n'est proposée que si l'une de ses cartes
+  // est un coup légal (annoncer = jouer une carte de l'annonce, #77). La
+  // chouine, qui gagne le coup sans jouer, reste réservée à l'entame.
+  const combos = myTurn
+    ? getAvailableCombos(game, me).filter(c => c.type === 'chouine'
+        ? game.trick.length === 0
+        : comboCards(game.players[me].hand, c).some(cc => legalMoves.includes(cc)))
+    : [];
 
   // Cartes jouables : pendant une annonce en attente, seules les cartes qui
-  // composent l'annonce sont jouables (#77) ; sinon, les coups légaux.
-  const announceCards = pendingAnnounce ? comboCards(game.players[me].hand, pendingAnnounce) : null;
+  // composent l'annonce ET restent légales sont jouables (#77/#90) ; sinon,
+  // les coups légaux.
+  const announceCards = pendingAnnounce
+    ? comboCards(game.players[me].hand, pendingAnnounce).filter(c => legalMoves.includes(c))
+    : null;
   const playableCards = announceCards ?? legalMoves;
 
   const onPlay = (card: Card) => {
@@ -183,7 +195,7 @@ export function GameTable({ controller }: { controller?: GameController } = {}) 
               const briq = pl.won.filter(isBrisque).length;
               return (
                 <span key={p} className={`${styles.captLine} ${p === me ? styles.captMe : ''}`}>
-                  {name} — plis {plis}{p === me ? ` · briq ${briq}` : ''}{pl.annonce ? ` · ann ${pl.annonce}` : ''}
+                  {name} — plis {plis}{p === me ? ` · brisque${briq > 1 ? 's' : ''} ${briq}` : ''}{pl.annonce ? ` · ann ${pl.annonce}` : ''}
                 </span>
               );
             })}
@@ -201,7 +213,7 @@ export function GameTable({ controller }: { controller?: GameController } = {}) 
         <div className={styles.actBar}>
           {game.handOver ? (
             <span className="note">Coup terminé.</span>
-          ) : game.gatePending ? null : myTurn && game.trick.length === 0 ? (
+          ) : game.gatePending ? null : myTurn ? (
             pendingAnnounce ? (
               <>
                 <span className="note" style={{ alignSelf: 'center' }}>
@@ -224,21 +236,21 @@ export function GameTable({ controller }: { controller?: GameController } = {}) 
                   {c.setsTrump ? ' (fixe atout)' : ''}
                 </button>
               ))}
-              {game.turnUp && game.phase === 'draw' && game.trump &&
+              {game.trick.length === 0 && game.turnUp && game.phase === 'draw' && game.trump &&
                 game.players[me].hand.some(c => c.s === game.trump && c.r === '7') && (
                   <button className="btn btn--ghost btn--sm" onClick={() => exchangeSeven(me)}>
                     Échanger le 7 d'atout
                   </button>
                 )}
               <span className="note" style={{ alignSelf: 'center' }}>
-                {combos.length > 0 ? 'Annoncez (en jouant une carte de l\'annonce) ou entamez.' : 'À vous d\'entamer.'}
+                {game.trick.length === 0
+                  ? (combos.length > 0 ? 'Annoncez (en jouant une carte de l\'annonce) ou entamez.' : 'À vous d\'entamer.')
+                  : combos.length > 0
+                    ? 'Annoncez (en jouant une carte de l\'annonce) ou répondez.'
+                    : `À vous de répondre${game.phase === 'final' ? ' (fournir / monter / couper)' : ''}.`}
               </span>
             </>
             )
-          ) : myTurn ? (
-            <span className="note" style={{ alignSelf: 'center' }}>
-              À vous de répondre{game.phase === 'final' ? ' (fournir / monter / couper)' : ''}.
-            </span>
           ) : (game.mode === 'ai' || game.mode === 'friend') && game.turn > 0 ? (
             <span className="note" style={{ alignSelf: 'center' }}>
               🤖 {game.names[game.turn]} réfléchit…

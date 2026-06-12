@@ -86,6 +86,53 @@ test('declare (#77) : l’annonce se valide en jouant une carte qui la compose',
   });
 });
 
+test('declare (#90) : l’annonce est permise en réponse (phase de pioche)', () => {
+  // Bob a entamé ; Alice répond et annonce sa quinte (5 brisques en main).
+  const sess = mkSession({
+    phase: 'draw', trump: 'coeur', turn: 0, leader: 1,
+    trick: [{ p: 1, card: c('coeur', 'R') }],
+    players: [
+      p([c('pique', 'A'), c('pique', '10'), c('carreau', 'A'), c('carreau', '10'), c('trefle', '10')]),
+      p([c('coeur', '8'), c('coeur', '9'), c('trefle', '7'), c('trefle', '8')]),
+    ],
+  });
+  const res = sess.applyAction('u1', { type: 'declare', sig: 'quinte', card: c('trefle', '10') });
+  assert.ok(res.ok, res.error);
+  assert.equal(sess.state.players[0].annonce, 50, 'la quinte est créditée');
+  assert.equal(sess.lastTrick.cards.length, 2, 'la carte a complété le pli');
+});
+
+test('declare (#90) : refusée en réponse de phase finale si la carte de l’annonce est illégale', () => {
+  // Phase finale, Bob entame coeur : Alice a du coeur, elle doit fournir —
+  // la D♠ de son mariage n’est pas un coup légal, l’annonce est refusée
+  // sans rien créditer (rollback).
+  const sess = mkSession({
+    phase: 'final', trump: 'carreau', turn: 0,
+    trick: [{ p: 1, card: c('coeur', '9') }],
+    players: [
+      p([c('coeur', '7'), c('pique', 'R'), c('pique', 'D')]),
+      p([c('trefle', '7'), c('trefle', '8')]),
+    ],
+  });
+  const res = sess.applyAction('u1', { type: 'declare', sig: 'mariage|pique', card: c('pique', 'D') });
+  assert.equal(res.ok, false);
+  assert.equal(sess.state.players[0].annonce, 0, 'rien n’a été crédité (rollback)');
+  assert.equal(sess.state.players[0].hand.length, 3, 'la carte n’a pas quitté la main');
+});
+
+test('declare (#90) : la chouine reste réservée à l’entame', () => {
+  const sess = mkSession({
+    phase: 'draw', trump: 'coeur', turn: 0,
+    trick: [{ p: 1, card: c('coeur', '8') }],
+    players: [
+      p([c('pique', 'A'), c('pique', '10'), c('pique', 'R'), c('pique', 'D'), c('pique', 'V')]),
+      p([c('coeur', '7'), c('coeur', '9'), c('carreau', '7'), c('carreau', '8')]),
+    ],
+  });
+  assert.equal(sess.applyAction('u1', { type: 'declare', sig: 'chouine|pique' }).ok, false);
+  assert.equal(sess.finished, false);
+});
+
 test('nextHand : nécessite l’accord des deux joueurs avant de distribuer', () => {
   const sess = mkSession({ handOver: true });
   assert.ok(sess.applyAction('u1', { type: 'nextHand' }).ok);
