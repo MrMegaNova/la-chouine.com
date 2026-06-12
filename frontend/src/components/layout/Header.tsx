@@ -50,6 +50,7 @@ export function Header() {
       )}
       {user && <Link to="/profil" className={`${styles.navLink} ${isActive('/profil') ? styles.active : ''}`}>Profil</Link>}
       <Link to="/regles" className={`${styles.navLink} ${isActive('/regles') ? styles.active : ''}`}>Règles</Link>
+      <Link to="/a-propos" className={`${styles.navLink} ${isActive('/a-propos') ? styles.active : ''}`}>À propos</Link>
       {!user && <Link to="/connexion" className={`${styles.navLink} ${isActive('/connexion') ? styles.active : ''}`}>Se connecter</Link>}
     </>
   );
