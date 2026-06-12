@@ -1,4 +1,6 @@
+import { useEffect } from 'react';
 import { useGameStore } from '@/store/gameStore';
+import { playSound } from '@/sound/sounds';
 import type { GameState, HandResult as HandResultType } from '@/game/types';
 
 interface Props {
@@ -37,6 +39,12 @@ export function HandResult({ result, game, onNext, token, userId, online }: Prop
   };
 
   const { winner, forced, matchWinner, cp, ann, der, tot } = result;
+
+  // Son de fin de partie (#155) : victoire/défaite selon le siège du joueur.
+  useEffect(() => {
+    if (matchWinner === null) return;
+    playSound(matchWinner === game.viewPlayer ? 'win' : 'lose');
+  }, [matchWinner, game.viewPlayer]);
 
   const playerRows = game.names.map((name, p) => (
     <div key={p} className="list-row">
