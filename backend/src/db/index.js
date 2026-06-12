@@ -2,6 +2,7 @@
 
 const { Pool } = require('pg');
 const config = require('../config');
+const { logger } = require('../logger');
 
 const pool = new Pool({
   host:     config.db.host,
@@ -16,7 +17,7 @@ const pool = new Pool({
 });
 
 pool.on('error', (err) => {
-  console.error('Erreur pool PostgreSQL inattendue', err);
+  logger.error({ err }, 'Erreur pool PostgreSQL inattendue');
 });
 
 /**

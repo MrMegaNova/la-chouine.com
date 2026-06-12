@@ -2,6 +2,7 @@
 
 const nodemailer = require('nodemailer');
 const config = require('../config');
+const { logger } = require('../logger');
 
 let _transport = null;
 
@@ -122,7 +123,7 @@ function logMailError(context, err) {
     responseCode: err && err.responseCode, // code SMTP numérique (535, 550…)
     response: err && err.response,         // réponse texte du serveur SMTP
   };
-  console.error(`Erreur envoi ${context} :`, JSON.stringify(details));
+  logger.error({ context, ...details }, 'Erreur envoi email');
 }
 
 /**
@@ -136,7 +137,7 @@ async function verifyTransport() {
   const { host, port, secure } = config.smtp;
   try {
     await getTransport().verify();
-    console.log(`[email] SMTP OK — ${host}:${port} (secure=${secure})`);
+    logger.info({ host, port, secure }, 'SMTP OK');
     return true;
   } catch (err) {
     logMailError(`vérification SMTP (${host}:${port} secure=${secure})`, err);

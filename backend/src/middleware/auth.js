@@ -54,7 +54,7 @@ async function requireAuth(req, res, next) {
       return res.status(401).json({ error: 'Session expirée. Reconnectez-vous.' });
     }
   } catch (err) {
-    console.error('requireAuth token_version error:', err);
+    req.log.error({ err }, 'requireAuth: vérification token_version');
     return res.status(500).json({ error: 'Erreur interne.' });
   }
   req.user = user;

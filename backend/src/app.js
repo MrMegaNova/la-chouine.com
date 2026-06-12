@@ -3,7 +3,9 @@
 const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
+const pinoHttp = require('pino-http');
 const config = require('./config');
+const { logger, redact } = require('./logger');
 const { authLimiter, apiLimiter } = require('./middleware/rateLimiter');
 
 const authRoutes    = require('./routes/auth');
@@ -31,6 +33,16 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
+// ─── Journalisation des requêtes (#130) ──────────────────────────────────────
+// Un log par requête (méthode, URL, statut, durée) avec id de corrélation ;
+// redaction des en-têtes/corps sensibles. `req.log` est dispo dans les routes.
+app.use(pinoHttp({
+  logger,
+  redact,
+  // Le corps n'est pas loggé par défaut ; on garde un bruit minimal.
+  autoLogging: { ignore: (req) => req.url === '/api/health' },
+}));
+
 // ─── Parsing ──────────────────────────────────────────────────────────────────
 
 app.use(express.json({ limit: '64kb' }));
@@ -50,8 +62,8 @@ app.use('/api/online',  apiLimiter,  onlineRoutes);
 app.use((_req, res) => res.status(404).json({ error: 'Endpoint introuvable.' }));
 
 // eslint-disable-next-line no-unused-vars
-app.use((err, _req, res, _next) => {
-  console.error('Erreur non gérée :', err);
+app.use((err, req, res, _next) => {
+  (req.log || logger).error({ err }, 'Erreur non gérée');
   res.status(500).json({ error: 'Erreur interne du serveur.' });
 });
 

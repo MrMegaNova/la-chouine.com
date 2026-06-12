@@ -51,7 +51,7 @@ router.get('/me', requireAuth, async (req, res) => {
       },
     });
   } catch (err) {
-    console.error('GET /users/me error:', err);
+    req.log.error({ err }, 'GET /users/me');
     res.status(500).json({ error: 'Erreur interne.' });
   }
 });
@@ -99,7 +99,7 @@ router.get('/search', requireAuth, async (req, res) => {
       friendshipRequester: u.friendship_requester || null,
     })));
   } catch (err) {
-    console.error('GET /users/search error:', err);
+    req.log.error({ err }, 'GET /users/search');
     res.status(500).json({ error: 'Erreur interne.' });
   }
 });
@@ -130,7 +130,7 @@ router.get('/history', requireAuth, async (req, res) => {
     );
     res.json(rows);
   } catch (err) {
-    console.error('GET /users/history error:', err);
+    req.log.error({ err }, 'GET /users/history');
     res.status(500).json({ error: 'Erreur interne.' });
   }
 });
@@ -178,7 +178,7 @@ router.post('/me/password', requireAuth, async (req, res) => {
     });
     res.json({ message: 'Mot de passe modifié.', token: fresh });
   } catch (err) {
-    console.error('POST /users/me/password error:', err);
+    req.log.error({ err }, 'POST /users/me/password');
     res.status(500).json({ error: 'Erreur interne.' });
   }
 });
@@ -204,7 +204,7 @@ router.post('/me/avatar', requireAuth, async (req, res) => {
       [avatar, req.user.id]);
     res.json({ avatar });
   } catch (err) {
-    console.error('POST /users/me/avatar error:', err);
+    req.log.error({ err }, 'POST /users/me/avatar');
     res.status(500).json({ error: 'Erreur interne.' });
   }
 });
@@ -215,7 +215,7 @@ router.delete('/me/avatar', requireAuth, async (req, res) => {
       [req.user.id]);
     res.json({ avatar: null });
   } catch (err) {
-    console.error('DELETE /users/me/avatar error:', err);
+    req.log.error({ err }, 'DELETE /users/me/avatar');
     res.status(500).json({ error: 'Erreur interne.' });
   }
 });

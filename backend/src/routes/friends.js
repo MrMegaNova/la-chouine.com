@@ -43,7 +43,7 @@ router.get('/', requireAuth, async (req, res) => {
       ...userPresence(r.id),
     })));
   } catch (err) {
-    console.error('GET /friends error:', err);
+    req.log.error({ err }, 'GET /friends');
     res.status(500).json({ error: 'Erreur interne.' });
   }
 });
@@ -62,7 +62,7 @@ router.get('/requests', requireAuth, async (req, res) => {
     );
     res.json(rows);
   } catch (err) {
-    console.error('GET /friends/requests error:', err);
+    req.log.error({ err }, 'GET /friends/requests');
     res.status(500).json({ error: 'Erreur interne.' });
   }
 });
@@ -120,7 +120,7 @@ router.post('/request', requireAuth, async (req, res) => {
     notifyUser(targetId, { kind: 'friendRequest', from: req.user.username });
     res.status(201).json({ message: 'Demande d\'ami envoyée.' });
   } catch (err) {
-    console.error('POST /friends/request error:', err);
+    req.log.error({ err }, 'POST /friends/request');
     res.status(500).json({ error: 'Erreur interne.' });
   }
 });
@@ -141,7 +141,7 @@ router.post('/accept', requireAuth, async (req, res) => {
     if (!rows.length) return res.status(404).json({ error: 'Demande introuvable.' });
     res.json({ message: 'Ami ajouté.' });
   } catch (err) {
-    console.error('POST /friends/accept error:', err);
+    req.log.error({ err }, 'POST /friends/accept');
     res.status(500).json({ error: 'Erreur interne.' });
   }
 });
@@ -160,7 +160,7 @@ router.post('/decline', requireAuth, async (req, res) => {
     );
     res.json({ message: 'Demande refusée.' });
   } catch (err) {
-    console.error('POST /friends/decline error:', err);
+    req.log.error({ err }, 'POST /friends/decline');
     res.status(500).json({ error: 'Erreur interne.' });
   }
 });
@@ -178,7 +178,7 @@ router.delete('/:id', requireAuth, async (req, res) => {
     );
     res.json({ message: 'Ami retiré.' });
   } catch (err) {
-    console.error('DELETE /friends/:id error:', err);
+    req.log.error({ err }, 'DELETE /friends/:id');
     res.status(500).json({ error: 'Erreur interne.' });
   }
 });

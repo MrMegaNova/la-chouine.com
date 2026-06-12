@@ -41,6 +41,7 @@ const { Matchmaker } = require('./matchmaking');
 const presence = require('./presence');
 const notifier = require('./notifier');
 const turnClock = require('../game/turnClock');
+const { logger } = require('../logger');
 
 function send(ws, obj) {
   if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(obj));
@@ -52,7 +53,7 @@ function defaultOnMatchComplete(outcome) {
   const { recordMatch } = require('../services/matchRecorder');
   Promise.resolve()
     .then(() => recordMatch(outcome))
-    .catch(e => console.error('[ws] enregistrement du match échoué :', e.message));
+    .catch(err => logger.error({ err, sessionId: outcome.sessionId }, 'ws: enregistrement du match échoué'));
 }
 
 // Lecture de l'Elo par défaut (production) depuis la base.
@@ -193,7 +194,7 @@ function attachWebSocketServer(httpServer, opts = {}) {
     stopClockTimer(session); // (#141)
     const outcome = { sessionId: session.id, ...session.getMatchOutcome() };
     try { onMatchComplete(outcome); }
-    catch (e) { console.error('[ws] onMatchComplete a échoué :', e.message); }
+    catch (err) { logger.error({ err, sessionId: session.id }, 'ws: onMatchComplete a échoué'); }
     registry.endSession(session.id);
     schedulePresence();
   }
@@ -355,7 +356,7 @@ function attachWebSocketServer(httpServer, opts = {}) {
   const timer = setInterval(() => {
     let pairs;
     try { pairs = matchmaker.findMatches(); }
-    catch (e) { return console.error('[mm] appariement échoué :', e.message); }
+    catch (err) { return logger.error({ err }, 'mm: appariement échoué'); }
     for (const [a, b] of pairs) onPair(a, b);
   }, tickMs);
   if (timer.unref) timer.unref(); // ne bloque pas l'arrêt du process / des tests
