@@ -10,6 +10,8 @@
 // Format : { t:'notification', kind:'friendRequest'|…, ...données } — `kind`
 // est extensible (défi entre amis #45, etc.).
 
+const { logger } = require('../logger');
+
 let sender = null;
 
 /** @param {(userId: string, obj: object) => void} fn */
@@ -18,7 +20,7 @@ function setSender(fn) { sender = fn; }
 function notifyUser(userId, payload) {
   if (!sender) return;
   try { sender(userId, { t: 'notification', ...payload }); }
-  catch (e) { console.error('[notifier] envoi échoué :', e.message); }
+  catch (err) { logger.error({ err, userId }, 'notifier: envoi échoué'); }
 }
 
 function reset() { sender = null; } // utilitaire de test

@@ -70,7 +70,7 @@ router.post('/', requireAuth, async (req, res) => {
 
     res.status(201).json({ id: result.gid });
   } catch (err) {
-    console.error('POST /games error:', err);
+    req.log.error({ err }, 'POST /games');
     res.status(500).json({ error: 'Erreur interne.' });
   }
 });

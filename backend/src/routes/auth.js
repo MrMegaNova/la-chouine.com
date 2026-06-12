@@ -110,7 +110,7 @@ router.post('/register', async (req, res) => {
         'Compte créé. Un email de confirmation a été envoyé à votre adresse.',
     });
   } catch (err) {
-    console.error('register error:', err);
+    req.log.error({ err }, 'register');
     res.status(500).json({ errors: ['Erreur interne. Réessayez.'] });
   }
 });
@@ -140,7 +140,7 @@ router.get('/verify-email', async (req, res) => {
 
     res.json({ message: 'Adresse email confirmée. Vous pouvez vous connecter.' });
   } catch (err) {
-    console.error('verify-email error:', err);
+    req.log.error({ err }, 'verify-email');
     res.status(500).json({ error: 'Erreur interne.' });
   }
 });
@@ -187,7 +187,7 @@ router.post('/login', async (req, res) => {
     const token = signToken(user);
     res.json({ token, username: user.username, id: user.id });
   } catch (err) {
-    console.error('login error:', err);
+    req.log.error({ err }, 'login');
     res.status(500).json({ error: 'Erreur interne.' });
   }
 });
@@ -257,7 +257,7 @@ router.post('/forgot-password', async (req, res) => {
 
     res.json(generic);
   } catch (err) {
-    console.error('forgot-password error:', err);
+    req.log.error({ err }, 'forgot-password');
     res.json(generic); // Ne pas révéler l'erreur
   }
 });
@@ -289,7 +289,7 @@ router.post('/reset-password', async (req, res) => {
     }
     res.json({ message: 'Mot de passe modifié. Vous pouvez vous connecter.' });
   } catch (err) {
-    console.error('reset-password error:', err);
+    req.log.error({ err }, 'reset-password');
     res.status(500).json({ error: 'Erreur interne.' });
   }
 });

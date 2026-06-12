@@ -5,6 +5,16 @@ const path = require('path');
 
 const { pool } = require('./index');
 
+// Logger dédié au CLI de migration : toujours actif (le logger applicatif est
+// silencieux en NODE_ENV=test, or les migrations CI tournent justement en test
+// et leur sortie doit rester visible). Joli en TTY, JSON sinon.
+const logger = require('pino')({
+  level: 'info',
+  ...(process.stdout.isTTY
+    ? { transport: { target: 'pino-pretty', options: { colorize: true, ignore: 'pid,hostname,time' } } }
+    : {}),
+});
+
 async function migrate() {
   const client = await pool.connect();
   try {
@@ -24,11 +34,11 @@ async function migrate() {
         [file]
       );
       if (rows.length) {
-        console.log(`  ✓ ${file} (déjà appliqué)`);
+        logger.info(`✓ ${file} (déjà appliqué)`);
         continue;
       }
 
-      console.log(`  → Application de ${file}…`);
+      logger.info(`→ Application de ${file}…`);
       const sql = fs.readFileSync(path.join(dir, file), 'utf8');
       await client.query('BEGIN');
       try {
@@ -38,14 +48,14 @@ async function migrate() {
           [file]
         );
         await client.query('COMMIT');
-        console.log(`  ✓ ${file}`);
+        logger.info(`✓ ${file}`);
       } catch (err) {
         await client.query('ROLLBACK');
         throw err;
       }
     }
 
-    console.log('Migrations terminées.');
+    logger.info('Migrations terminées.');
   } finally {
     client.release();
     await pool.end();
@@ -53,6 +63,6 @@ async function migrate() {
 }
 
 migrate().catch(err => {
-  console.error('Échec des migrations :', err.message);
+  logger.error({ err }, 'Échec des migrations');
   process.exit(1);
 });
