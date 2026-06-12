@@ -18,7 +18,9 @@ const app = express();
 
 // ─── Sécurité ─────────────────────────────────────────────────────────────────
 
-app.set('trust proxy', 1);
+// Nombre de proxies de confiance (#144) : en prod, Traefik + nginx = 2 hops,
+// sinon req.ip vaudrait l'IP de Traefik (rate-limiting par IP inopérant).
+app.set('trust proxy', config.trustProxy);
 
 app.use(helmet({
   contentSecurityPolicy: config.isProd ? undefined : false,

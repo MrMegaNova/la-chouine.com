@@ -12,6 +12,11 @@ module.exports = {
   isTest: process.env.NODE_ENV === 'test',
   isProd: process.env.NODE_ENV === 'production',
 
+  // Nombre de proxies de confiance devant le backend (#144). Détermine req.ip,
+  // clé du rate-limiting par IP. Dev (accès direct) : 0/1. Prod derrière
+  // Traefik + nginx : 2.
+  trustProxy: parseInt(process.env.TRUST_PROXY || '1', 10),
+
   db: {
     host:     process.env.PGHOST     || 'localhost',
     port:     parseInt(process.env.PGPORT || '5432', 10),

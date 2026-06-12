@@ -32,6 +32,8 @@ services:
     environment:
       NODE_ENV:       production
       PORT:           "3000"
+      # Traefik + nginx = 2 proxies devant le backend (#144) → vraie IP client.
+      TRUST_PROXY:    "2"
       PGHOST:         db
       PGPORT:         "5432"
       PGUSER:         ${POSTGRES_USER}
