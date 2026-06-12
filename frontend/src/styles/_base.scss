@@ -7,10 +7,25 @@ html, body { height: 100%; }
 body {
   font-family: var(--sans);
   color: var(--cream);
-  @include felt-background;
+  // Couleur de repli unie (évite tout flash blanc avant/autour de la couche
+  // fixe du fond) ; le dégradé felt est porté par ::after ci-dessous.
+  background: var(--felt-edge);
   min-height: 100%;
   overflow-x: hidden;
   -webkit-tap-highlight-color: transparent;
+
+  // Fond « felt » sur une couche FIXE plein écran (#148) : peint une seule fois
+  // sur le viewport → continu et identique sur toutes les pages, sans couture
+  // au scroll. Porté par le body qui défile, le dégradé se terminait à ~90 % de
+  // la hauteur de page et révélait à plat la couleur de bord la plus foncée.
+  &::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;          // derrière le contenu
+    pointer-events: none;
+    @include felt-background;
+  }
 
   &::before {
     content: '';
