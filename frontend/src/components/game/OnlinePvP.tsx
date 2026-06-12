@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { useOnlineStore } from '@/store/onlineStore';
+import { playSound } from '@/sound/sounds';
 import { GameTable, type GameController } from './GameTable';
 
 // Pilote l'expérience PvP en ligne, rendue en overlay plein écran :
@@ -125,6 +126,9 @@ function ForfeitEnd({
   onRematch: (() => void) | null;
   onHome: () => void;
 }) {
+  // Son de fin par forfait (#155).
+  useEffect(() => { playSound(youWin ? 'win' : 'lose'); }, [youWin]);
+
   const who = opponent ?? 'Votre adversaire';
   const detail = youWin
     ? (reason === 'timeout'

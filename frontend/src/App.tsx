@@ -42,6 +42,14 @@ export default function App() {
 
   useEffect(() => { restoreSession(); }, []);
 
+  // Déverrouille le contexte audio (#155) au tout premier geste — requis sur
+  // mobile/iOS où l'audio ne peut démarrer qu'après une interaction.
+  useEffect(() => {
+    const unlock = () => { import('@/sound/sounds').then(m => m.unlockAudio()); window.removeEventListener('pointerdown', unlock); };
+    window.addEventListener('pointerdown', unlock, { once: true });
+    return () => window.removeEventListener('pointerdown', unlock);
+  }, []);
+
   // Présence (#43) : socket ouvert tant que l'utilisateur est connecté — il
   // alimente le compteur de joueurs en ligne et sert de canal de reprise si
   // une partie était en cours (le serveur repousse l'état à la connexion).
