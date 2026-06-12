@@ -8,6 +8,7 @@ const { signToken } = require('../middleware/auth');
 const { sendVerificationEmail, sendPasswordResetEmail, logMailError } = require('../services/email');
 const { isUsernameAllowed } = require('../services/usernameFilter');
 const { authGuard } = require('../services/authGuard');
+const { validatePassword } = require('../services/passwordPolicy');
 const config = require('../config');
 
 // Garde-fous anti-abus (#86) — débrayés en test, comme les rate limiters
@@ -20,22 +21,6 @@ const router = express.Router();
 
 const USERNAME_RE = /^[A-Za-z0-9_\-]{2,30}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-function validatePassword(password) {
-  if (!password || password.length < 8)
-    return 'Le mot de passe doit contenir au moins 8 caractères.';
-  if (password.length > 128)
-    return 'Mot de passe trop long (128 caractères max).';
-  if (!/[a-z]/.test(password))
-    return 'Le mot de passe doit contenir au moins une lettre minuscule.';
-  if (!/[A-Z]/.test(password))
-    return 'Le mot de passe doit contenir au moins une lettre majuscule.';
-  if (!/[0-9]/.test(password))
-    return 'Le mot de passe doit contenir au moins un chiffre.';
-  if (!/[^A-Za-z0-9]/.test(password))
-    return 'Le mot de passe doit contenir au moins un caractère spécial.';
-  return null;
-}
 
 function validateRegister(body) {
   const errors = [];

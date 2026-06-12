@@ -97,6 +97,10 @@ export const usersApi = {
 
   history: (token: string) =>
     apiCall<HistoryEntry[]>('GET', '/users/history', undefined, token),
+
+  changePassword: (currentPassword: string, newPassword: string, token: string) =>
+    apiCall<{ message: string; error?: string }>(
+      'POST', '/users/me/password', { currentPassword, newPassword }, token),
 };
 
 // ─── Friends ──────────────────────────────────────────────────────────────────

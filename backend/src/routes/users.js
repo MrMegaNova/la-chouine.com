@@ -1,8 +1,11 @@
 'use strict';
 
 const express = require('express');
+const bcrypt = require('bcryptjs');
 const { query } = require('../db');
 const { requireAuth } = require('../middleware/auth');
+const { validatePassword } = require('../services/passwordPolicy');
+const config = require('../config');
 
 const router = express.Router();
 
@@ -126,6 +129,43 @@ router.get('/history', requireAuth, async (req, res) => {
     res.json(rows);
   } catch (err) {
     console.error('GET /users/history error:', err);
+    res.status(500).json({ error: 'Erreur interne.' });
+  }
+});
+
+// ─── POST /api/users/me/password ──────────────────────────────────────────────
+// Changement de mot de passe par un utilisateur connecté (#108) : exige le mot
+// de passe actuel, applique la politique, et refuse un nouveau identique.
+
+router.post('/me/password', requireAuth, async (req, res) => {
+  const { currentPassword, newPassword } = req.body || {};
+  if (!currentPassword || !newPassword) {
+    return res.status(422).json({ error: 'Mot de passe actuel et nouveau requis.' });
+  }
+  const pwdError = validatePassword(newPassword);
+  if (pwdError) return res.status(422).json({ error: pwdError });
+  if (newPassword === currentPassword) {
+    return res.status(422).json({ error: 'Le nouveau mot de passe doit être différent de l’actuel.' });
+  }
+
+  try {
+    const { rows } = await query(
+      `SELECT password_hash FROM users WHERE id = $1`,
+      [req.user.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Utilisateur introuvable.' });
+
+    const match = await bcrypt.compare(currentPassword, rows[0].password_hash);
+    if (!match) return res.status(403).json({ error: 'Mot de passe actuel incorrect.' });
+
+    const passwordHash = await bcrypt.hash(newPassword, config.auth.bcryptRounds);
+    await query(
+      `UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2`,
+      [passwordHash, req.user.id]
+    );
+    res.json({ message: 'Mot de passe modifié.' });
+  } catch (err) {
+    console.error('POST /users/me/password error:', err);
     res.status(500).json({ error: 'Erreur interne.' });
   }
 });

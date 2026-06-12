@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { usersApi, type HistoryEntry } from '@/api/client';
+import { EyeToggle, PasswordChecklist, passwordValid } from '@/components/auth/password';
 
 export default function Profile() {
   const { user, token, logout, refreshUser } = useAuthStore();
@@ -61,6 +62,8 @@ export default function Profile() {
         ))}
       </div>
 
+      <ChangePasswordSection />
+
       <h3 style={{ fontFamily: 'var(--serif)', fontSize: 24, marginBottom: 14 }}>Historique des parties</h3>
       {history.length === 0 ? (
         <div className="list-empty">Aucune partie jouée. <a href="/jouer" style={{ color: 'var(--gold-soft)' }}>Lancez-en une !</a></div>
@@ -85,6 +88,76 @@ export default function Profile() {
               </div>
             );
           })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Changement de mot de passe par l'utilisateur connecté (#108).
+function ChangePasswordSection() {
+  const { token } = useAuthStore();
+  const [open, setOpen] = useState(false);
+  const [current, setCurrent] = useState('');
+  const [next, setNext] = useState('');
+  const [showCurrent, setShowCurrent] = useState(false);
+  const [showNext, setShowNext] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const submit = async () => {
+    setError(''); setSuccess('');
+    if (!current) { setError('Saisissez votre mot de passe actuel.'); return; }
+    if (!passwordValid(next)) { setError('Le nouveau mot de passe ne respecte pas toutes les règles.'); return; }
+    if (next === current) { setError('Le nouveau mot de passe doit être différent de l\'actuel.'); return; }
+    if (!token) return;
+    setLoading(true);
+    const { ok, data } = await usersApi.changePassword(current, next, token);
+    setLoading(false);
+    if (!ok) { setError(data.error ?? 'Erreur.'); return; }
+    setSuccess('Mot de passe modifié.');
+    setCurrent(''); setNext(''); setShowCurrent(false); setShowNext(false);
+  };
+
+  return (
+    <div className="panel" style={{ marginBottom: 30, maxWidth: 460 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <h3 style={{ fontFamily: 'var(--serif)', fontSize: 22, margin: 0, flex: 1 }}>🔒 Sécurité</h3>
+        <button className="btn btn--ghost btn--sm" onClick={() => { setOpen(o => !o); setError(''); setSuccess(''); }}>
+          {open ? 'Fermer' : 'Changer mon mot de passe'}
+        </button>
+      </div>
+
+      {open && (
+        <div style={{ marginTop: 14 }}>
+          <div className="field">
+            <label>Mot de passe actuel</label>
+            <div style={{ position: 'relative' }}>
+              <input type={showCurrent ? 'text' : 'password'} value={current}
+                onChange={e => setCurrent(e.target.value)} placeholder="••••••••"
+                style={{ paddingRight: 38, width: '100%' }} />
+              <EyeToggle shown={showCurrent} onToggle={() => setShowCurrent(s => !s)} />
+            </div>
+          </div>
+          <div className="field">
+            <label>Nouveau mot de passe</label>
+            <div style={{ position: 'relative' }}>
+              <input type={showNext ? 'text' : 'password'} value={next}
+                onChange={e => setNext(e.target.value)} placeholder="••••••••"
+                style={{ paddingRight: 38, width: '100%' }}
+                onKeyDown={e => e.key === 'Enter' && submit()} />
+              <EyeToggle shown={showNext} onToggle={() => setShowNext(s => !s)} />
+            </div>
+            <PasswordChecklist password={next} />
+          </div>
+
+          {error && <p className="form-error">{error}</p>}
+          {success && <p className="form-ok" style={{ marginBottom: 8 }}>{success}</p>}
+
+          <button className="btn btn--gold btn--full" disabled={loading} onClick={submit}>
+            {loading ? '…' : 'Valider le changement'}
+          </button>
         </div>
       )}
     </div>
