@@ -120,3 +120,27 @@ test('POST /api/auth/forgot-password — réponse générique', async () => {
   assert.equal(res.status, 200);
   assert.ok(res.body.message);
 });
+
+test('POST /api/auth/forgot-password — compte non activé : renvoie un lien d’activation (#105)', async () => {
+  // TestUser1 (créé plus haut) n'est pas activé : le formulaire doit
+  // régénérer un verify_token, pas un reset_token.
+  const before = await pool.query(
+    `SELECT verify_token, reset_token FROM users WHERE email = $1`,
+    ['testuser1@test.la-chouine.invalid']
+  );
+  const res = await request.post('/api/auth/forgot-password').send({
+    email: 'testuser1@test.la-chouine.invalid',
+  });
+  assert.equal(res.status, 200);
+
+  const after = await pool.query(
+    `SELECT verify_token, verify_expires, reset_token, email_verified
+     FROM users WHERE email = $1`,
+    ['testuser1@test.la-chouine.invalid']
+  );
+  assert.equal(after.rows[0].email_verified, false);
+  assert.notEqual(after.rows[0].verify_token, before.rows[0].verify_token, 'nouveau lien d’activation émis');
+  assert.ok(after.rows[0].verify_token, 'verify_token présent');
+  assert.ok(after.rows[0].verify_expires, 'expiration repoussée');
+  assert.equal(after.rows[0].reset_token, null, 'aucun token de reset émis pour un compte non activé');
+});
