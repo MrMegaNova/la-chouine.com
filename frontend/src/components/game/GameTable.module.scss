@@ -152,10 +152,16 @@
 }
 .trickSlot {
   position: relative;
+}
+// Glisse directionnelle (#97) : ma carte arrive du bas (ma main), celle de
+// l'adversaire du haut (son côté de la table).
+.fromMe  :global(.playing-card) { animation: card-slide-up 0.42s ease-out both; }
+.fromOpp :global(.playing-card) { animation: card-slide-down 0.42s ease-out both; }
 
-  // Cartes posées : animation alternée gauche / droite
-  &:nth-child(odd)  :global(.playing-card) { animation: card-land-a 0.42s ease-out both; }
-  &:nth-child(even) :global(.playing-card) { animation: card-land-b 0.42s ease-out both; }
+@media (prefers-reduced-motion: reduce) {
+  .fromMe :global(.playing-card),
+  .fromOpp :global(.playing-card),
+  .myHand :global(.playing-card) { animation: none !important; }
 }
 .trickLabel {
   position: absolute;

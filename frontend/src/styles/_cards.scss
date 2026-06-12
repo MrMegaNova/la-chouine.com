@@ -70,13 +70,14 @@
 
 // ─── Animations ───────────────────────────────────────────────────────────────
 
-// Carte jouée sur le tapis : tombe depuis le haut avec légère rotation
-@keyframes card-land-a {
-  from { opacity: 0; transform: translateY(-24px) scale(0.88) rotate(-3deg); }
+// Carte jouée sur le tapis (#97) : glisse directionnelle — depuis ma main
+// (bas) ou depuis le côté adverse (haut), avec légère rotation.
+@keyframes card-slide-up {
+  from { opacity: 0; transform: translateY(46px) scale(0.9) rotate(2deg); }
   to   { opacity: 1; transform: none; }
 }
-@keyframes card-land-b {
-  from { opacity: 0; transform: translateY(-24px) scale(0.88) rotate(3deg); }
+@keyframes card-slide-down {
+  from { opacity: 0; transform: translateY(-46px) scale(0.9) rotate(-2deg); }
   to   { opacity: 1; transform: none; }
 }
 

@@ -178,7 +178,9 @@ export function GameTable({ controller }: { controller?: GameController } = {}) 
           {/* Trick */}
           <div className={styles.trickZone}>
             {game.trick.map((t, i) => (
-              <div key={i} className={styles.trickSlot}>
+              // Glisse directionnelle (#97) : ma carte monte depuis ma main,
+              // celle d'un adversaire descend depuis son côté de la table.
+              <div key={i} className={`${styles.trickSlot} ${t.p === me ? styles.fromMe : styles.fromOpp}`}>
                 <span className={styles.trickLabel}>{game.names[t.p]}</span>
                 <PlayingCard card={t.card} trump={game.trump !== null && t.card.s === game.trump} />
               </div>
