@@ -9,9 +9,9 @@ const { GameSession } = require('../game/session');
 const sessions = new Map();    // sessionId -> GameSession
 const userSession = new Map(); // userId    -> sessionId
 
-function createSession({ players, variant = 'classic', target = 3, rated = true }) {
+function createSession({ players, variant = 'classic', target = 3, rated = true, clockOptions }) {
   const id = randomUUID();
-  const session = new GameSession({ id, players, variant, target, rated });
+  const session = new GameSession({ id, players, variant, target, rated, clockOptions });
   sessions.set(id, session);
   for (const p of players) userSession.set(p.userId, id);
   return session;

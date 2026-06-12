@@ -37,6 +37,7 @@ interface ServerSnapshot {
   handNo: number;
   lastTrick: { cards: TrickEntry[]; winner: number } | null;
   opponentLastTrick: { cards: TrickEntry[]; winner: number } | null; // (#95)
+  clock: TurnClockView | null; // horloge de coup (#141), null hors partie classée
   lastAnnounce: { seat: number; sig: string; label: string; cards: Card[] } | null;
   lastHandResult: HandResult | null;
   finished: boolean;
@@ -58,6 +59,17 @@ export interface Presence {
   online: number;
   inQueue: number;
   inGame: number;
+}
+
+// Vue d'horloge de coup (#141) poussée par le serveur ; le client décompte
+// localement entre deux snapshots (le serveur reste la référence).
+export interface TurnClockView {
+  seat: number | null;       // siège dont l'horloge tourne
+  remainingMs: number | null; // temps restant au moment du snapshot
+  paused: boolean;            // gelée (un joueur déconnecté)
+  baseMs: number;
+  reserveMs: number[];        // réserve restante par siège
+  timeouts: number[];         // coups automatiques subis par siège
 }
 
 // Défi entre amis (#45/#47)
@@ -96,6 +108,7 @@ interface OnlineState {
   incomingChallenge: IncomingChallenge | null;
   outgoingChallenge: OutgoingChallenge | null;
   gameRated: boolean | null;       // type de la partie en cours (true = classée)
+  clock: TurnClockView | null;     // horloge de coup (#141)
 
   connectPresence: (token: string) => void;
   disconnectPresence: () => void;
@@ -218,6 +231,7 @@ export const useOnlineStore = create<OnlineState>((set, get) => {
       pendingResult,
       forfeit,
       gameRated: snap.rated ?? get().gameRated,
+      clock: snap.finished ? null : (snap.clock ?? null), // horloge de coup (#141)
       status: snap.finished ? 'over' : 'playing',
       opponent: snap.names[1 - snap.you] ?? get().opponent,
       // Un match clos (forfait compris) efface l'alerte de déconnexion adverse.
@@ -414,6 +428,7 @@ export const useOnlineStore = create<OnlineState>((set, get) => {
     incomingChallenge: null,
     outgoingChallenge: null,
     gameRated: null,
+    clock: null,
 
     // Présence : socket ouvert dès la connexion de l'utilisateur (#43). Sert
     // aussi de canal de reprise si une partie était en cours (le serveur
@@ -505,7 +520,7 @@ export const useOnlineStore = create<OnlineState>((set, get) => {
       reconnectAttempts = 0;
       set({
         status: 'idle', game: null, pendingResult: null, opponent: null,
-        searchStartedAt: null, error: null, gameRated: null,
+        searchStartedAt: null, error: null, gameRated: null, clock: null,
         opponentDisconnected: false, opponentDeadline: null, reconnecting: false, forfeit: null,
       });
       // Le socket reste ouvert (présence) ; s'il était tombé, on le relance.

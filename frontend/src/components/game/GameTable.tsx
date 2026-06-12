@@ -5,6 +5,7 @@ import { getLegalMoves, getAvailableCombos, isBrisque, comboCards } from '@/game
 import { SUIT_SYMBOL } from '@/game/constants';
 import { PlayingCard } from './PlayingCard';
 import { HandResult } from './HandResult';
+import { TurnTimer } from './TurnTimer';
 import type { Card, Combo, GameState, HandResult as HandResultType } from '@/game/types';
 import styles from './GameTable.module.scss';
 
@@ -129,6 +130,11 @@ export function GameTable({ controller }: { controller?: GameController } = {}) 
           ))}
         </div>
         <TrumpBadge trump={game.trump} variant={game.variant} target={game.target} />
+      </div>
+
+      {/* Horloge de coup (#141) — partie classée en ligne, visible des deux. */}
+      <div style={{ display: 'flex', justifyContent: 'center', padding: '2px 0' }}>
+        <TurnTimer me={me} names={game.names} />
       </div>
 
       {/* Felt */}
