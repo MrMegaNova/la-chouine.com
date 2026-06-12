@@ -39,6 +39,9 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  // Champ-piège anti-bot (#86) : invisible pour un humain, donc vide en usage
+  // normal — les bots de spam le remplissent et sont écartés côté serveur.
+  const [website, setWebsite] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
@@ -68,7 +71,7 @@ export default function Login() {
     reset();
     setLoading(true);
     const { login: _l, ...store } = useAuthStore.getState();
-    const err = await store.register(username.trim(), email.trim(), password);
+    const err = await store.register(username.trim(), email.trim(), password, website);
     setLoading(false);
     if (err) { setError(err); return; }
     setSuccess('Compte créé ! Vérifiez vos emails pour activer votre compte.');
@@ -113,6 +116,21 @@ export default function Login() {
             <label>Email</label>
             <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="votre@email.com" />
           </div>
+        )}
+
+        {/* Champ-piège anti-bot (#86) — hors écran, ignoré par les lecteurs
+            d'écran et le clavier ; un humain ne le remplit jamais. */}
+        {tab === 'register' && (
+          <input
+            type="text"
+            name="website"
+            value={website}
+            onChange={e => setWebsite(e.target.value)}
+            autoComplete="off"
+            tabIndex={-1}
+            aria-hidden="true"
+            style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, opacity: 0 }}
+          />
         )}
 
         {tab !== 'forgot' && (

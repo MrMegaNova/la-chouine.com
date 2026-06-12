@@ -7,7 +7,12 @@ const { query, withTransaction } = require('../db');
 const { signToken } = require('../middleware/auth');
 const { sendVerificationEmail, sendPasswordResetEmail, logMailError } = require('../services/email');
 const { isUsernameAllowed } = require('../services/usernameFilter');
+const { authGuard } = require('../services/authGuard');
 const config = require('../config');
+
+// Garde-fous anti-abus (#86) — débrayés en test, comme les rate limiters
+// (le module est testé unitairement dans tests/authGuard.test.js).
+const guardsOff = config.isTest;
 
 const router = express.Router();
 
@@ -54,6 +59,21 @@ function generateToken() {
 // ─── POST /api/auth/register ──────────────────────────────────────────────────
 
 router.post('/register', async (req, res) => {
+  // Champ-piège anti-bot (#86) : invisible pour un humain (masqué en CSS),
+  // les bots le remplissent. Faux succès pour ne pas les renseigner.
+  if (typeof req.body.website === 'string' && req.body.website.trim() !== '') {
+    return res.status(201).json({
+      message: 'Compte créé. Un email de confirmation a été envoyé à votre adresse.',
+    });
+  }
+
+  // Plafond d'inscriptions par IP (#86) — contre la création de comptes en masse.
+  if (!guardsOff && !authGuard.registerAllowed(req.ip)) {
+    return res.status(429).json({
+      errors: ['Trop de comptes créés récemment depuis cette adresse. Réessayez plus tard.'],
+    });
+  }
+
   const errors = validateRegister(req.body);
   if (errors.length) return res.status(422).json({ errors });
 
@@ -84,6 +104,8 @@ router.post('/register', async (req, res) => {
       [username, email, passwordHash, verifyToken, verifyExpires]
     );
     const user = rows[0];
+
+    if (!guardsOff) authGuard.registerRecorded(req.ip); // compte créé → décompte IP (#86)
 
     // Envoi de l'email — non bloquant pour la réponse
     sendVerificationEmail(user.email, verifyToken, user.username).catch(err =>
@@ -138,6 +160,12 @@ router.post('/login', async (req, res) => {
     return res.status(422).json({ error: 'Pseudo et mot de passe requis.' });
   }
 
+  // Anti-brute-force (#86) : blocage temporaire du couple IP+pseudo après
+  // N échecs — message générique, pour ne pas révéler l'existence du compte.
+  if (!guardsOff && !authGuard.loginAllowed(req.ip, username).allowed) {
+    return res.status(429).json({ error: 'Trop de tentatives. Réessayez plus tard.' });
+  }
+
   try {
     const { rows } = await query(
       `SELECT id, username, email, password_hash, email_verified
@@ -151,15 +179,18 @@ router.post('/login', async (req, res) => {
     const match = await bcrypt.compare(password, validHash);
 
     if (!user || !match) {
+      if (!guardsOff) authGuard.loginFailed(req.ip, username);
       return res.status(401).json({ error: 'Identifiants incorrects.' });
     }
     if (!user.email_verified) {
+      // Identifiants corrects : ce n'est pas une attaque, on ne compte pas.
       return res.status(403).json({
         error: 'Compte non activé. Vérifiez vos emails.',
         code: 'EMAIL_NOT_VERIFIED',
       });
     }
 
+    if (!guardsOff) authGuard.loginSucceeded(req.ip, username);
     const token = signToken(user);
     res.json({ token, username: user.username, id: user.id });
   } catch (err) {
