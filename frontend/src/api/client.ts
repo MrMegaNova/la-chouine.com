@@ -98,8 +98,10 @@ export const usersApi = {
   history: (token: string) =>
     apiCall<HistoryEntry[]>('GET', '/users/history', undefined, token),
 
+  // Le serveur réémet un token frais : le changement révoque tous les JWT
+  // antérieurs (#117), y compris celui de la session courante.
   changePassword: (currentPassword: string, newPassword: string, token: string) =>
-    apiCall<{ message: string; error?: string }>(
+    apiCall<{ message: string; token?: string; error?: string }>(
       'POST', '/users/me/password', { currentPassword, newPassword }, token),
 };
 

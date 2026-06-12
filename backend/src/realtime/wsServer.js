@@ -85,12 +85,16 @@ async function defaultAreFriends(a, b) {
  * @param {number} [opts.heartbeatMs]  période du ping de vie (0 = désactivé)
  * @param {(a,b)=>Promise<boolean>} [opts.areFriends]  contrôle d'amitié des défis
  * @param {number} [opts.challengeTtlMs] durée de vie d'un défi avant expiration
+ * @param {(user)=>Promise<boolean>} [opts.validateUser] contrôle additionnel à la
+ *   connexion (#117) — en production, server.js branche la vérification de la
+ *   version de token en DB ; par défaut (tests), la signature seule suffit.
  * @param {string} [opts.path]
  */
 function attachWebSocketServer(httpServer, opts = {}) {
   const onMatchComplete = opts.onMatchComplete || defaultOnMatchComplete;
   const getRating = opts.getRating || defaultGetRating;
   const areFriends = opts.areFriends || defaultAreFriends;
+  const validateUser = opts.validateUser || (async () => true);
   const matchmaker = new Matchmaker(opts.matchmaking || {});
   const tickMs = opts.tickMs ?? 1000;
   const graceMs = opts.graceMs ?? 60000;
@@ -369,12 +373,18 @@ function attachWebSocketServer(httpServer, opts = {}) {
   }
 
   // ── Connexions ──
-  wss.on('connection', (ws, req) => {
+  wss.on('connection', async (ws, req) => {
     let user;
     try {
       const url = new URL(req.url, 'http://localhost');
       user = verifyToken(url.searchParams.get('token'));
     } catch { user = null; }
+    // Vérification additionnelle (#117) : version de token révoquée → refus,
+    // comme une signature invalide. Fail-closed sur erreur de vérification.
+    if (user) {
+      try { if (!(await validateUser(user))) user = null; }
+      catch { user = null; }
+    }
     if (!user) {
       send(ws, { t: 'error', error: 'Authentification requise.' });
       ws.close(4001, 'unauthorized');

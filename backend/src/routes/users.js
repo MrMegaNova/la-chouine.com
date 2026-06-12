@@ -3,7 +3,7 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const { query } = require('../db');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, signToken } = require('../middleware/auth');
 const { validatePassword } = require('../services/passwordPolicy');
 const config = require('../config');
 
@@ -159,11 +159,22 @@ router.post('/me/password', requireAuth, async (req, res) => {
     if (!match) return res.status(403).json({ error: 'Mot de passe actuel incorrect.' });
 
     const passwordHash = await bcrypt.hash(newPassword, config.auth.bcryptRounds);
-    await query(
-      `UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2`,
+    // token_version + 1 révoque tous les JWT émis avant (#117) — y compris
+    // celui de cette session : on en réémet un frais dans la réponse pour ne
+    // pas déconnecter l'utilisateur qui vient de changer son mot de passe.
+    const { rows: upd } = await query(
+      `UPDATE users SET password_hash = $1, token_version = token_version + 1,
+              updated_at = NOW()
+       WHERE id = $2
+       RETURNING username, token_version`,
       [passwordHash, req.user.id]
     );
-    res.json({ message: 'Mot de passe modifié.' });
+    const fresh = signToken({
+      id: req.user.id,
+      username: upd[0].username,
+      token_version: upd[0].token_version,
+    });
+    res.json({ message: 'Mot de passe modifié.', token: fresh });
   } catch (err) {
     console.error('POST /users/me/password error:', err);
     res.status(500).json({ error: 'Erreur interne.' });
