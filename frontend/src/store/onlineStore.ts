@@ -38,6 +38,7 @@ interface ServerSnapshot {
   lastTrick: { cards: TrickEntry[]; winner: number } | null;
   opponentLastTrick: { cards: TrickEntry[]; winner: number } | null; // (#95)
   clock: TurnClockView | null; // horloge de coup (#141), null hors partie classée
+  lastExchange: { seat: number; handNo: number } | null; // échange du 7 d'atout (#76)
   lastAnnounce: { seat: number; sig: string; label: string; cards: Card[] } | null;
   lastHandResult: HandResult | null;
   finished: boolean;
@@ -217,6 +218,10 @@ function closeSocket() {
 }
 
 export const useOnlineStore = create<OnlineState>((set, get) => {
+  // Déduplication du toast d'échange du 7 (#76) : l'état est repoussé à chaque
+  // action, on ne notifie qu'au premier snapshot portant un nouvel échange.
+  let lastExchangeKey: string | null = null;
+
   // Applique un snapshot serveur à l'état du store (état autoritaire).
   function applySnapshot(snap: ServerSnapshot) {
     const game = mapSnapshot(snap);
@@ -226,6 +231,20 @@ export const useOnlineStore = create<OnlineState>((set, get) => {
     const forfeit: ForfeitInfo | null = snap.finished && mr?.forfeit
       ? { by: mr.forfeit.by, reason: mr.forfeit.reason, youWin: mr.winnerSeat === snap.you }
       : null;
+
+    // Échange du 7 d'atout (#76) : toast pour les deux joueurs (« Vous » pour
+    // l'auteur, son nom pour l'adversaire).
+    let exchangeToast: string | null = null;
+    const ex = snap.lastExchange;
+    if (ex) {
+      const key = `${ex.handNo}|${ex.seat}`;
+      if (key !== lastExchangeKey) {
+        lastExchangeKey = key;
+        exchangeToast = ex.seat === snap.you
+          ? 'Vous échangez le 7 d’atout'
+          : `${snap.names[ex.seat] ?? 'L’adversaire'} échange le 7 d’atout`;
+      }
+    }
     set({
       game,
       pendingResult,
@@ -234,6 +253,7 @@ export const useOnlineStore = create<OnlineState>((set, get) => {
       clock: snap.finished ? null : (snap.clock ?? null), // horloge de coup (#141)
       status: snap.finished ? 'over' : 'playing',
       opponent: snap.names[1 - snap.you] ?? get().opponent,
+      ...(exchangeToast ? { toast: exchangeToast } : {}),
       // Un match clos (forfait compris) efface l'alerte de déconnexion adverse.
       ...(snap.finished ? { opponentDisconnected: false, opponentDeadline: null } : {}),
     });
@@ -260,6 +280,7 @@ export const useOnlineStore = create<OnlineState>((set, get) => {
         break;
       case 'matchFound':
         clearTrickHold();
+        lastExchangeKey = null; // nouvelle partie : repart la déduplication d'échange (#76)
         set({
           status: 'found',
           opponent: (msg.opponent as string) ?? null,

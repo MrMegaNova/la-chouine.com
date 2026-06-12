@@ -38,6 +38,7 @@ class GameSession {
     this.matchResult = null;        // { winnerSeat, scores } à la fin du match
     this.lastTrick = null;          // { cards:[{p,card}], winner } pour l'animation
     this.lastTrickBySeat = [null, null]; // dernier pli ramassé par chaque siège (#95)
+    this.lastExchange = null;       // { seat, handNo } — dernier échange du 7 d'atout (#76)
     this.lastHandResult = null;     // HandResult de la dernière main terminée
     this.nextHandAcks = new Set();  // sièges ayant validé « main suivante »
     // Horloge de coup (#141) — parties classées uniquement ; pilotée par le
@@ -178,6 +179,9 @@ class GameSession {
     const next = applyExchangeSeven(s, seat);
     if (next === s) return { ok: false, error: 'Échange du 7 impossible.' };
     this.state = next;
+    // Signale l'échange aux deux joueurs (#76) — sans quoi l'adversaire ne voit
+    // que la retourne changer silencieusement. Dédupliqué par main + siège.
+    this.lastExchange = { seat, handNo: this.state.handNo };
     return { ok: true };
   }
 
@@ -190,6 +194,7 @@ class GameSession {
       this.nextHandAcks.clear();
       this.lastTrick = null;
       this.lastTrickBySeat = [null, null];
+      this.lastExchange = null;
       this.lastHandResult = null;
       this.state = dealHand(this.state);
     }
@@ -302,6 +307,8 @@ class GameSession {
       opponentLastTrick: seat >= 0 ? this.lastTrickBySeat[1 - seat] : null,
       // Horloge de coup (#141) — null hors partie classée.
       clock: this.clockView(),
+      // Dernier échange du 7 d'atout (#76) — pour le signaler aux deux joueurs.
+      lastExchange: this.lastExchange,
       lastAnnounce: s.lastAnnounce ?? null,
       lastHandResult: s.handOver ? this.lastHandResult : null,
       finished: this.finished,
