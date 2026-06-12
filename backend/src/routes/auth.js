@@ -41,6 +41,14 @@ function generateToken() {
   return crypto.randomBytes(32).toString('hex'); // 64 chars hex
 }
 
+// Seul le HASH du token est stocké en base (#122) : une fuite de dump ne
+// permet pas de réutiliser un lien de vérification/réinitialisation. Le token
+// en clair ne transite que dans l'email. SHA-256 (token aléatoire à haute
+// entropie → pas besoin de sel/KDF, contrairement à un mot de passe).
+function hashToken(raw) {
+  return crypto.createHash('sha256').update(raw).digest('hex');
+}
+
 // ─── POST /api/auth/register ──────────────────────────────────────────────────
 
 router.post('/register', async (req, res) => {
@@ -86,7 +94,7 @@ router.post('/register', async (req, res) => {
       `INSERT INTO users (username, email, password_hash, verify_token, verify_expires)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING id, username, email`,
-      [username, email, passwordHash, verifyToken, verifyExpires]
+      [username, email, passwordHash, hashToken(verifyToken), verifyExpires]
     );
     const user = rows[0];
 
@@ -123,7 +131,7 @@ router.get('/verify-email', async (req, res) => {
          AND verify_expires > NOW()
          AND email_verified = FALSE
        RETURNING id, username`,
-      [token]
+      [hashToken(token)]
     );
 
     if (!rows.length) {
@@ -215,7 +223,7 @@ router.post('/forgot-password', async (req, res) => {
       await query(
         `UPDATE users SET verify_token = $1, verify_expires = $2, updated_at = NOW()
          WHERE id = $3`,
-        [verifyToken, verifyExpires, user.id]
+        [hashToken(verifyToken), verifyExpires, user.id]
       );
 
       sendVerificationEmail(user.email, verifyToken, user.username).catch(err =>
@@ -231,7 +239,7 @@ router.post('/forgot-password', async (req, res) => {
     await query(
       `UPDATE users SET reset_token = $1, reset_expires = $2, updated_at = NOW()
        WHERE id = $3`,
-      [resetToken, resetExpires, user.id]
+      [hashToken(resetToken), resetExpires, user.id]
     );
 
     sendPasswordResetEmail(user.email, resetToken, user.username).catch(err =>
@@ -264,7 +272,7 @@ router.post('/reset-password', async (req, res) => {
            token_version = token_version + 1, updated_at = NOW()
        WHERE reset_token = $2 AND reset_expires > NOW()
        RETURNING id`,
-      [passwordHash, token]
+      [passwordHash, hashToken(token)]
     );
 
     if (!rows.length) {
