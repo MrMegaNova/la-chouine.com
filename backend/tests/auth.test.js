@@ -121,6 +121,34 @@ test('POST /api/auth/forgot-password — réponse générique', async () => {
   assert.ok(res.body.message);
 });
 
+test('POST /api/auth/reset-password — le token est comparé hashé (#122)', async () => {
+  const crypto = require('node:crypto');
+  const raw = crypto.randomBytes(32).toString('hex'); // lien envoyé par email
+  const hashed = crypto.createHash('sha256').update(raw).digest('hex'); // stocké en base
+
+  await pool.query(
+    `INSERT INTO users (username, email, password_hash, email_verified, reset_token, reset_expires)
+     VALUES ($1, $2, 'x', TRUE, $3, NOW() + INTERVAL '1 hour')`,
+    ['ResetHashUser', 'resethash@test.la-chouine.invalid', hashed]
+  );
+
+  // (1) Le token EN CLAIR (celui de l'email) est accepté → comparé après hashage.
+  const ok = await request.post('/api/auth/reset-password')
+    .send({ token: raw, password: 'NouveauPass1!' });
+  assert.equal(ok.status, 200);
+
+  // (2) La valeur STOCKÉE (le hash) ne doit jamais valoir un token utilisable :
+  //     une fuite de dump ne permet pas de réinitialiser le compte.
+  await pool.query(
+    `UPDATE users SET reset_token = $1, reset_expires = NOW() + INTERVAL '1 hour'
+     WHERE email = $2`,
+    [crypto.createHash('sha256').update(raw).digest('hex'), 'resethash@test.la-chouine.invalid']
+  );
+  const leak = await request.post('/api/auth/reset-password')
+    .send({ token: hashed, password: 'EncoreAutre2?' });
+  assert.equal(leak.status, 400, 'le hash stocké n’est pas un token valide');
+});
+
 test('POST /api/auth/forgot-password — compte non activé : renvoie un lien d’activation (#105)', async () => {
   // TestUser1 (créé plus haut) n'est pas activé : le formulaire doit
   // régénérer un verify_token, pas un reset_token.
