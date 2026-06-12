@@ -110,3 +110,51 @@ test('WebSocket : validateUser rejette un token révoqué (#117)', async (t) => 
   assert.ok(msgs.some(m => m.t === 'hello'), 'token à jour → connexion acceptée');
   wsFresh.close();
 });
+
+test('WebSocket : rate-limit des messages — flood rejeté puis connexion fermée (#124)', async (t) => {
+  registry.reset();
+  const server = http.createServer();
+  // Budget volontairement petit pour un test rapide et déterministe.
+  attachWebSocketServer(server, { msgRatePerSec: 5, msgBurst: 5, msgFloodKick: 10 });
+  await new Promise(r => server.listen(0, r));
+  const port = server.address().port;
+  t.after(() => server.close());
+
+  const token = signToken({ id: 'uflood', username: 'Flood' });
+  const ws = new WebSocket(`ws://localhost:${port}/ws?token=${token}`);
+  const msgs = [];
+  let closeCode = null;
+  ws.on('message', d => msgs.push(JSON.parse(d.toString())));
+  ws.on('close', code => { closeCode = code; });
+  await once(ws, 'open');
+  await delay(20);
+
+  // Rafale bien au-delà du budget (burst 5 + 10 rejets consécutifs → kick).
+  for (let i = 0; i < 60; i++) ws.send(JSON.stringify({ t: 'sync' }));
+  await delay(120);
+
+  assert.ok(msgs.some(m => m.t === 'error' && m.code === 'RATE_LIMIT'), 'le flood est rejeté');
+  assert.equal(closeCode, 4002, 'un flood soutenu ferme la connexion');
+});
+
+test('WebSocket : le jeu normal n’est jamais rate-limité (#124)', async (t) => {
+  registry.reset();
+  const server = http.createServer();
+  attachWebSocketServer(server);
+  await new Promise(r => server.listen(0, r));
+  const port = server.address().port;
+  t.after(() => server.close());
+
+  const token = signToken({ id: 'ucalm', username: 'Calm' });
+  const ws = new WebSocket(`ws://localhost:${port}/ws?token=${token}`);
+  const msgs = [];
+  ws.on('message', d => msgs.push(JSON.parse(d.toString())));
+  await once(ws, 'open');
+  await delay(20);
+
+  // Quelques sync espacés (rythme d'une partie réelle) — aucun rejet.
+  for (let i = 0; i < 5; i++) { ws.send(JSON.stringify({ t: 'sync' })); await delay(20); }
+  await delay(40);
+  assert.ok(!msgs.some(m => m.code === 'RATE_LIMIT'), 'aucun message légitime n’est throttlé');
+  ws.close();
+});
