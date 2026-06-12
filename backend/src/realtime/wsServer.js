@@ -100,6 +100,28 @@ function attachWebSocketServer(httpServer, opts = {}) {
   const graceMs = opts.graceMs ?? 60000;
   const heartbeatMs = opts.heartbeatMs ?? 30000;
   const challengeTtlMs = opts.challengeTtlMs ?? 60000;
+  // Rate-limit des messages entrants (#124) : seau à jetons par socket. Le jeu
+  // normal (annonce + carte + sync) reste bien en dessous ; un flood est rejeté
+  // sans traitement, et un abus soutenu ferme la connexion (borne le coût CPU
+  // et l'amplification ×2 du rebroadcast).
+  const msgRatePerSec = opts.msgRatePerSec ?? 20;
+  const msgBurst = opts.msgBurst ?? 40;
+  const msgFloodKick = opts.msgFloodKick ?? 100; // rejets consécutifs → fermeture
+
+  // Consomme un jeton ; renvoie false si le socket dépasse son budget.
+  function allowMessage(ws, now) {
+    if (ws.msgTokens === undefined) {
+      ws.msgTokens = msgBurst; ws.msgRefilledAt = now; ws.msgStrikes = 0;
+    }
+    const elapsed = now - ws.msgRefilledAt;
+    if (elapsed > 0) {
+      ws.msgTokens = Math.min(msgBurst, ws.msgTokens + (elapsed / 1000) * msgRatePerSec);
+      ws.msgRefilledAt = now;
+    }
+    if (ws.msgTokens >= 1) { ws.msgTokens -= 1; ws.msgStrikes = 0; return true; }
+    ws.msgStrikes += 1;
+    return false;
+  }
 
   const wss = new WebSocketServer({ server: httpServer, path: opts.path || '/ws' });
 
@@ -407,6 +429,13 @@ function attachWebSocketServer(httpServer, opts = {}) {
     schedulePresence();
 
     ws.on('message', (raw) => {
+      // Rate-limit (#124) : au-delà du budget, on rejette sans rien traiter ;
+      // un flood soutenu ferme la connexion (évite l'amplification du broadcast).
+      if (!allowMessage(ws, Date.now())) {
+        if (ws.msgStrikes >= msgFloodKick) return ws.close(4002, 'rate-limit');
+        return send(ws, { t: 'error', error: 'Trop de messages. Ralentissez.', code: 'RATE_LIMIT' });
+      }
+
       let msg;
       try { msg = JSON.parse(raw.toString()); }
       catch { return send(ws, { t: 'error', error: 'JSON invalide.' }); }
