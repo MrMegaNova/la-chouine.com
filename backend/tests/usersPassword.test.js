@@ -9,7 +9,10 @@ const { signToken } = require('../src/middleware/auth');
 const app = require('../src/app');
 
 const request = supertest(app);
-const EMAIL = 'pwdchange@test.la-chouine.invalid';
+// Domaine distinct de auth.test.js (qui purge « %@test.la-chouine.invalid ») :
+// les fichiers de test tournent en parallèle sur la même base, un email
+// capturé par sa purge ferait disparaître l'utilisateur en pleine exécution.
+const EMAIL = 'pwdchange@userspw.invalid';
 const OLD = 'Motdepasse123!';
 
 let token;
