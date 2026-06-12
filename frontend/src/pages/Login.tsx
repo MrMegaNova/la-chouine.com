@@ -1,37 +1,10 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { authApi } from '@/api/client';
+import { EyeToggle, PasswordChecklist } from '@/components/auth/password';
 
 type Tab = 'login' | 'register' | 'forgot';
-
-const pwdRules = [
-  { label: '8 caractères minimum', test: (p: string) => p.length >= 8 },
-  { label: 'Une majuscule', test: (p: string) => /[A-Z]/.test(p) },
-  { label: 'Une minuscule', test: (p: string) => /[a-z]/.test(p) },
-  { label: 'Un chiffre', test: (p: string) => /[0-9]/.test(p) },
-  { label: 'Un caractère spécial', test: (p: string) => /[^A-Za-z0-9]/.test(p) },
-];
-
-// Bouton œil (#78) : bascule l'affichage du mot de passe en clair.
-function EyeToggle({ shown, onToggle }: { shown: boolean; onToggle: () => void }) {
-  return (
-    <button
-      type="button"
-      aria-label={shown ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
-      aria-pressed={shown}
-      title={shown ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
-      onClick={onToggle}
-      style={{
-        position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
-        background: 'none', border: 'none', cursor: 'pointer', padding: 2,
-        color: 'var(--gold-soft)', fontSize: 16, lineHeight: 1,
-      }}
-    >
-      {shown ? '🙈' : '👁'}
-    </button>
-  );
-}
 
 export default function Login() {
   const [tab, setTab] = useState<Tab>('login');
@@ -45,7 +18,13 @@ export default function Login() {
   const [error, setError] = useState('');
   // Compte non activé au login (#105) : on propose le renvoi d'un lien.
   const [notActivated, setNotActivated] = useState(false);
-  const [success, setSuccess] = useState('');
+  // Message de succès après une réinitialisation (#107).
+  const location = useLocation();
+  const [success, setSuccess] = useState(
+    (location.state as { resetDone?: boolean } | null)?.resetDone
+      ? 'Mot de passe modifié. Vous pouvez vous connecter.'
+      : ''
+  );
   const [loading, setLoading] = useState(false);
   const { login } = useAuthStore();
   const navigate = useNavigate();
@@ -146,15 +125,7 @@ export default function Login() {
                 onKeyDown={e => e.key === 'Enter' && (tab === 'login' ? handleLogin() : handleRegister())} />
               <EyeToggle shown={showPassword} onToggle={() => setShowPassword(s => !s)} />
             </div>
-            {tab === 'register' && password.length > 0 && (
-              <ul style={{ listStyle: 'none', margin: '6px 0 0', padding: 0, display: 'flex', flexWrap: 'wrap', gap: '4px 12px' }}>
-                {pwdRules.map(r => (
-                  <li key={r.label} style={{ fontSize: 12, color: r.test(password) ? 'var(--green, #4caf50)' : 'var(--muted, #888)' }}>
-                    {r.test(password) ? '✓' : '○'} {r.label}
-                  </li>
-                ))}
-              </ul>
-            )}
+            {tab === 'register' && <PasswordChecklist password={password} />}
           </div>
         )}
 

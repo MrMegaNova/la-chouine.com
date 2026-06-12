@@ -14,6 +14,7 @@ import Home from '@/pages/Home';
 import About from '@/pages/About';
 import Play from '@/pages/Play';
 import Login from '@/pages/Login';
+import ResetPassword from '@/pages/ResetPassword';
 import Friends from '@/pages/Friends';
 import Profile from '@/pages/Profile';
 import Rules from '@/pages/Rules';
@@ -76,6 +77,7 @@ export default function App() {
           <Route path="/profil" element={<Profile />} />
           <Route path="/regles" element={<Rules />} />
           <Route path="/a-propos" element={<About />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/verify-email" element={<VerifyEmail />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
