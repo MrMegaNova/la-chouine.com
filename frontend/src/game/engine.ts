@@ -66,6 +66,7 @@ export function createGame(opts: GameOpts): GameState {
     handOver: false,
     lastTrickWinner: null,
     lastTrick: null,
+    lastTrickBySeat: new Array(n).fill(null),
     lastAnnounce: null,
     sevenAnnounced: false,
   };
@@ -129,6 +130,7 @@ export function dealHand(game: GameState): GameState {
     handOver: false,
     lastTrickWinner: null,
     lastTrick: null,
+    lastTrickBySeat: new Array(n).fill(null),
     lastAnnounce: null,
     gatePending: false,
     sevenAnnounced: false,
@@ -345,6 +347,13 @@ export function applyResolveTrick(game: GameState): GameState {
     i === winner ? { ...p, won: [...p.won, ...wonCards] } : p
   );
 
+  // Dernier pli ramassé par ce siège (#95) — `seq` croît à chaque ramassage
+  // pour départager le plus récent entre plusieurs adversaires.
+  const seq = Math.max(0, ...game.lastTrickBySeat.map(t => t?.seq ?? 0)) + 1;
+  const lastTrickBySeat = game.lastTrickBySeat.map((t, i) =>
+    i === winner ? { cards: game.trick, seq } : t
+  );
+
   let newGame: GameState = {
     ...game,
     players,
@@ -353,6 +362,7 @@ export function applyResolveTrick(game: GameState): GameState {
     turn: winner,
     lastTrickWinner: winner,
     lastTrick: { cards: game.trick, winner },
+    lastTrickBySeat,
   };
 
   if (game.phase === 'draw') {

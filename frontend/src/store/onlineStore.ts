@@ -36,6 +36,7 @@ interface ServerSnapshot {
   handOver: boolean;
   handNo: number;
   lastTrick: { cards: TrickEntry[]; winner: number } | null;
+  opponentLastTrick: { cards: TrickEntry[]; winner: number } | null; // (#95)
   lastAnnounce: { seat: number; sig: string; label: string; cards: Card[] } | null;
   lastHandResult: HandResult | null;
   finished: boolean;
@@ -180,6 +181,10 @@ function mapSnapshot(s: ServerSnapshot): GameState {
     handOver: s.handOver,
     lastTrickWinner: s.lastTrick ? s.lastTrick.winner : null,
     lastTrick: s.lastTrick,
+    // Seul le dernier pli adverse est public (#95) ; le sien est dans `won`.
+    lastTrickBySeat: Array.from({ length: n }, (_, i) =>
+      i !== s.you && s.opponentLastTrick ? { cards: s.opponentLastTrick.cards, seq: 1 } : null
+    ),
     lastAnnounce: s.lastAnnounce ?? null,
     sevenAnnounced: false,
   };
