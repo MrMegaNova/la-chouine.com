@@ -12,6 +12,8 @@ const {
   isLegalMove, resolveTrickWinner, shouldAnnounceAuSept, getLegalMoves,
   comboCards, sameCard,
 } = require('./engine');
+const { PTS, ORDER } = require('./constants');
+const turnClock = require('./turnClock');
 
 class GameSession {
   /**
@@ -22,7 +24,7 @@ class GameSession {
    * @param {number}  [o.target]  3 | 5
    * @param {boolean} [o.rated]   false = partie amicale, sans incidence Elo (#47)
    */
-  constructor({ id, players, variant = 'classic', target = 3, rated = true }) {
+  constructor({ id, players, variant = 'classic', target = 3, rated = true, clockOptions }) {
     if (!Array.isArray(players) || players.length !== 2) {
       throw new Error('GameSession : exactement 2 joueurs requis (v1).');
     }
@@ -38,6 +40,9 @@ class GameSession {
     this.lastTrickBySeat = [null, null]; // dernier pli ramassé par chaque siège (#95)
     this.lastHandResult = null;     // HandResult de la dernière main terminée
     this.nextHandAcks = new Set();  // sièges ayant validé « main suivante »
+    // Horloge de coup (#141) — parties classées uniquement ; pilotée par le
+    // driver temps réel (wsServer), qui arme l'échéance et gère la pause.
+    this.clock = this.rated ? turnClock.createClock(clockOptions) : null;
 
     this.state = dealHand(createGame({
       mode: 'online',
@@ -207,6 +212,48 @@ class GameSession {
     return next;
   }
 
+  // ── Horloge de coup (#141) ──────────────────────────────────────────────────
+  // Le module turnClock est pur ; ces méthodes l'appliquent à l'état de session.
+  // Le driver (wsServer) arme l'échéance réelle et appelle clockTimeout() à
+  // l'expiration. Toutes prennent `now` pour rester déterministes et testables.
+
+  /** Échéance atteinte : joue un coup automatique (carte légale la moins chère)
+   *  et compte une pénalité ; au quota, clôt par forfait. */
+  clockTimeout(now = Date.now()) {
+    if (!this.clock || this.finished || this.state.handOver) return { ok: false };
+    const seat = this.clock.seat;
+    if (seat === null) return { ok: false };
+
+    if (turnClock.recordTimeout(this.clock, seat)) {
+      this.forfeit(seat, 'timeout'); // trop de coups automatiques → défaite
+      return { ok: true, seat, forfeit: true };
+    }
+    const card = this._autoCard(seat);
+    if (!card) return { ok: false };
+    const res = this._play(seat, card);
+    return { ok: res.ok, seat, forfeit: false, card };
+  }
+
+  /** Carte « la moins coûteuse » parmi les coups légaux (heuristique du coup auto). */
+  _autoCard(seat) {
+    const legal = getLegalMoves(this.state, seat);
+    if (!legal.length) return null;
+    return [...legal].sort((a, b) => PTS[a.r] - PTS[b.r] || ORDER[a.r] - ORDER[b.r])[0];
+  }
+
+  /** Vue d'horloge pour le snapshot (mêmes infos pour les deux joueurs). */
+  clockView(now = Date.now()) {
+    if (!this.clock) return null;
+    return {
+      seat: this.clock.seat,
+      remainingMs: turnClock.remainingMs(this.clock, now),
+      paused: this.clock.paused,
+      baseMs: this.clock.baseMs,
+      reserveMs: [...this.clock.reserve],
+      timeouts: [...this.clock.timeouts],
+    };
+  }
+
   /** Résultat du match pour l'enregistrement classé (Elo), ou null si non terminé. */
   getMatchOutcome() {
     if (!this.finished || !this.matchResult) return null;
@@ -253,6 +300,8 @@ class GameSession {
       // Dernier pli ramassé par l'adversaire (#95) : seul pli adverse que la
       // règle autorise à consulter — même si on a ramassé des plis depuis.
       opponentLastTrick: seat >= 0 ? this.lastTrickBySeat[1 - seat] : null,
+      // Horloge de coup (#141) — null hors partie classée.
+      clock: this.clockView(),
       lastAnnounce: s.lastAnnounce ?? null,
       lastHandResult: s.handOver ? this.lastHandResult : null,
       finished: this.finished,

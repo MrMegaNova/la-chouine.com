@@ -40,6 +40,7 @@ const registry = require('./sessionRegistry');
 const { Matchmaker } = require('./matchmaking');
 const presence = require('./presence');
 const notifier = require('./notifier');
+const turnClock = require('../game/turnClock');
 
 function send(ws, obj) {
   if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(obj));
@@ -107,6 +108,7 @@ function attachWebSocketServer(httpServer, opts = {}) {
   const msgRatePerSec = opts.msgRatePerSec ?? 20;
   const msgBurst = opts.msgBurst ?? 40;
   const msgFloodKick = opts.msgFloodKick ?? 100; // rejets consécutifs → fermeture
+  const clockOptions = opts.clockOptions; // durées de l'horloge de coup (#141), réglables pour les tests
 
   // Consomme un jeton ; renvoie false si le socket dépasse son budget.
   function allowMessage(ws, now) {
@@ -188,6 +190,7 @@ function attachWebSocketServer(httpServer, opts = {}) {
   // ── Clôture de match (victoire normale ou forfait) ──
   function finishSession(session) {
     for (const p of session.players) cancelGrace(p.userId, { silent: true });
+    stopClockTimer(session); // (#141)
     const outcome = { sessionId: session.id, ...session.getMatchOutcome() };
     try { onMatchComplete(outcome); }
     catch (e) { console.error('[ws] onMatchComplete a échoué :', e.message); }
@@ -200,6 +203,85 @@ function attachWebSocketServer(httpServer, opts = {}) {
   // joueur en partie se ferme (multi-onglets : les autres onglets le maintiennent).
   const graceTimers = new Map();
   let stopped = false; // après stop(), plus aucun forfait ne doit être armé
+
+  // ── Horloge de coup (#141) ──
+  // Le module turnClock (pur) porte l'état ; ici on arme l'échéance réelle, on
+  // (re)démarre le tour à chaque action, et on met en pause/reprend selon les
+  // déconnexions (réutilise graceTimers comme source de vérité du « qui est
+  // déconnecté »). sessionId -> timeout.
+  const clockTimers = new Map();
+
+  function stopClockTimer(session) {
+    const t = clockTimers.get(session.id);
+    if (t) { clearTimeout(t); clockTimers.delete(session.id); }
+  }
+
+  // Siège actuellement déconnecté (dans son délai de grâce), ou -1.
+  function disconnectedSeat(session) {
+    for (let seat = 0; seat < session.players.length; seat++) {
+      if (graceTimers.has(session.players[seat].userId)) return seat;
+    }
+    return -1;
+  }
+
+  function scheduleClock(session) {
+    stopClockTimer(session);
+    if (stopped || !session.clock || session.finished || session.state.handOver) return;
+    if (session.clock.paused) return; // pas de timer tant qu'on est en pause
+    const rem = turnClock.remainingMs(session.clock, Date.now());
+    if (rem === null) return;
+    const timer = setTimeout(() => onClockExpire(session), Math.max(0, rem));
+    if (timer.unref) timer.unref();
+    clockTimers.set(session.id, timer);
+  }
+
+  // Aligne l'horloge sur le tour courant : crédite le coup précédent et démarre
+  // le décompte du siège actif. Appelé après chaque action appliquée.
+  function syncClock(session) {
+    if (!session.clock) return;
+    const now = Date.now();
+    if (session.finished || session.state.handOver) {
+      stopClockTimer(session);
+      session.clock.seat = null;
+      session.clock.deadline = null;
+      session.clock.paused = false;
+      return;
+    }
+    if (session.clock.paused) turnClock.resume(session.clock, now); // un coup a progressé
+    const turn = session.state.turn;
+    if (session.clock.seat !== turn) {
+      if (session.clock.seat !== null) turnClock.commitMove(session.clock, now);
+      turnClock.startTurn(session.clock, turn, now);
+    }
+    refreshClockPause(session); // re-pause si un joueur est encore déconnecté
+    scheduleClock(session);
+  }
+
+  // Met l'horloge en pause ssi un joueur est déconnecté, sinon la reprend.
+  function refreshClockPause(session) {
+    if (!session.clock || session.finished || session.state.handOver) return;
+    if (session.clock.seat === null) return; // aucun tour en cours à figer
+    const now = Date.now();
+    const dseat = disconnectedSeat(session);
+    if (dseat >= 0 && !session.clock.paused) {
+      // pause() peut refuser si le budget du déconnecté est épuisé : dans ce cas
+      // l'horloge continue de tourner (anti-abus déco/reco).
+      if (turnClock.pause(session.clock, dseat, now)) stopClockTimer(session);
+    } else if (dseat < 0 && session.clock.paused) {
+      turnClock.resume(session.clock, now);
+      scheduleClock(session);
+    }
+  }
+
+  function onClockExpire(session) {
+    clockTimers.delete(session.id);
+    if (stopped || session.finished || session.state.handOver) return;
+    const res = session.clockTimeout(Date.now());
+    if (!res.ok) return;
+    if (session.finished) { broadcast(session); finishSession(session); return; }
+    syncClock(session); // recale l'horloge sur le nouveau tour avant de diffuser
+    broadcast(session);
+  }
 
   function startGrace(userId) {
     if (stopped || graceTimers.has(userId)) return;
@@ -219,6 +301,8 @@ function attachWebSocketServer(httpServer, opts = {}) {
     if (timer.unref) timer.unref();
     graceTimers.set(userId, { timer, deadline });
 
+    refreshClockPause(session); // l'horloge se met en pause pendant la déconnexion (#141)
+
     const opp = opponentOf(session, userId);
     if (opp) notify(opp.userId, { t: 'opponentDisconnected', deadline, graceMs });
   }
@@ -228,8 +312,9 @@ function attachWebSocketServer(httpServer, opts = {}) {
     if (!pending) return;
     clearTimeout(pending.timer);
     graceTimers.delete(userId);
-    if (silent) return;
     const session = registry.sessionForUser(userId);
+    if (session) refreshClockPause(session); // reprise de l'horloge au retour (#141)
+    if (silent) return;
     const opp = session ? opponentOf(session, userId) : null;
     if (opp) notify(opp.userId, { t: 'opponentReconnected' });
   }
@@ -254,10 +339,12 @@ function attachWebSocketServer(httpServer, opts = {}) {
       variant,
       target: 3,
       rated,
+      clockOptions,
     });
     notify(a.userId, { t: 'matchFound', sessionId: session.id, opponent: b.name, rated });
     notify(b.userId, { t: 'matchFound', sessionId: session.id, opponent: a.name, rated });
-    broadcast(session);
+    syncClock(session); // démarre l'horloge du premier coup (#141, parties classées)
+    broadcast(session); // l'état initial porte déjà l'horloge en marche
     schedulePresence();
   }
 
@@ -450,7 +537,8 @@ function attachWebSocketServer(httpServer, opts = {}) {
 
       if (msg.t === 'action') {
         const res = session.applyAction(user.id, msg.action);
-        if (!res.ok) send(ws, { t: 'error', error: res.error });
+        if (res.ok) syncClock(session); // recale l'horloge sur le nouveau tour (#141)
+        else send(ws, { t: 'error', error: res.error });
         broadcast(session); // rediffuse l'état (à jour ou inchangé) aux deux joueurs
         if (session.finished) finishSession(session);
         return;
@@ -485,6 +573,8 @@ function attachWebSocketServer(httpServer, opts = {}) {
     if (presenceTimer) { clearTimeout(presenceTimer); presenceTimer = null; }
     for (const { timer: t } of graceTimers.values()) clearTimeout(t);
     graceTimers.clear();
+    for (const t of clockTimers.values()) clearTimeout(t);
+    clockTimers.clear();
     for (const c of challenges.values()) clearTimeout(c.timer);
     challenges.clear();
     for (const ws of wss.clients) ws.terminate(); // ne pas laisser de connexions pendantes
