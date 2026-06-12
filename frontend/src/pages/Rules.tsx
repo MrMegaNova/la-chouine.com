@@ -13,7 +13,7 @@ function Ex({ title, children }: { title?: string; children: React.ReactNode }) 
 
 export default function Rules() {
   return (
-    <div className="wrap" style={{ padding: '36px 0 60px' }}>
+    <div className="wrap" style={{ paddingTop: 36, paddingBottom: 60 }}>
       <h2 className="section-title">Les règles de la Chouine</h2>
       <p className="section-sub">
         Version classique, telle que pratiquée dans la Vallée du Loir — d'après la règle

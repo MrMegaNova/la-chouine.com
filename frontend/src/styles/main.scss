@@ -250,7 +250,17 @@
 }
 @media (max-width: 520px) {
   .playing-card { --w: 62px; }
-  .wrap { padding: 0 14px; }
+  .wrap { padding: 0 16px; }
+
+  // Lignes de liste (amis, recherche, invitations) : sur écran étroit, avatar
+  // + nom restent en ligne 1 et les actions passent en ligne 2 alignées à
+  // droite — sinon 3 boutons (dont « Retirer » #68) débordent (#151).
+  .list-row { flex-wrap: wrap; }
+  .list-row__actions {
+    width: 100%;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
 }
 @media (max-width: 380px) {
   .playing-card { --w: 52px; }

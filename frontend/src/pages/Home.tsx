@@ -39,7 +39,7 @@ export default function Home() {
   return (
     <>
       <section>
-        <div className="wrap hero" style={{ padding: '46px 0 30px' }}>
+        <div className="wrap hero" style={{ paddingTop: 46, paddingBottom: 30 }}>
           <div className="hero-grid">
             <div>
               <span className="kicker">◑ Jeu du Val de Loir · depuis le XVIᵉ siècle</span>

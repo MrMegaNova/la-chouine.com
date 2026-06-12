@@ -24,7 +24,7 @@ export default function Profile() {
   const wr = user.stats.plays ? Math.round(user.stats.wins / user.stats.plays * 100) : 0;
 
   return (
-    <div className="wrap" style={{ padding: '36px 0 60px' }}>
+    <div className="wrap" style={{ paddingTop: 36, paddingBottom: 60 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 18, marginBottom: 26 }}>
         <AvatarEditor />
         <div>
