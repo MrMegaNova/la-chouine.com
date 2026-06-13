@@ -44,6 +44,15 @@ cd frontend && npm run dev
 
 Sur push `main` ET pull_request : jobs **Backend** (+ Postgres, `NODE_ENV=test`), **Frontend** (build + vitest), **npm-audit**.
 
+## Sous-agents (`.claude/agents/`)
+
+- `feature-dev` — prend une issue, la développe sur une branche, ouvre la PR.
+- `pr-reviewer` — relit + teste une PR (parité moteurs, isolation tests, sécu).
+- `engine-parity` — vérifie la synchro `engine.ts` ↔ `engine.js`.
+- `backend-test-runner` — lance/diagnostique `node --test` (isolation DB).
+- `issue-author` — rédige une issue FR au style du repo.
+- `release-shepherd` — PR → merge → CI → prerelease.
+
 ## Prod
 
 Client → Traefik (forward headers) → nginx (conteneur frontend : SPA + proxy `/api` et `/ws`) → backend Express. `trust proxy` = 2 (chaîne à 2 proxies).
