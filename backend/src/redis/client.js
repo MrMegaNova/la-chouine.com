@@ -52,13 +52,16 @@ function setClient(c) {
 }
 
 async function close() {
+  // On ferme les connexions mais on NE remet PAS les références à null : un
+  // balayage/boucle encore en vol pourrait rappeler getClient() et, le client
+  // étant null, recréer une VRAIE connexion (erreurs de résolution en test).
+  // Garder la référence du client fermé fait échouer/no-op ces appels sans
+  // ouvrir de nouvelle connexion. setClient() réinitialise pour le test suivant.
   for (const c of [subscriber, client]) {
     if (c && typeof c.quit === 'function') {
       try { await c.quit(); } catch { /* déjà fermé */ }
     }
   }
-  client = null;
-  subscriber = null;
 }
 
 module.exports = { instanceId, getClient, getSubscriber, setClient, close };

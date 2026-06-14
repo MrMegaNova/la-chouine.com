@@ -8,31 +8,33 @@ process.env.PGUSER = process.env.PGUSER || 'x';
 process.env.PGPASSWORD = process.env.PGPASSWORD || 'x';
 process.env.PGDATABASE = process.env.PGDATABASE || 'x';
 process.env.PGHOST = process.env.PGHOST || 'localhost';
+process.env.REDIS_URL = process.env.REDIS_URL || 'redis://mock';
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('http');
 const { WebSocket } = require('ws');
 
+const { useMockRedis, flush, closeRedis } = require('./helpers/redis');
+const bus = require('../src/realtime/bus');
 const { attachWebSocketServer } = require('../src/realtime/wsServer');
-const registry = require('../src/realtime/sessionRegistry');
 const { signToken } = require('../src/middleware/auth');
 
 const delay = (ms) => new Promise(r => setTimeout(r, ms));
 const once = (em, ev) => new Promise(res => em.once(ev, res));
 
 test('matchmaking WS : deux joueurs en file sont appariés et reçoivent leur partie', async (t) => {
-  registry.reset();
+  const redis = useMockRedis(6); await flush(redis); await bus.stop();
   const server = http.createServer();
   const ratings = { u1: 1500, u2: 1510 };
-  const handle = attachWebSocketServer(server, {
+  const handle = await attachWebSocketServer(server, {
     tickMs: 15,
     getRating: (userId) => Promise.resolve(ratings[userId] ?? 1500),
     onMatchComplete: () => {}, // pas de DB
   });
   await new Promise(r => server.listen(0, r));
   const port = server.address().port;
-  t.after(() => { handle.stop(); server.close(); });
+  t.after(async () => { handle.stop(); server.close(); await closeRedis(); });
 
   const t1 = signToken({ id: 'u1', username: 'Alice' });
   const t2 = signToken({ id: 'u2', username: 'Bob' });

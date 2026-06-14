@@ -1,46 +1,38 @@
 'use strict';
 
-// ─── Serveur WebSocket PvP ────────────────────────────────────────────────────
-// Attache un serveur WebSocket (`ws`) au serveur HTTP existant, sur le chemin
-// `/ws`. Authentifie chaque connexion via le JWT (passé en query `?token=`, car
-// l'API WebSocket du navigateur ne permet pas d'en-tête Authorization).
+// ─── Serveur WebSocket PvP — multi-instance via Redis (#31) ───────────────────
+// Attache un serveur WebSocket (`ws`) au serveur HTTP, sur `/ws`. Authentifie
+// via le JWT (query `?token=`). L'état temps-réel (file, sessions, présence,
+// défis) vit dans Redis : N instances peuvent tourner derrière le reverse-proxy.
 //
-// Deux rôles :
-//   1. Matchmaking : le joueur rejoint une file par variante ; à l'appariement
-//      (Elo proche, fenêtre élargie) une GameSession est créée et notifiée.
-//   2. Jeu : relaie les actions vers la session autoritaire et diffuse l'état
-//      filtré aux deux joueurs ; à la fin du match, persiste le résultat (Elo).
+// Modèle « stateless + sweep » :
+//   - Aucune session en mémoire : chaque coup est appliqué sous verrou Redis
+//     (charge → applyAction → sauvegarde), donc n'importe quelle instance traite
+//     n'importe quel coup, et les parties survivent à un redéploiement.
+//   - Livraison via le bus pub/sub : une instance publie un snapshot, toutes le
+//     reçoivent et le remettent à leurs sockets locaux (le destinataire peut être
+//     connecté à une autre instance).
+//   - Les timers (horloge #141, grâce #30, expiration des défis #45) ne sont plus
+//     des setTimeout par instance mais des deadlines Redis balayées par un sweep
+//     périodique sous verrou (une instance à la fois).
 //
-// Protocole (JSON) :
-//   client → serveur : { t:'queue', action:'join'|'leave', variant } |
-//                       { t:'action', action:{...} } | { t:'sync' }
-//   serveur → client : { t:'hello', userId } | { t:'queue', status, ... } |
-//                       { t:'matchFound', sessionId, opponent } |
-//                       { t:'state', state } | { t:'error', error } |
-//                       { t:'opponentDisconnected', deadline, graceMs } |
-//                       { t:'opponentReconnected' }
-//
-// Abandon / reconnexion (#30) : à la fermeture du DERNIER socket d'un joueur en
-// partie, un délai de grâce démarre (l'adversaire est prévenu). S'il revient à
-// temps, la partie reprend ; sinon le match est clos par forfait (défaite Elo
-// pleine). L'action { type:'forfeit' } permet d'abandonner volontairement.
-//
-// Défis entre amis (#45/#47) :
-//   client → serveur : { t:'challenge', action:'invite', to, variant, rated } |
-//                       { t:'challenge', action:'accept'|'decline'|'cancel', challengeId }
-//   serveur → client : { t:'challenge', status:'sent'|'declined'|'expired'|'cancelled', ... }
-//                       + notification kind:'challenge' chez le destinataire.
-// L'invitation exige une amitié ACCEPTÉE ; l'acceptation crée la GameSession
-// directement, sans file d'attente. `rated:false` = amicale, sans Elo.
+// Protocole (JSON) — inchangé :
+//   client → serveur : { t:'queue', action, variant } | { t:'action', action } |
+//                       { t:'sync' } | { t:'challenge', action, ... }
+//   serveur → client : { t:'hello'|'queue'|'matchFound'|'state'|'error'|
+//                        'presence'|'opponentDisconnected'|'opponentReconnected'|
+//                        'challenge' , ... }
 
 const { randomUUID } = require('crypto');
 const { WebSocketServer } = require('ws');
 const { verifyToken } = require('../middleware/auth');
-const registry = require('./sessionRegistry');
-const { Matchmaker } = require('./matchmaking');
-const presence = require('./presence');
+const sessionStore = require('./sessionStore');
+const matchmakingStore = require('./matchmakingStore');
+const presenceStore = require('./presenceStore');
+const bus = require('./bus');
 const notifier = require('./notifier');
 const turnClock = require('../game/turnClock');
+const { getClient } = require('../redis/client');
 const { logger } = require('../logger');
 
 function send(ws, obj) {
@@ -56,14 +48,12 @@ function defaultOnMatchComplete(outcome) {
     .catch(err => logger.error({ err, sessionId: outcome.sessionId }, 'ws: enregistrement du match échoué'));
 }
 
-// Lecture de l'Elo par défaut (production) depuis la base.
 function defaultGetRating(userId, variant) {
   const { query } = require('../db');
   const { getRating } = require('../services/matchRecorder');
   return getRating(query, userId, variant);
 }
 
-// Un défi (#45) n'est permis qu'entre amis acceptés. Injectable dans les tests.
 async function defaultAreFriends(a, b) {
   const { query } = require('../db');
   const { rows } = await query(
@@ -76,46 +66,50 @@ async function defaultAreFriends(a, b) {
   return rows.length > 0;
 }
 
+// Verrou non bloquant pour les boucles (appariement, sweep) : une seule instance
+// agit par tick ; le TTL le libère même si l'instance meurt.
+async function tryLock(key, ttlMs) {
+  const token = randomUUID();
+  const ok = await getClient().set(key, token, 'PX', ttlMs, 'NX');
+  if (!ok) return null;
+  return async () => {
+    try { if (await getClient().get(key) === token) await getClient().del(key); }
+    catch { /* expiré */ }
+  };
+}
+
+// Clés des défis (#45) dans Redis.
+const CK = {
+  chal: (id) => `chal:${id}`,
+  from: (uid) => `chal:from:${uid}`,
+  ids: 'chal:ids',
+};
+
 /**
  * @param {http.Server} httpServer
- * @param {object} [opts]
- * @param {(outcome:object)=>void}        [opts.onMatchComplete]
- * @param {(userId,variant)=>Promise<number>} [opts.getRating]
- * @param {object} [opts.matchmaking]  options du Matchmaker
- * @param {number} [opts.tickMs]       période de la boucle d'appariement
- * @param {number} [opts.graceMs]      délai de grâce avant forfait sur déconnexion
- * @param {number} [opts.heartbeatMs]  période du ping de vie (0 = désactivé)
- * @param {(a,b)=>Promise<boolean>} [opts.areFriends]  contrôle d'amitié des défis
- * @param {number} [opts.challengeTtlMs] durée de vie d'un défi avant expiration
- * @param {(user)=>Promise<boolean>} [opts.validateUser] contrôle additionnel à la
- *   connexion (#117) — en production, server.js branche la vérification de la
- *   version de token en DB ; par défaut (tests), la signature seule suffit.
- * @param {string} [opts.path]
+ * @param {object} [opts]  voir les valeurs par défaut ci-dessous.
+ * @returns {Promise<{wss, sockets, stop}>}
  */
-function attachWebSocketServer(httpServer, opts = {}) {
+async function attachWebSocketServer(httpServer, opts = {}) {
   const onMatchComplete = opts.onMatchComplete || defaultOnMatchComplete;
   const getRating = opts.getRating || defaultGetRating;
   const areFriends = opts.areFriends || defaultAreFriends;
   const validateUser = opts.validateUser || (async () => true);
-  const matchmaker = new Matchmaker(opts.matchmaking || {});
+  const mmParams = { ...matchmakingStore.DEFAULT_PARAMS, ...(opts.matchmaking || {}) };
   const tickMs = opts.tickMs ?? 1000;
+  const sweepMs = opts.sweepMs ?? tickMs;
   const graceMs = opts.graceMs ?? 60000;
   const heartbeatMs = opts.heartbeatMs ?? 30000;
   const challengeTtlMs = opts.challengeTtlMs ?? 60000;
-  // Rate-limit des messages entrants (#124) : seau à jetons par socket. Le jeu
-  // normal (annonce + carte + sync) reste bien en dessous ; un flood est rejeté
-  // sans traitement, et un abus soutenu ferme la connexion (borne le coût CPU
-  // et l'amplification ×2 du rebroadcast).
   const msgRatePerSec = opts.msgRatePerSec ?? 20;
   const msgBurst = opts.msgBurst ?? 40;
-  const msgFloodKick = opts.msgFloodKick ?? 100; // rejets consécutifs → fermeture
-  const clockOptions = opts.clockOptions; // durées de l'horloge de coup (#141), réglables pour les tests
+  const msgFloodKick = opts.msgFloodKick ?? 100;
+  const clockOptions = opts.clockOptions;
 
-  // Consomme un jeton ; renvoie false si le socket dépasse son budget.
+  let stopped = false;
+
   function allowMessage(ws, now) {
-    if (ws.msgTokens === undefined) {
-      ws.msgTokens = msgBurst; ws.msgRefilledAt = now; ws.msgStrikes = 0;
-    }
+    if (ws.msgTokens === undefined) { ws.msgTokens = msgBurst; ws.msgRefilledAt = now; ws.msgStrikes = 0; }
     const elapsed = now - ws.msgRefilledAt;
     if (elapsed > 0) {
       ws.msgTokens = Math.min(msgBurst, ws.msgTokens + (elapsed / 1000) * msgRatePerSec);
@@ -128,9 +122,8 @@ function attachWebSocketServer(httpServer, opts = {}) {
 
   const wss = new WebSocketServer({ server: httpServer, path: opts.path || '/ws' });
 
-  // userId -> Set<ws> (un joueur peut avoir plusieurs onglets ; on diffuse à tous)
-  const sockets = new Map();
-
+  // ── Sockets LOCAUX à cette instance ──
+  const sockets = new Map(); // userId -> Set<ws>
   const addSocket = (userId, ws) => {
     if (!sockets.has(userId)) sockets.set(userId, new Set());
     sockets.get(userId).add(ws);
@@ -141,345 +134,274 @@ function attachWebSocketServer(httpServer, opts = {}) {
     set.delete(ws);
     if (set.size === 0) sockets.delete(userId);
   };
-  const notify = (userId, obj) => {
+  const deliverLocal = (userId, obj) => {
     const set = sockets.get(userId);
     if (set) for (const ws of set) send(ws, obj);
   };
-  notifier.setSender(notify); // les routes Express peuvent notifier (#44)
-  const pushStateTo = (userId, session) => {
-    const set = sockets.get(userId);
-    if (!set) return;
-    const snap = session.snapshotFor(userId);
-    for (const ws of set) send(ws, { t: 'state', state: snap });
-  };
-  const broadcast = (session) => {
-    for (const p of session.players) pushStateTo(p.userId, session);
-  };
 
-  const opponentOf = (session, userId) =>
-    session.players.find(p => p.userId !== userId) || null;
-
-  // ── Présence (#43) ──
-  // Compteurs (jamais de noms) : joueurs connectés (dédupliqués par userId,
-  // multi-onglets = 1), en file d'attente, en partie. Exposés aux routes via
-  // le module presence, et diffusés aux connectés à chaque changement
-  // (debounce court : une rafale de connexions ne produit qu'un message).
-  const presenceStats = () => ({
-    online: sockets.size,
-    inQueue: matchmaker.totalSize(),
-    inGame: registry.activeUserCount(),
+  // ── Bus pub/sub : livraison cross-instance ──
+  const offBus = bus.onMessage((m) => {
+    if (m.kind === 'user') deliverLocal(m.userId, m.obj);
+    else if (m.kind === 'presence') {
+      const msg = { t: 'presence', ...m.counts };
+      for (const set of sockets.values()) for (const ws of set) send(ws, msg);
+    }
   });
-  presence.setProvider(presenceStats);
-  // Présence individuelle (#46) — consommée par GET /api/friends (amis acceptés
-  // uniquement) pour la pastille en ligne / en partie.
-  presence.setUserProvider((userId) => ({
-    online: sockets.has(userId),
-    inGame: !!registry.sessionForUser(userId),
-  }));
+  await bus.start();
 
+  // Notifie un joueur où qu'il soit connecté (publie ; chaque instance livre en local).
+  const notify = (userId, obj) => { bus.publish({ kind: 'user', userId, obj }).catch(() => {}); };
+  notifier.setSender(notify); // les routes Express notifient via le bus (#44)
+
+  const broadcastSession = (session) => {
+    for (const p of session.players) notify(p.userId, { t: 'state', state: session.snapshotFor(p.userId) });
+  };
+  const opponentOf = (session, userId) => session.players.find(p => p.userId !== userId) || null;
+
+  // ── Présence (#43) : compteurs agrégés Redis, diffusés (debounce) ──
   let presenceTimer = null;
   function schedulePresence() {
     if (stopped || presenceTimer) return;
-    presenceTimer = setTimeout(() => {
+    presenceTimer = setTimeout(async () => {
       presenceTimer = null;
-      const msg = { t: 'presence', ...presenceStats() };
-      for (const set of sockets.values()) for (const ws of set) send(ws, msg);
+      try { bus.publish({ kind: 'presence', counts: await presenceStore.counts() }).catch(() => {}); }
+      catch { /* Redis indisponible : on retentera au prochain changement */ }
     }, 250);
     if (presenceTimer.unref) presenceTimer.unref();
   }
 
-  // ── Clôture de match (victoire normale ou forfait) ──
-  function finishSession(session) {
-    for (const p of session.players) cancelGrace(p.userId, { silent: true });
-    stopClockTimer(session); // (#141)
-    const outcome = { sessionId: session.id, ...session.getMatchOutcome() };
-    try { onMatchComplete(outcome); }
-    catch (err) { logger.error({ err, sessionId: session.id }, 'ws: onMatchComplete a échoué'); }
-    registry.endSession(session.id);
-    schedulePresence();
-  }
-
-  // ── Délai de grâce sur déconnexion (#30) ──
-  // userId -> { timer, deadline } ; armé seulement quand le DERNIER socket d'un
-  // joueur en partie se ferme (multi-onglets : les autres onglets le maintiennent).
-  const graceTimers = new Map();
-  let stopped = false; // après stop(), plus aucun forfait ne doit être armé
-
-  // ── Horloge de coup (#141) ──
-  // Le module turnClock (pur) porte l'état ; ici on arme l'échéance réelle, on
-  // (re)démarre le tour à chaque action, et on met en pause/reprend selon les
-  // déconnexions (réutilise graceTimers comme source de vérité du « qui est
-  // déconnecté »). sessionId -> timeout.
-  const clockTimers = new Map();
-
-  function stopClockTimer(session) {
-    const t = clockTimers.get(session.id);
-    if (t) { clearTimeout(t); clockTimers.delete(session.id); }
-  }
-
-  // Siège actuellement déconnecté (dans son délai de grâce), ou -1.
-  function disconnectedSeat(session) {
+  // ── Horloge de coup (#141) — pure, pilotée par l'état Redis ──
+  // Siège déconnecté (en grâce), ou -1.
+  async function disconnectedSeat(session) {
     for (let seat = 0; seat < session.players.length; seat++) {
-      if (graceTimers.has(session.players[seat].userId)) return seat;
+      if ((await presenceStore.getGrace(session.players[seat].userId)) !== null) return seat;
     }
     return -1;
   }
-
-  function scheduleClock(session) {
-    stopClockTimer(session);
-    if (stopped || !session.clock || session.finished || session.state.handOver) return;
-    if (session.clock.paused) return; // pas de timer tant qu'on est en pause
-    const rem = turnClock.remainingMs(session.clock, Date.now());
-    if (rem === null) return;
-    const timer = setTimeout(() => onClockExpire(session), Math.max(0, rem));
-    if (timer.unref) timer.unref();
-    clockTimers.set(session.id, timer);
-  }
-
-  // Aligne l'horloge sur le tour courant : crédite le coup précédent et démarre
-  // le décompte du siège actif. Appelé après chaque action appliquée.
-  function syncClock(session) {
+  // Aligne l'horloge sur le tour courant après un coup. `dseat` = siège déconnecté.
+  function syncClock(session, dseat) {
     if (!session.clock) return;
     const now = Date.now();
     if (session.finished || session.state.handOver) {
-      stopClockTimer(session);
-      session.clock.seat = null;
-      session.clock.deadline = null;
-      session.clock.paused = false;
-      return;
+      session.clock.seat = null; session.clock.deadline = null; session.clock.paused = false; return;
     }
-    if (session.clock.paused) turnClock.resume(session.clock, now); // un coup a progressé
+    if (session.clock.paused) turnClock.resume(session.clock, now);
     const turn = session.state.turn;
     if (session.clock.seat !== turn) {
       if (session.clock.seat !== null) turnClock.commitMove(session.clock, now);
       turnClock.startTurn(session.clock, turn, now);
     }
-    refreshClockPause(session); // re-pause si un joueur est encore déconnecté
-    scheduleClock(session);
+    if (dseat >= 0 && !session.clock.paused) turnClock.pause(session.clock, dseat, now);
   }
 
-  // Met l'horloge en pause ssi un joueur est déconnecté, sinon la reprend.
-  function refreshClockPause(session) {
-    if (!session.clock || session.finished || session.state.handOver) return;
-    if (session.clock.seat === null) return; // aucun tour en cours à figer
-    const now = Date.now();
-    const dseat = disconnectedSeat(session);
-    if (dseat >= 0 && !session.clock.paused) {
-      // pause() peut refuser si le budget du déconnecté est épuisé : dans ce cas
-      // l'horloge continue de tourner (anti-abus déco/reco).
-      if (turnClock.pause(session.clock, dseat, now)) stopClockTimer(session);
-    } else if (dseat < 0 && session.clock.paused) {
-      turnClock.resume(session.clock, now);
-      scheduleClock(session);
-    }
-  }
-
-  function onClockExpire(session) {
-    clockTimers.delete(session.id);
-    if (stopped || session.finished || session.state.handOver) return;
-    const res = session.clockTimeout(Date.now());
-    if (!res.ok) return;
-    if (session.finished) { broadcast(session); finishSession(session); return; }
-    syncClock(session); // recale l'horloge sur le nouveau tour avant de diffuser
-    broadcast(session);
-  }
-
-  function startGrace(userId) {
-    if (stopped || graceTimers.has(userId)) return;
-    const session = registry.sessionForUser(userId);
-    if (!session || session.finished) return;
-
-    const deadline = Date.now() + graceMs;
-    const timer = setTimeout(() => {
-      graceTimers.delete(userId);
-      const s = registry.sessionForUser(userId);
-      if (!s || s.finished || sockets.has(userId)) return;
-      const res = s.forfeit(s.seatOf(userId), 'timeout');
-      if (!res.ok) return;
-      broadcast(s);
-      finishSession(s);
-    }, graceMs);
-    if (timer.unref) timer.unref();
-    graceTimers.set(userId, { timer, deadline });
-
-    refreshClockPause(session); // l'horloge se met en pause pendant la déconnexion (#141)
-
-    const opp = opponentOf(session, userId);
-    if (opp) notify(opp.userId, { t: 'opponentDisconnected', deadline, graceMs });
-  }
-
-  function cancelGrace(userId, { silent = false } = {}) {
-    const pending = graceTimers.get(userId);
-    if (!pending) return;
-    clearTimeout(pending.timer);
-    graceTimers.delete(userId);
-    const session = registry.sessionForUser(userId);
-    if (session) refreshClockPause(session); // reprise de l'horloge au retour (#141)
-    if (silent) return;
-    const opp = session ? opponentOf(session, userId) : null;
-    if (opp) notify(opp.userId, { t: 'opponentReconnected' });
-  }
-
-  // Fermeture d'un socket : retrait de la file, et si c'était le dernier onglet
-  // d'un joueur en partie, démarrage du délai de grâce avant forfait.
-  function handleSocketGone(userId, ws) {
-    removeSocket(userId, ws);
-    if (sockets.has(userId)) return; // un autre onglet maintient la présence
-    matchmaker.leave(userId);
-    dropChallengesOf(userId); // les défis en attente tombent avec la connexion
-    startGrace(userId);
+  // ── Clôture de match (victoire ou forfait) ──
+  async function finishSession(session) {
+    for (const p of session.players) await presenceStore.clearGrace(p.userId);
+    const outcome = { sessionId: session.id, ...session.getMatchOutcome() };
+    try { onMatchComplete(outcome); }
+    catch (err) { logger.error({ err, sessionId: session.id }, 'ws: onMatchComplete a échoué'); }
+    await sessionStore.endSession(session.id);
     schedulePresence();
   }
 
-  // ── Démarrage d'une partie (matchmaking ou défi accepté) ──
-  function startMatch(a, b, { variant, rated = true } = {}) {
-    matchmaker.leave(a.userId); // un défi accepté retire les deux joueurs de la file
-    matchmaker.leave(b.userId);
-    const session = registry.createSession({
+  // ── Démarrage d'une partie (appariement ou défi) ──
+  async function startMatch(a, b, { variant, rated = true } = {}) {
+    await matchmakingStore.leave(a.userId);
+    await matchmakingStore.leave(b.userId);
+    const session = await sessionStore.createSession({
       players: [{ userId: a.userId, name: a.name }, { userId: b.userId, name: b.name }],
-      variant,
-      target: 3,
-      rated,
-      clockOptions,
+      variant, target: 3, rated, clockOptions,
     });
+    syncClock(session, -1); // démarre l'horloge du premier coup (#141)
+    await sessionStore.save(session);
     notify(a.userId, { t: 'matchFound', sessionId: session.id, opponent: b.name, rated });
     notify(b.userId, { t: 'matchFound', sessionId: session.id, opponent: a.name, rated });
-    syncClock(session); // démarre l'horloge du premier coup (#141, parties classées)
-    broadcast(session); // l'état initial porte déjà l'horloge en marche
+    broadcastSession(session);
     schedulePresence();
   }
 
-  // ── Boucle d'appariement ──
-  function onPair(a, b) {
-    startMatch(a, b, { variant: a.variant, rated: true });
-  }
-  const timer = setInterval(() => {
-    let pairs;
-    try { pairs = matchmaker.findMatches(); }
-    catch (err) { return logger.error({ err }, 'mm: appariement échoué'); }
-    for (const [a, b] of pairs) onPair(a, b);
+  // ── Boucle d'appariement (une instance à la fois) ──
+  const tickTimer = setInterval(async () => {
+    if (stopped) return;
+    const release = await tryLock('mm:lock', tickMs).catch(() => null);
+    if (!release) return;
+    try {
+      const pairs = await matchmakingStore.findMatches(mmParams);
+      for (const [a, b] of pairs) await startMatch(a, b, { variant: a.variant, rated: true });
+    } catch (err) { logger.error({ err }, 'mm: appariement échoué'); }
+    finally { await release(); }
   }, tickMs);
-  if (timer.unref) timer.unref(); // ne bloque pas l'arrêt du process / des tests
+  if (tickTimer.unref) tickTimer.unref();
 
-  // ── Gestion de la file ──
-  function handleQueue(ws, user, msg) {
+  // ── Sweep des deadlines (horloge + grâce), une instance à la fois ──
+  const sweepTimer = setInterval(() => { sweepOnce().catch(err => logger.error({ err }, 'sweep échoué')); }, sweepMs);
+  if (sweepTimer.unref) sweepTimer.unref();
+
+  async function sweepOnce() {
+    if (stopped) return;
+    const release = await tryLock('sweep:lock', sweepMs).catch(() => null);
+    if (!release) return;
+    try {
+      // Grâces expirées → forfait.
+      for (const uid of await presenceStore.listGraces()) {
+        const g = await presenceStore.getGrace(uid);
+        if (g === null) continue;
+        if (await presenceStore.isOnline(uid)) { await presenceStore.clearGrace(uid); continue; }
+        if (Date.now() < g) continue;
+        const sid = await sessionStore.sessionIdForUser(uid);
+        if (!sid) { await presenceStore.clearGrace(uid); continue; }
+        await sessionStore.withLock(sid, async () => {
+          const s = await sessionStore.getSession(sid);
+          if (!s || s.finished) return;
+          if (!s.forfeit(s.seatOf(uid), 'timeout').ok) return;
+          await sessionStore.save(s);
+          broadcastSession(s);
+          await finishSession(s);
+        });
+      }
+      // Horloges : pause/reprise selon présence, puis expiration.
+      for (const sid of await sessionStore.listActiveSessionIds()) {
+        await sessionStore.withLock(sid, async () => {
+          const s = await sessionStore.getSession(sid);
+          if (!s || !s.clock || s.finished || s.state.handOver || s.clock.seat === null) return;
+          const now = Date.now();
+          const dseat = await disconnectedSeat(s);
+          let changed = false;
+          if (dseat >= 0 && !s.clock.paused) { if (turnClock.pause(s.clock, dseat, now)) changed = true; }
+          else if (dseat < 0 && s.clock.paused) { turnClock.resume(s.clock, now); changed = true; }
+          if (turnClock.isExpired(s.clock, now)) {
+            const res = s.clockTimeout(now);
+            if (res.ok) {
+              if (s.finished) { await sessionStore.save(s); broadcastSession(s); await finishSession(s); return; }
+              syncClock(s, dseat); await sessionStore.save(s); broadcastSession(s); return;
+            }
+          }
+          if (changed) await sessionStore.save(s);
+        });
+      }
+    } finally { await release(); }
+  }
+
+  // ── File d'attente ──
+  async function handleQueue(ws, user, msg) {
     if (msg.action === 'leave') {
-      matchmaker.leave(user.id);
+      await matchmakingStore.leave(user.id);
       schedulePresence();
       return send(ws, { t: 'queue', status: 'left' });
     }
     if (msg.action === 'join') {
-      if (registry.sessionForUser(user.id)) {
+      if (await sessionStore.sessionIdForUser(user.id)) {
         return send(ws, { t: 'error', error: 'Une partie est déjà en cours.' });
       }
       const variant = msg.variant === 'mondoubleau' ? 'mondoubleau' : 'classic';
-      Promise.resolve()
-        .then(() => getRating(user.id, variant))
-        .then((rating) => {
-          matchmaker.join({ userId: user.id, name: user.username || 'Joueur', rating, variant });
-          send(ws, { t: 'queue', status: 'searching', variant, rating });
-          schedulePresence();
-        })
-        .catch(() => send(ws, { t: 'error', error: 'File d’attente indisponible.' }));
+      try {
+        const rating = await getRating(user.id, variant);
+        await matchmakingStore.join({ userId: user.id, name: user.username || 'Joueur', rating, variant });
+        send(ws, { t: 'queue', status: 'searching', variant, rating });
+        schedulePresence();
+      } catch { send(ws, { t: 'error', error: 'File d’attente indisponible.' }); }
       return;
     }
     send(ws, { t: 'error', error: 'Action de file inconnue.' });
   }
 
-  // ── Défis entre amis (#45/#47) ──
-  // challengeId -> { id, from, fromName, to, variant, rated, timer, expiresAt }.
-  // En mémoire, comme la file (cf. #31 pour le multi-process).
-  const challenges = new Map();
-
-  const outgoingChallengeOf = (userId) => {
-    for (const c of challenges.values()) if (c.from === userId) return c;
-    return null;
-  };
-
-  function dropChallenge(c) {
-    clearTimeout(c.timer);
-    challenges.delete(c.id);
+  // ── Défis entre amis (#45/#47) — état dans Redis ──
+  async function outgoingChallengeOf(userId) {
+    const id = await getClient().get(CK.from(userId));
+    return id ? { id, ...(await getClient().hgetall(CK.chal(id))) } : null;
   }
-
-  // Annule tout défi impliquant ce joueur (déconnexion totale) en prévenant l'autre.
-  function dropChallengesOf(userId) {
-    for (const c of [...challenges.values()]) {
-      if (c.from === userId) {
-        dropChallenge(c);
-        notifier.notifyUser(c.to, { kind: 'challengeCancelled', challengeId: c.id });
-      } else if (c.to === userId) {
-        dropChallenge(c);
-        notify(c.from, { t: 'challenge', status: 'cancelled', challengeId: c.id });
-      }
+  async function dropChallenge(id, from) {
+    const r = getClient();
+    await r.del(CK.chal(id));
+    if (from) await r.del(CK.from(from));
+    await r.srem(CK.ids, id);
+  }
+  async function dropChallengesOf(userId) {
+    for (const id of await getClient().smembers(CK.ids)) {
+      const c = await getClient().hgetall(CK.chal(id));
+      if (!c || !c.from) { await getClient().srem(CK.ids, id); continue; }
+      if (c.from === userId) { await dropChallenge(id, c.from); notifier.notifyUser(c.to, { kind: 'challengeCancelled', challengeId: id }); }
+      else if (c.to === userId) { await dropChallenge(id, c.from); notify(c.from, { t: 'challenge', status: 'cancelled', challengeId: id }); }
     }
   }
 
-  function handleChallenge(ws, user, msg) {
+  async function handleChallenge(ws, user, msg) {
     if (msg.action === 'invite') {
       const to = typeof msg.to === 'string' ? msg.to : null;
       if (!to || to === user.id) return send(ws, { t: 'error', error: 'Destinataire invalide.' });
-      if (registry.sessionForUser(user.id)) return send(ws, { t: 'error', error: 'Une partie est déjà en cours.' });
-      if (registry.sessionForUser(to)) return send(ws, { t: 'error', error: 'Cet ami est déjà en partie.' });
-      if (!sockets.has(to)) return send(ws, { t: 'error', error: 'Cet ami n’est pas en ligne.' });
-      if (outgoingChallengeOf(user.id)) return send(ws, { t: 'error', error: 'Vous avez déjà un défi en attente.' });
-
+      if (await sessionStore.sessionIdForUser(user.id)) return send(ws, { t: 'error', error: 'Une partie est déjà en cours.' });
+      if (await sessionStore.sessionIdForUser(to)) return send(ws, { t: 'error', error: 'Cet ami est déjà en partie.' });
+      if (!(await presenceStore.isOnline(to))) return send(ws, { t: 'error', error: 'Cet ami n’est pas en ligne.' });
+      if (await outgoingChallengeOf(user.id)) return send(ws, { t: 'error', error: 'Vous avez déjà un défi en attente.' });
       const variant = msg.variant === 'mondoubleau' ? 'mondoubleau' : 'classic';
-      const rated = msg.rated === true; // défaut : amicale (#47)
-
-      Promise.resolve()
-        .then(() => areFriends(user.id, to))
-        .then((ok) => {
-          if (!ok) return send(ws, { t: 'error', error: 'Vous ne pouvez défier que vos amis.' });
-          const id = randomUUID();
-          const expiresAt = Date.now() + challengeTtlMs;
-          const timer = setTimeout(() => {
-            const c = challenges.get(id);
-            if (!c) return;
-            dropChallenge(c);
-            notify(c.from, { t: 'challenge', status: 'expired', challengeId: id });
-            notifier.notifyUser(c.to, { kind: 'challengeCancelled', challengeId: id });
-          }, challengeTtlMs);
-          if (timer.unref) timer.unref();
-          challenges.set(id, { id, from: user.id, fromName: user.username || 'Joueur', to, variant, rated, timer, expiresAt });
-          send(ws, { t: 'challenge', status: 'sent', challengeId: id, expiresAt, variant, rated });
-          notifier.notifyUser(to, { kind: 'challenge', challengeId: id, from: user.username || 'Joueur', variant, rated, expiresAt });
-        })
-        .catch(() => send(ws, { t: 'error', error: 'Défi indisponible.' }));
+      const rated = msg.rated === true;
+      try {
+        if (!(await areFriends(user.id, to))) return send(ws, { t: 'error', error: 'Vous ne pouvez défier que vos amis.' });
+        const id = randomUUID();
+        const expiresAt = Date.now() + challengeTtlMs;
+        const r = getClient();
+        await r.hset(CK.chal(id), { id, from: user.id, fromName: user.username || 'Joueur', to, variant, rated: rated ? '1' : '', expiresAt });
+        await r.set(CK.from(user.id), id);
+        await r.sadd(CK.ids, id);
+        send(ws, { t: 'challenge', status: 'sent', challengeId: id, expiresAt, variant, rated });
+        notifier.notifyUser(to, { kind: 'challenge', challengeId: id, from: user.username || 'Joueur', variant, rated, expiresAt });
+      } catch { send(ws, { t: 'error', error: 'Défi indisponible.' }); }
       return;
     }
 
-    const c = challenges.get(typeof msg.challengeId === 'string' ? msg.challengeId : '');
-    if (!c) return send(ws, { t: 'error', error: 'Défi introuvable ou expiré.' });
+    const id = typeof msg.challengeId === 'string' ? msg.challengeId : '';
+    const c = await getClient().hgetall(CK.chal(id));
+    if (!c || !c.from) return send(ws, { t: 'error', error: 'Défi introuvable ou expiré.' });
+    c.rated = c.rated === '1';
 
     if (msg.action === 'accept') {
       if (c.to !== user.id) return send(ws, { t: 'error', error: 'Ce défi ne vous est pas destiné.' });
-      if (registry.sessionForUser(c.from) || registry.sessionForUser(c.to)) {
-        dropChallenge(c);
+      if (await sessionStore.sessionIdForUser(c.from) || await sessionStore.sessionIdForUser(c.to)) {
+        await dropChallenge(id, c.from);
         return send(ws, { t: 'error', error: 'Un des joueurs est déjà en partie.' });
       }
-      if (!sockets.has(c.from)) {
-        dropChallenge(c);
+      if (!(await presenceStore.isOnline(c.from))) {
+        await dropChallenge(id, c.from);
         return send(ws, { t: 'error', error: 'Votre ami s’est déconnecté.' });
       }
-      dropChallenge(c);
-      startMatch(
-        { userId: c.from, name: c.fromName },
-        { userId: c.to, name: user.username || 'Joueur' },
-        { variant: c.variant, rated: c.rated }
-      );
+      await dropChallenge(id, c.from);
+      await startMatch({ userId: c.from, name: c.fromName }, { userId: c.to, name: user.username || 'Joueur' }, { variant: c.variant, rated: c.rated });
       return;
     }
     if (msg.action === 'decline') {
       if (c.to !== user.id) return send(ws, { t: 'error', error: 'Ce défi ne vous est pas destiné.' });
-      dropChallenge(c);
-      return notify(c.from, { t: 'challenge', status: 'declined', challengeId: c.id });
+      await dropChallenge(id, c.from);
+      return notify(c.from, { t: 'challenge', status: 'declined', challengeId: id });
     }
     if (msg.action === 'cancel') {
       if (c.from !== user.id) return send(ws, { t: 'error', error: 'Ce défi n’est pas le vôtre.' });
-      dropChallenge(c);
-      return notifier.notifyUser(c.to, { kind: 'challengeCancelled', challengeId: c.id });
+      await dropChallenge(id, c.from);
+      return notifier.notifyUser(c.to, { kind: 'challengeCancelled', challengeId: id });
     }
     send(ws, { t: 'error', error: 'Action de défi inconnue.' });
+  }
+
+  // ── Action de jeu (sous verrou de session) ──
+  async function handleAction(ws, user, action) {
+    const sid = await sessionStore.sessionIdForUser(user.id);
+    if (!sid) return send(ws, { t: 'error', error: 'Aucune partie en cours.' });
+    let result = null;
+    await sessionStore.withLock(sid, async () => {
+      const session = await sessionStore.getSession(sid);
+      if (!session) { result = { error: 'Aucune partie en cours.' }; return; }
+      const res = session.applyAction(user.id, action);
+      if (res.ok) {
+        const dseat = await disconnectedSeat(session);
+        syncClock(session, dseat);
+      }
+      await sessionStore.save(session);
+      result = { res, session };
+    });
+    if (!result) return;
+    if (result.error) return send(ws, { t: 'error', error: result.error });
+    if (!result.res.ok) send(ws, { t: 'error', error: result.res.error });
+    broadcastSession(result.session);
+    if (result.session.finished) await finishSession(result.session);
   }
 
   // ── Connexions ──
@@ -489,11 +411,8 @@ function attachWebSocketServer(httpServer, opts = {}) {
       const url = new URL(req.url, 'http://localhost');
       user = verifyToken(url.searchParams.get('token'));
     } catch { user = null; }
-    // Vérification additionnelle (#117) : version de token révoquée → refus,
-    // comme une signature invalide. Fail-closed sur erreur de vérification.
     if (user) {
-      try { if (!(await validateUser(user))) user = null; }
-      catch { user = null; }
+      try { if (!(await validateUser(user))) user = null; } catch { user = null; }
     }
     if (!user) {
       send(ws, { t: 'error', error: 'Authentification requise.' });
@@ -505,56 +424,78 @@ function attachWebSocketServer(httpServer, opts = {}) {
     ws.on('pong', () => { ws.isAlive = true; });
     addSocket(user.id, ws);
 
-    // Reprise : si une partie est en cours pour ce joueur, on lui renvoie l'état
-    // et on désarme l'éventuel forfait en attente (l'adversaire est prévenu).
-    // `inSession` permet à un client qui se croyait en partie de découvrir
-    // qu'elle s'est terminée pendant son absence (forfait déjà prononcé).
-    cancelGrace(user.id);
-    const existing = registry.sessionForUser(user.id);
-    send(ws, { t: 'hello', userId: user.id, inSession: !!existing });
-    send(ws, { t: 'presence', ...presenceStats() }); // état immédiat, sans attendre la diffusion
-    if (existing) pushStateTo(user.id, existing);
-    schedulePresence();
-
+    // Attacher les listeners AVANT tout await : sinon un message client (ex.
+    // « queue join » envoyé dès l'ouverture) arriverait pendant le setup async
+    // et serait perdu (les awaits Redis prennent un temps réel non nul).
     ws.on('message', (raw) => {
-      // Rate-limit (#124) : au-delà du budget, on rejette sans rien traiter ;
-      // un flood soutenu ferme la connexion (évite l'amplification du broadcast).
       if (!allowMessage(ws, Date.now())) {
         if (ws.msgStrikes >= msgFloodKick) return ws.close(4002, 'rate-limit');
         return send(ws, { t: 'error', error: 'Trop de messages. Ralentissez.', code: 'RATE_LIMIT' });
       }
-
       let msg;
       try { msg = JSON.parse(raw.toString()); }
       catch { return send(ws, { t: 'error', error: 'JSON invalide.' }); }
 
-      if (msg.t === 'queue') return handleQueue(ws, user, msg);
-      if (msg.t === 'challenge') return handleChallenge(ws, user, msg);
-
-      const session = registry.sessionForUser(user.id);
-      if (!session) return send(ws, { t: 'error', error: 'Aucune partie en cours.' });
-
-      if (msg.t === 'sync') return pushStateTo(user.id, session);
-
-      if (msg.t === 'action') {
-        const res = session.applyAction(user.id, msg.action);
-        if (res.ok) syncClock(session); // recale l'horloge sur le nouveau tour (#141)
-        else send(ws, { t: 'error', error: res.error });
-        broadcast(session); // rediffuse l'état (à jour ou inchangé) aux deux joueurs
-        if (session.finished) finishSession(session);
-        return;
-      }
-      send(ws, { t: 'error', error: 'Message inconnu.' });
+      const route = (async () => {
+        if (msg.t === 'queue') return handleQueue(ws, user, msg);
+        if (msg.t === 'challenge') return handleChallenge(ws, user, msg);
+        if (msg.t === 'sync') {
+          const s = await sessionStore.sessionForUser(user.id);
+          if (!s) return send(ws, { t: 'error', error: 'Aucune partie en cours.' });
+          return send(ws, { t: 'state', state: s.snapshotFor(user.id) });
+        }
+        if (msg.t === 'action') return handleAction(ws, user, msg.action);
+        send(ws, { t: 'error', error: 'Message inconnu.' });
+      })();
+      route.catch(err => logger.error({ err }, 'ws: traitement message échoué'));
     });
+    const gone = () => handleSocketGone(user.id, ws).catch(err => logger.error({ err }, 'ws: fermeture échouée'));
+    ws.on('close', gone);
+    ws.on('error', gone);
 
-    ws.on('close', () => handleSocketGone(user.id, ws));
-    ws.on('error', () => handleSocketGone(user.id, ws));
+    await presenceStore.addOnline(user.id);
+
+    // Reprise : annule un éventuel forfait en attente, prévient l'adversaire.
+    const hadGrace = (await presenceStore.getGrace(user.id)) !== null;
+    if (hadGrace) await presenceStore.clearGrace(user.id);
+    const sid = await sessionStore.sessionIdForUser(user.id);
+    if (hadGrace && sid) {
+      const s = await sessionStore.getSession(sid);
+      const opp = s ? opponentOf(s, user.id) : null;
+      if (opp) notify(opp.userId, { t: 'opponentReconnected' });
+    }
+    send(ws, { t: 'hello', userId: user.id, inSession: !!sid });
+    send(ws, { t: 'presence', ...(await presenceStore.counts()) });
+    if (sid) {
+      const s = await sessionStore.getSession(sid);
+      if (s) send(ws, { t: 'state', state: s.snapshotFor(user.id) });
+    }
+    schedulePresence();
   });
 
+  // Fermeture d'un socket : si c'était le dernier (local + cross-instance) d'un
+  // joueur, on le sort de la file et on arme la grâce s'il est en partie.
+  async function handleSocketGone(userId, ws) {
+    removeSocket(userId, ws);
+    if (sockets.has(userId)) return; // un autre onglet local reste
+    await presenceStore.removeOnline(userId);
+    if (await presenceStore.isOnline(userId)) return; // connecté sur une autre instance
+    await matchmakingStore.leave(userId);
+    await dropChallengesOf(userId);
+    const sid = await sessionStore.sessionIdForUser(userId);
+    if (sid) {
+      const s = await sessionStore.getSession(sid);
+      if (s && !s.finished) {
+        const deadline = Date.now() + graceMs;
+        await presenceStore.setGrace(userId, deadline);
+        const opp = opponentOf(s, userId);
+        if (opp) notify(opp.userId, { t: 'opponentDisconnected', deadline, graceMs });
+      }
+    }
+    schedulePresence();
+  }
+
   // ── Heartbeat ──
-  // Détecte les connexions mortes que TCP ne signale pas (mobile, veille) : un
-  // socket qui ne répond pas au ping est terminé, ce qui déclenche le délai de
-  // grâce comme une déconnexion ordinaire.
   let heartbeat = null;
   if (heartbeatMs > 0) {
     heartbeat = setInterval(() => {
@@ -569,20 +510,16 @@ function attachWebSocketServer(httpServer, opts = {}) {
 
   function stop() {
     stopped = true;
-    clearInterval(timer);
+    clearInterval(tickTimer);
+    clearInterval(sweepTimer);
     if (heartbeat) clearInterval(heartbeat);
     if (presenceTimer) { clearTimeout(presenceTimer); presenceTimer = null; }
-    for (const { timer: t } of graceTimers.values()) clearTimeout(t);
-    graceTimers.clear();
-    for (const t of clockTimers.values()) clearTimeout(t);
-    clockTimers.clear();
-    for (const c of challenges.values()) clearTimeout(c.timer);
-    challenges.clear();
-    for (const ws of wss.clients) ws.terminate(); // ne pas laisser de connexions pendantes
+    offBus();
+    for (const ws of wss.clients) ws.terminate();
     wss.close();
   }
 
-  return { wss, sockets, matchmaker, stop };
+  return { wss, sockets, stop };
 }
 
 module.exports = { attachWebSocketServer };
