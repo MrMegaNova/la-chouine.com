@@ -8,6 +8,47 @@
 //   au-delà de fallbackMs, la fenêtre devient infinie (on accepte n'importe qui).
 // Module **pur** (aucune dépendance DB/réseau) → entièrement testable.
 
+// ── Cœur d'appariement (pur, sans état) ───────────────────────────────────────
+// Extrait pour être partagé par la file en mémoire (Matchmaker, mono-instance)
+// et par la file Redis (matchmakingStore, multi-instance #31) : une seule
+// source de vérité pour la fenêtre d'Elo et l'appariement plus-proche-voisin.
+
+/** Demi-largeur de fenêtre d'Elo tolérée par un ticket selon son temps d'attente. */
+function windowFor(ticket, now, params) {
+  const elapsed = now - ticket.joinedAt;
+  if (elapsed >= params.fallbackMs) return Infinity;
+  const steps = Math.floor(elapsed / params.stepMs);
+  return params.initialWindow + steps * params.growthPerStep;
+}
+
+/**
+ * Apparie une liste de tickets (une seule variante) par plus proche voisin Elo,
+ * dans la fenêtre élargie par l'attente. Pur : ne mute pas l'entrée.
+ * @returns {Array<[ticket, ticket]>} paires formées
+ */
+function pairTickets(tickets, params, now) {
+  const sorted = [...tickets].sort((a, b) => a.rating - b.rating);
+  const used = new Set();
+  const pairs = [];
+  for (let i = 0; i < sorted.length; i++) {
+    if (used.has(sorted[i].userId)) continue;
+    // Plus proche voisin (par Elo) non encore apparié.
+    let j = i + 1;
+    while (j < sorted.length && used.has(sorted[j].userId)) j++;
+    if (j >= sorted.length) continue;
+    const gap = Math.abs(sorted[i].rating - sorted[j].rating);
+    // Appariés si l'écart tient dans la fenêtre de l'un OU l'autre (le plus
+    // patient élargit assez sa recherche pour accepter le voisin).
+    const win = Math.max(windowFor(sorted[i], now, params), windowFor(sorted[j], now, params));
+    if (gap <= win) {
+      pairs.push([sorted[i], sorted[j]]);
+      used.add(sorted[i].userId);
+      used.add(sorted[j].userId);
+    }
+  }
+  return pairs;
+}
+
 class Matchmaker {
   constructor(opts = {}) {
     this.initialWindow = opts.initialWindow ?? 50;
@@ -48,12 +89,19 @@ class Matchmaker {
     return n;
   }
 
+  /** Paramètres de fenêtre de cette instance (pour les helpers purs). */
+  get params() {
+    return {
+      initialWindow: this.initialWindow,
+      growthPerStep: this.growthPerStep,
+      stepMs: this.stepMs,
+      fallbackMs: this.fallbackMs,
+    };
+  }
+
   /** Demi-largeur de fenêtre d'Elo tolérée par un ticket selon son temps d'attente. */
   windowFor(ticket, now) {
-    const elapsed = now - ticket.joinedAt;
-    if (elapsed >= this.fallbackMs) return Infinity;
-    const steps = Math.floor(elapsed / this.stepMs);
-    return this.initialWindow + steps * this.growthPerStep;
+    return windowFor(ticket, now, this.params);
   }
 
   /**
@@ -63,28 +111,15 @@ class Matchmaker {
   findMatches(now = Date.now()) {
     const pairs = [];
     for (const q of this.queues.values()) {
-      const tickets = [...q.values()].sort((a, b) => a.rating - b.rating);
-      const used = new Set();
-      for (let i = 0; i < tickets.length; i++) {
-        if (used.has(tickets[i].userId)) continue;
-        // Plus proche voisin (par Elo) non encore apparié.
-        let j = i + 1;
-        while (j < tickets.length && used.has(tickets[j].userId)) j++;
-        if (j >= tickets.length) continue;
-        const gap = Math.abs(tickets[i].rating - tickets[j].rating);
-        // Appariés si l'écart tient dans la fenêtre de l'un OU l'autre (le plus
-        // patient élargit assez sa recherche pour accepter le voisin).
-        const win = Math.max(this.windowFor(tickets[i], now), this.windowFor(tickets[j], now));
-        if (gap <= win) {
-          pairs.push([tickets[i], tickets[j]]);
-          used.add(tickets[i].userId);
-          used.add(tickets[j].userId);
-        }
+      const qPairs = pairTickets([...q.values()], this.params, now);
+      for (const [a, b] of qPairs) {
+        pairs.push([a, b]);
+        q.delete(a.userId);
+        q.delete(b.userId);
       }
-      for (const id of used) q.delete(id);
     }
     return pairs;
   }
 }
 
-module.exports = { Matchmaker };
+module.exports = { Matchmaker, windowFor, pairTickets };

@@ -17,6 +17,12 @@ module.exports = {
   // Traefik + nginx : 2.
   trustProxy: parseInt(process.env.TRUST_PROXY || '1', 10),
 
+  // État temps-réel PvP (file, sessions, présence) externalisé dans Redis pour
+  // le scaling multi-instance (#31). Obligatoire : pas de repli mémoire.
+  redis: {
+    url: required('REDIS_URL'),
+  },
+
   db: {
     host:     process.env.PGHOST     || 'localhost',
     port:     parseInt(process.env.PGPORT || '5432', 10),
