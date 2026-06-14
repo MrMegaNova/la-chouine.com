@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { authApi } from '@/api/client';
 import { EyeToggle, PasswordChecklist } from '@/components/auth/password';
+import { Turnstile, captchaEnabled } from '@/components/Turnstile';
 
 type Tab = 'login' | 'register' | 'forgot';
 
@@ -15,6 +16,8 @@ export default function Login() {
   // Champ-piège anti-bot (#86) : invisible pour un humain, donc vide en usage
   // normal — les bots de spam le remplissent et sont écartés côté serveur.
   const [website, setWebsite] = useState('');
+  // Token captcha Turnstile (#104) — rempli par le widget si activé.
+  const [captcha, setCaptcha] = useState('');
   const [error, setError] = useState('');
   // Compte non activé au login (#105) : on propose le renvoi d'un lien.
   const [notActivated, setNotActivated] = useState(false);
@@ -51,9 +54,10 @@ export default function Login() {
 
   const handleRegister = async () => {
     reset();
+    if (captchaEnabled && !captcha) { setError('Veuillez valider le captcha.'); return; }
     setLoading(true);
     const { login: _l, ...store } = useAuthStore.getState();
-    const err = await store.register(username.trim(), email.trim(), password, website);
+    const err = await store.register(username.trim(), email.trim(), password, website, captcha);
     setLoading(false);
     if (err) { setError(err); return; }
     setSuccess('Compte créé ! Vérifiez vos emails pour activer votre compte.');
@@ -128,6 +132,9 @@ export default function Login() {
             {tab === 'register' && <PasswordChecklist password={password} />}
           </div>
         )}
+
+        {/* Captcha optionnel (#104) — ne s'affiche que si VITE_TURNSTILE_SITE_KEY. */}
+        {tab === 'register' && <Turnstile onToken={setCaptcha} />}
 
         {error && <p className="form-error">{error}</p>}
         {notActivated && tab === 'login' && (

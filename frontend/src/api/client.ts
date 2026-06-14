@@ -35,6 +35,9 @@ export interface RegisterPayload {
   password: string;
   // Champ-piège anti-bot (#86) : caché aux humains, vide en usage normal.
   website?: string;
+  // Token Cloudflare Turnstile (#104) — présent seulement si le captcha est
+  // activé (VITE_TURNSTILE_SITE_KEY) ; ignoré côté serveur sans clé secrète.
+  'cf-turnstile-response'?: string;
 }
 export interface LoginResponse {
   token: string;

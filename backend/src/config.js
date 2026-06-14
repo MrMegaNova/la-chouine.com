@@ -56,4 +56,11 @@ module.exports = {
     bcryptRounds: 12,
     verifyTokenTtlMs: parseInt(process.env.VERIFY_TOKEN_TTL_MS || '86400000', 10),
   },
+
+  // Captcha Cloudflare Turnstile (#104) — OPTIONNEL. Sans clé secrète, la
+  // vérification est désactivée (comportement inchangé). À activer si le spam
+  // persiste malgré les barrières #86.
+  turnstile: {
+    secretKey: process.env.TURNSTILE_SECRET_KEY || '',
+  },
 };

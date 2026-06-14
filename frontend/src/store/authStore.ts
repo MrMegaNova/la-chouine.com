@@ -8,7 +8,7 @@ interface AuthState {
   loading: boolean;
 
   login: (username: string, password: string) => Promise<string | null>;
-  register: (username: string, email: string, password: string, website?: string) => Promise<string | null>;
+  register: (username: string, email: string, password: string, website?: string, captcha?: string) => Promise<string | null>;
   logout: () => void;
   restoreSession: () => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -29,8 +29,8 @@ export const useAuthStore = create<AuthState>()(
         return null;
       },
 
-      register: async (username, email, password, website) => {
-        const { ok, data } = await authApi.register({ username, email, password, website });
+      register: async (username, email, password, website, captcha) => {
+        const { ok, data } = await authApi.register({ username, email, password, website, 'cf-turnstile-response': captcha });
         if (!ok) {
           const errs = (data as { errors?: string[]; error?: string });
           return (errs.errors ?? [errs.error ?? 'Erreur.']).join(' ');

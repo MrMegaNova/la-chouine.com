@@ -9,6 +9,7 @@ const { sendVerificationEmail, sendPasswordResetEmail, logMailError } = require(
 const { isUsernameAllowed } = require('../services/usernameFilter');
 const { authGuard } = require('../services/authGuard');
 const { validatePassword } = require('../services/passwordPolicy');
+const { verifyCaptcha } = require('../services/captcha');
 const config = require('../config');
 
 // Garde-fous anti-abus (#86) — débrayés en test, comme les rate limiters
@@ -58,6 +59,12 @@ router.post('/register', async (req, res) => {
     return res.status(201).json({
       message: 'Compte créé. Un email de confirmation a été envoyé à votre adresse.',
     });
+  }
+
+  // Captcha optionnel (#104) — sans clé Turnstile configurée, passthrough
+  // (aucun changement). Avec clé : un token valide est exigé.
+  if (!(await verifyCaptcha(req.body['cf-turnstile-response'], req.ip))) {
+    return res.status(422).json({ errors: ['Vérification anti-robot échouée. Réessayez.'] });
   }
 
   // Plafond d'inscriptions par IP (#86) — contre la création de comptes en masse.
