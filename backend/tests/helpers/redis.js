@@ -36,6 +36,8 @@ let current = null;
  */
 function useMockRedis(db = 1) {
   if (current) { try { current.disconnect(); } catch { /* déjà fermé */ } }
+  // Isole aussi les canaux pub/sub (globaux, non cloisonnés par DB) par fichier.
+  process.env.RT_NS = `db${db}:`;
   if (process.env.REDIS_TEST_REAL === '1') {
     const IORedis = require('ioredis');
     current = new IORedis(process.env.REDIS_URL, { maxRetriesPerRequest: null, db });
@@ -57,6 +59,7 @@ async function flush(c) {
  * `node --test` ne se terminerait jamais. Sans effet notable sur le mock.
  */
 async function closeRedis() {
+  try { await require('../../src/realtime/bus').stop(); } catch { /* bus non démarré */ }
   if (current) { try { current.disconnect(); } catch { /* déjà fermé */ } current = null; }
   await client.close();
 }

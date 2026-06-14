@@ -26,6 +26,7 @@ const K = {
   owner: (id) => `sess:owner:${id}`,
   lock: (id) => `sess:lock:${id}`,
   active: 'sess:active',
+  ids: 'sess:ids',
 };
 
 /** Écrit l'état courant de la session dans Redis. */
@@ -40,6 +41,7 @@ async function createSession({ players, variant = 'classic', target = 3, rated =
   const pipe = getClient().multi();
   pipe.set(K.sess(id), JSON.stringify(session.toJSON()));
   pipe.set(K.owner(id), owner);
+  pipe.sadd(K.ids, id);
   for (const p of players) { pipe.set(K.user(p.userId), id); pipe.sadd(K.active, p.userId); }
   await pipe.exec();
   return session;
@@ -70,6 +72,7 @@ async function endSession(id) {
   const session = await getSession(id);
   const pipe = getClient().multi();
   pipe.del(K.sess(id), K.owner(id), K.lock(id));
+  pipe.srem(K.ids, id);
   if (session) {
     for (const p of session.players) {
       pipe.srem(K.active, p.userId);
@@ -82,6 +85,11 @@ async function endSession(id) {
 /** Nombre de joueurs actuellement en partie (toutes sessions confondues). */
 async function activeUserCount() {
   return getClient().scard(K.active);
+}
+
+/** Ids des sessions en cours — parcourus par le sweep des deadlines (horloge/grâce). */
+async function listActiveSessionIds() {
+  return getClient().smembers(K.ids);
 }
 
 // Libération sûre : ne supprime le verrou que si on le détient encore (le jeton
@@ -117,5 +125,5 @@ async function withLock(id, fn, { ttlMs = 5000, retryMs = 20, maxWaitMs = 2000 }
 
 module.exports = {
   K, save, createSession, getSession, sessionForUser, sessionIdForUser,
-  ownerOf, endSession, activeUserCount, withLock,
+  ownerOf, endSession, activeUserCount, listActiveSessionIds, withLock,
 };
