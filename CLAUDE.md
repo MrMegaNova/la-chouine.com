@@ -9,16 +9,19 @@ Jeu de cartes français (la Chouine) en ligne, jouable contre l'IA ou en PvP cla
 - **Frontend** : Vite 5, React 18, TypeScript, Zustand (+ persist), React Router v6, SCSS, Vitest.
   - `frontend/src/game/engine.ts` — moteur de jeu (TS).
   - `frontend/src/store/` — stores Zustand (`gameStore`, `onlineStore`, `authStore`, `soundStore`).
-- **Backend** : Node 24, Express 4, PostgreSQL (`pg`), WebSocket (`ws`), JWT, bcryptjs, nodemailer, pino.
+- **Backend** : Node 24, Express 4, PostgreSQL (`pg`), Redis (`ioredis`), WebSocket (`ws`), JWT, bcryptjs, nodemailer, pino.
   - `backend/src/game/engine.js` — moteur de jeu (JS), **doit rester synchrone avec le moteur TS**.
-  - `backend/src/game/session.js` — `GameSession` autoritatif (PvP en mémoire).
-  - `backend/src/wsServer.js`, `sessionRegistry`, `matchmaking` — serveur temps réel.
+  - `backend/src/game/session.js` — `GameSession` autoritatif ; `toJSON`/`fromJSON` pour Redis (#31).
+  - `backend/src/realtime/wsServer.js` — serveur temps réel **multi-instance** (#31), modèle *stateless + sweep*.
+  - `backend/src/realtime/` — `matchmakingStore` (file), `sessionStore` (sessions + verrou), `presenceStore` (présence + grâce), `bus` (pub/sub) : tout l'état temps-réel vit dans **Redis**. `matchmaking.js` garde la logique d'appariement **pure** (`pairTickets`).
+  - `backend/src/redis/client.js` — client Redis injectable (`setClient` pour les tests).
   - `backend/migrations/NNN_*.sql` — migrations, appliquées par `node src/db/migrate.js`.
 
 ## ⚠️ Pièges à connaître
 
 1. **Double moteur.** Toute règle de jeu modifiée dans `engine.ts` doit l'être à l'identique dans `engine.js` (et inversement). Une divergence casse silencieusement le PvP. Attention : le moteur gère **deux variantes** (`classic` et `mondoubleau`), et `mondoubleau` a des branches propres (phase sans atout) — la parité doit couvrir ces branches, pas seulement la variante classique. → agent `engine-parity`.
 2. **Tests backend en parallèle sur DB partagée.** `node --test tests/*.test.js` lance chaque fichier dans un process séparé sur la **même** base. Chaque fichier doit utiliser un **domaine email distinct** (`@<fichier>.invalid`, ex. `@gamesroute.invalid`) car le cleanup (`DELETE ... ILIKE '%@domaine'`) d'un fichier supprimerait sinon les lignes d'un autre → CI rouge intermittent. Supprimer les `games` **avant** les `users` (FK + contrainte `must_have_identity`). En prod, la suppression d'un utilisateur est gérée par le trigger `trg_pseudonymize_user_games` (migration `006`) qui pseudonymise ses sièges au lieu de violer la contrainte ; le cleanup des tests, lui, supprime explicitement dans le bon ordre. → agent `backend-test-runner`.
+3. **Tests Redis : un Redis partagé en CI (#31).** Le code temps-réel parle à un vrai Redis (`REDIS_URL`, obligatoire). Les tests : **mock par défaut** (`ioredis-mock`, via `tests/helpers/redis.js` → `useMockRedis(db)`), **vrai Redis si `REDIS_TEST_REAL=1`** (la CI le fait). Comme les fichiers tournent en parallèle sur le **même** Redis, chaque fichier prend un **index de DB distinct** (1-15) — l'analogue Redis des domaines email — et les canaux pub/sub sont préfixés par `RT_NS` (les canaux sont globaux, pas cloisonnés par DB). Toujours appeler `closeRedis()` dans un `after()` : une connexion ioredis ouverte empêche `node --test` de se terminer.
 
 ## Commandes
 
@@ -74,3 +77,5 @@ Dependabot est actif (npm ×2, docker ×3, github-actions). Les **bumps majeurs 
 ## Prod
 
 Client → Traefik (forward headers) → nginx (conteneur frontend : SPA + proxy `/api` et `/ws`) → backend Express. `trust proxy` = 2 (chaîne à 2 proxies).
+
+Le backend dépend de **PostgreSQL** (persistance) et de **Redis** (état temps-réel PvP, #31) — tous deux services `docker-compose` (`redis:8-alpine`). Redis est obligatoire : sans `REDIS_URL` joignable, le backend refuse de démarrer. Le modèle *stateless + sweep* rend le PvP **scalable horizontalement** (N instances backend) et les parties **survivent à un redéploiement**.
