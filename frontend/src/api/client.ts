@@ -177,4 +177,9 @@ export const onlineApi = {
   // connexion WebSocket ; les connectés reçoivent les mêmes chiffres en push.
   get: () =>
     apiCall<{ online: number; inQueue: number; inGame: number }>('GET', '/online'),
+
+  // Ticket éphémère pour ouvrir le WebSocket sans mettre le JWT dans l'URL
+  // (#120). À redemander à chaque (re)connexion.
+  wsTicket: (token: string) =>
+    apiCall<{ ticket: string }>('POST', '/online/ws-ticket', undefined, token),
 };

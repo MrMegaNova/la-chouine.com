@@ -26,6 +26,8 @@
 const { randomUUID } = require('crypto');
 const { WebSocketServer } = require('ws');
 const { verifyToken } = require('../middleware/auth');
+const config = require('../config');
+const ticketStore = require('./ticketStore');
 const sessionStore = require('./sessionStore');
 const matchmakingStore = require('./matchmakingStore');
 const presenceStore = require('./presenceStore');
@@ -418,7 +420,11 @@ async function attachWebSocketServer(httpServer, opts = {}) {
     let user;
     try {
       const url = new URL(req.url, 'http://localhost');
-      user = verifyToken(url.searchParams.get('token'));
+      // #120 : auth par TICKET éphémère (le JWT ne doit plus être dans l'URL).
+      // Le `?token=` reste accepté HORS production (dev/tests) pour la simplicité.
+      const ticket = url.searchParams.get('ticket');
+      if (ticket) user = await ticketStore.consume(ticket);
+      else if (!config.isProd) user = verifyToken(url.searchParams.get('token'));
     } catch { user = null; }
     if (user) {
       try { if (!(await validateUser(user))) user = null; } catch { user = null; }
