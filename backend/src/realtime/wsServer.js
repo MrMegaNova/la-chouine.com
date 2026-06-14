@@ -279,6 +279,15 @@ async function attachWebSocketServer(httpServer, opts = {}) {
           if (changed) await sessionStore.save(s);
         });
       }
+      // Défis expirés (#45) : préviens le défieur et le destinataire, puis purge.
+      for (const id of await getClient().smembers(CK.ids)) {
+        const c = await getClient().hgetall(CK.chal(id));
+        if (!c || !c.from) { await getClient().srem(CK.ids, id); continue; }
+        if (Number(c.expiresAt) > Date.now()) continue;
+        await dropChallenge(id, c.from);
+        notify(c.from, { t: 'challenge', status: 'expired', challengeId: id });
+        notifier.notifyUser(c.to, { kind: 'challengeCancelled', challengeId: id });
+      }
     } finally { await release(); }
   }
 

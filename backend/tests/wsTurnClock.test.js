@@ -7,21 +7,27 @@ process.env.PGUSER = process.env.PGUSER || 'x';
 process.env.PGPASSWORD = process.env.PGPASSWORD || 'x';
 process.env.PGDATABASE = process.env.PGDATABASE || 'x';
 process.env.PGHOST = process.env.PGHOST || 'localhost';
+process.env.REDIS_URL = process.env.REDIS_URL || 'redis://mock';
 
-const { test } = require('node:test');
+const { test, beforeEach, after } = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('http');
 const { WebSocket } = require('ws');
 
+const { useMockRedis, flush, closeRedis } = require('./helpers/redis');
+const bus = require('../src/realtime/bus');
+const sessionStore = require('../src/realtime/sessionStore');
 const { attachWebSocketServer } = require('../src/realtime/wsServer');
-const registry = require('../src/realtime/sessionRegistry');
 const { signToken } = require('../src/middleware/auth');
 
 const delay = (ms) => new Promise(r => setTimeout(r, ms));
 const once = (em, ev) => new Promise(res => em.once(ev, res));
 
+beforeEach(async () => { const r = useMockRedis(12); await flush(r); await bus.stop(); });
+after(closeRedis);
+
 async function matchTwo(server, { clockOptions }) {
-  const handle = attachWebSocketServer(server, {
+  const handle = await attachWebSocketServer(server, {
     tickMs: 15,
     getRating: () => Promise.resolve(1500),
     onMatchComplete: () => {},
@@ -44,12 +50,11 @@ async function matchTwo(server, { clockOptions }) {
 }
 
 test('horloge (#141) : l’état initial d’une partie classée porte l’horloge en marche', async (t) => {
-  registry.reset();
   const server = http.createServer();
   const { handle, ws1, ws2, msgs1 } = await matchTwo(server, {
     clockOptions: { baseMs: 5000, reserveMs: 0, pauseBudgetMs: 5000, maxTimeouts: 9 },
   });
-  t.after(() => { handle.stop(); ws1.close(); ws2.close(); server.close(); });
+  t.after(async () => { handle.stop(); ws1.close(); ws2.close(); server.close(); await closeRedis(); });
 
   const state = msgs1.filter(m => m.t === 'state').pop();
   assert.ok(state, 'le joueur 1 reçoit un état');
@@ -59,12 +64,11 @@ test('horloge (#141) : l’état initial d’une partie classée porte l’horlo
 });
 
 test('horloge (#141) : à l’expiration, un coup automatique est joué (pénalité)', async (t) => {
-  registry.reset();
   const server = http.createServer();
   const { handle, ws1, ws2, msgs1 } = await matchTwo(server, {
     clockOptions: { baseMs: 70, reserveMs: 0, pauseBudgetMs: 5000, maxTimeouts: 9 },
   });
-  t.after(() => { handle.stop(); ws1.close(); ws2.close(); server.close(); });
+  t.after(async () => { handle.stop(); ws1.close(); ws2.close(); server.close(); await closeRedis(); });
 
   // Aucun joueur ne joue : l'horloge expire et le serveur joue à leur place.
   await delay(300);
@@ -74,26 +78,30 @@ test('horloge (#141) : à l’expiration, un coup automatique est joué (pénali
 });
 
 test('horloge (#141) : pause quand l’adversaire est déconnecté, reprise au retour', async (t) => {
-  registry.reset();
   const server = http.createServer();
   const { handle, ws1, ws2 } = await matchTwo(server, {
     // Base longue pour que l'horloge n'expire pas pendant le test.
     clockOptions: { baseMs: 4000, reserveMs: 0, pauseBudgetMs: 5000, maxTimeouts: 9 },
   });
-  t.after(() => { handle.stop(); ws1.close(); ws2.close(); server.close(); });
+  t.after(async () => { handle.stop(); ws1.close(); ws2.close(); server.close(); await closeRedis(); });
 
-  const session = registry.sessionForUser('u1');
+  // État dans Redis : on recharge à chaque vérification (le sweep mute la copie
+  // persistée, pas l'objet local).
+  const sid = await sessionStore.sessionIdForUser('u1');
+  let session = await sessionStore.getSession(sid);
   assert.ok(session && session.clock, 'session classée avec horloge');
   assert.equal(session.clock.paused, false);
 
-  // Bob se déconnecte → l'horloge se met en pause.
+  // Bob se déconnecte → le sweep met l'horloge en pause.
   ws2.close();
-  await delay(80);
+  await delay(120);
+  session = await sessionStore.getSession(sid);
   assert.equal(session.clock.paused, true, 'horloge en pause pendant la déconnexion');
   const timeoutsDuringPause = session.clock.timeouts[0] + session.clock.timeouts[1];
 
   // Elle ne s'écoule pas : pas de coup automatique pendant la pause.
   await delay(200);
+  session = await sessionStore.getSession(sid);
   assert.equal(session.clock.timeouts[0] + session.clock.timeouts[1], timeoutsDuringPause,
     'aucun coup automatique tant que c’est en pause');
 });

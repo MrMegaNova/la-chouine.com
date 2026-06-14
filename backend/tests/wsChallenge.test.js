@@ -10,14 +10,17 @@ process.env.PGUSER = process.env.PGUSER || 'x';
 process.env.PGPASSWORD = process.env.PGPASSWORD || 'x';
 process.env.PGDATABASE = process.env.PGDATABASE || 'x';
 process.env.PGHOST = process.env.PGHOST || 'localhost';
+process.env.REDIS_URL = process.env.REDIS_URL || 'redis://mock';
 
-const { test } = require('node:test');
+const { test, beforeEach, after } = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('http');
 const { WebSocket } = require('ws');
 
+const { useMockRedis, flush, closeRedis } = require('./helpers/redis');
+const bus = require('../src/realtime/bus');
+const sessionStore = require('../src/realtime/sessionStore');
 const { attachWebSocketServer } = require('../src/realtime/wsServer');
-const registry = require('../src/realtime/sessionRegistry');
 const { signToken } = require('../src/middleware/auth');
 
 const delay = (ms) => new Promise(r => setTimeout(r, ms));
@@ -26,13 +29,16 @@ const once = (em, ev) => new Promise(res => em.once(ev, res));
 // u1 et u2 sont amis ; u3 n'est l'ami de personne.
 const FRIENDS = new Set(['u1|u2', 'u2|u1']);
 
+beforeEach(async () => { const r = useMockRedis(10); await flush(r); await bus.stop(); });
+after(closeRedis);
+
 async function setup(t, { challengeTtlMs = 60000 } = {}) {
-  registry.reset();
   const recorded = [];
   const server = http.createServer();
-  const rt = attachWebSocketServer(server, {
+  const rt = await attachWebSocketServer(server, {
     heartbeatMs: 0,
     graceMs: 5000,
+    sweepMs: 20,    // sweep rapide : l'expiration des défis se déclenche vite
     challengeTtlMs,
     areFriends: async (a, b) => FRIENDS.has(`${a}|${b}`),
     onMatchComplete: (outcome) => recorded.push(outcome),
@@ -48,7 +54,7 @@ async function setup(t, { challengeTtlMs = 60000 } = {}) {
     return { ws, msgs, send: (o) => ws.send(JSON.stringify(o)) };
   };
 
-  t.after(() => { rt.stop(); server.close(); });
+  t.after(async () => { rt.stop(); server.close(); await closeRedis(); });
   return { connect, recorded };
 }
 
@@ -74,10 +80,10 @@ test('défi : invitation notifiée, acceptation → partie directe (amicale, san
   // (2) Acceptation → session pour les deux, sans passer par la file.
   c2.send({ t: 'challenge', action: 'accept', challengeId: notif.challengeId });
   await delay(60);
-  const session = registry.sessionForUser('u1');
+  const session = await sessionStore.sessionForUser('u1');
   assert.ok(session, 'session créée');
   assert.equal(session.rated, false);
-  assert.equal(registry.sessionForUser('u2'), session);
+  assert.equal((await sessionStore.sessionForUser('u2')).id, session.id);
   assert.ok(lastOf(c1.msgs, 'matchFound'), 'matchFound chez le défieur');
   assert.equal(lastOf(c2.msgs, 'matchFound').opponent, 'Alice');
   assert.equal(lastOf(c2.msgs, 'state').state.rated, false, 'le snapshot porte le type de partie');
@@ -103,7 +109,7 @@ test('défi classé : rated:true propagé jusqu’à l’outcome', async (t) => 
 
   c2.send({ t: 'challenge', action: 'accept', challengeId: notif.challengeId });
   await delay(60);
-  assert.equal(registry.sessionForUser('u1').rated, true);
+  assert.equal((await sessionStore.sessionForUser('u1')).rated, true);
 
   c1.send({ t: 'action', action: { type: 'forfeit' } });
   await delay(50);
@@ -127,7 +133,7 @@ test('défi : refusé hors amitié, hors ligne, ou déjà en partie', async (t) 
   assert.match(lastOf(c1.msgs, 'error').error, /en ligne/i);
 
   // (3) Un joueur déjà en partie ne peut ni défier ni être défié.
-  registry.createSession({
+  await sessionStore.createSession({
     players: [{ userId: 'u1', name: 'Alice' }, { userId: 'uX', name: 'X' }],
     variant: 'classic', target: 3,
   });
@@ -152,7 +158,7 @@ test('défi : refus notifié, annulation notifiée, expiration automatique', asy
   c2.send({ t: 'challenge', action: 'decline', challengeId: notif.challengeId });
   await delay(50);
   assert.equal(lastOf(c1.msgs, 'challenge').status, 'declined');
-  assert.equal(registry.sessionForUser('u1'), null);
+  assert.equal(await sessionStore.sessionForUser('u1'), null);
 
   // (2) Annulation par le défieur.
   c2.msgs.length = 0;
@@ -173,5 +179,5 @@ test('défi : refus notifié, annulation notifiée, expiration automatique', asy
   c2.send({ t: 'challenge', action: 'accept', challengeId: notif.challengeId });
   await delay(50);
   assert.match(lastOf(c2.msgs, 'error').error, /introuvable|expiré/i);
-  assert.equal(registry.sessionForUser('u1'), null);
+  assert.equal(await sessionStore.sessionForUser('u1'), null);
 });
