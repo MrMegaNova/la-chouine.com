@@ -13,13 +13,14 @@ process.env.PGPASSWORD = process.env.PGPASSWORD || 'x';
 process.env.PGDATABASE = process.env.PGDATABASE || 'x';
 process.env.REDIS_URL = process.env.REDIS_URL || 'redis://mock';
 
-const { test, beforeEach } = require('node:test');
+const { test, beforeEach, after } = require('node:test');
 const assert = require('node:assert/strict');
-const { useMockRedis, flush } = require('./helpers/redis');
+const { useMockRedis, flush, closeRedis } = require('./helpers/redis');
 const store = require('../src/realtime/matchmakingStore');
 
 let redis;
 beforeEach(async () => { redis = useMockRedis(); await flush(redis); });
+after(closeRedis); // ferme les connexions (vrai Redis : sinon node --test ne sort pas)
 
 test('join/leave : un seul ticket par joueur, compté par variante', async () => {
   await store.join({ userId: 'u1', name: 'A', rating: 1500, variant: 'classic' });

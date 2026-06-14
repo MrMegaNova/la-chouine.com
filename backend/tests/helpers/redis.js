@@ -17,16 +17,40 @@
 const RedisMock = require('ioredis-mock');
 const client = require('../../src/redis/client');
 
-/** Pose un client mock comme client Redis applicatif. Renvoie le client. */
+/**
+ * Pose un client comme client Redis applicatif. Renvoie le client.
+ * Par défaut : ioredis-mock (in-process). Si REDIS_TEST_REAL=1, un VRAI client
+ * ioredis sur REDIS_URL — pour valider le code contre un vrai serveur Redis
+ * (le mock peut diverger). Lancer alors les fichiers Redis un par un pour éviter
+ * les collisions sur le serveur partagé.
+ */
+let current = null;
+
 function useMockRedis() {
-  const mock = new RedisMock();
-  client.setClient(mock);
-  return mock;
+  if (current) { try { current.disconnect(); } catch { /* déjà fermé */ } }
+  if (process.env.REDIS_TEST_REAL === '1') {
+    const IORedis = require('ioredis');
+    current = new IORedis(process.env.REDIS_URL, { maxRetriesPerRequest: null });
+  } else {
+    current = new RedisMock();
+  }
+  client.setClient(current);
+  return current;
 }
 
-/** Vide le Redis mock du process (à appeler en début de chaque test). */
+/** Vide le Redis du process (à appeler en début de chaque test). */
 async function flush(c) {
   await c.flushall();
 }
 
-module.exports = { useMockRedis, flush };
+/**
+ * Ferme les connexions Redis (à appeler dans un `after()`). Indispensable avec un
+ * VRAI Redis : une connexion ioredis ouverte garde l'event loop vivant et
+ * `node --test` ne se terminerait jamais. Sans effet notable sur le mock.
+ */
+async function closeRedis() {
+  if (current) { try { current.disconnect(); } catch { /* déjà fermé */ } current = null; }
+  await client.close();
+}
+
+module.exports = { useMockRedis, flush, closeRedis };
