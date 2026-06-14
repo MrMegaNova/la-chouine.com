@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { useNotificationStore } from '@/store/notificationStore';
+import { onlineApi } from '@/api/client';
 import type { Card, GameState, HandResult, Variant, Suit, TrickEntry } from '@/game/types';
 
 // ─── Store PvP en ligne ───────────────────────────────────────────────────────
@@ -149,9 +150,10 @@ function clearTrickHold() {
   heldSnapshot = null;
 }
 
-function wsUrl(token: string): string {
+function wsUrl(ticket: string): string {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  return `${proto}://${location.host}/ws?token=${encodeURIComponent(token)}`;
+  // #120 : ticket éphémère, jamais le JWT (qui fuiterait dans les logs proxys).
+  return `${proto}://${location.host}/ws?ticket=${encodeURIComponent(ticket)}`;
 }
 
 const placeholder = (): Card => ({ s: 'pique', r: '7' });
@@ -408,28 +410,40 @@ export const useOnlineStore = create<OnlineState>((set, get) => {
     if (ws && ws.readyState === WebSocket.OPEN) { onOpen(); return; }
     if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
     if (ws) { try { ws.onclose = null; ws.close(); } catch { /* ignore */ } }
-    ws = new WebSocket(wsUrl(token));
-    ws.onopen = onOpen;
-    ws.onmessage = (e) => handleMessage(typeof e.data === 'string' ? e.data : '');
-    // onclose est l'unique point de décision (onerror est toujours suivi de onclose).
-    ws.onclose = () => {
-      ws = null;
-      set({ presence: null }); // chiffres périmés dès qu'on est déconnecté
-      const st = get().status;
-      if (st === 'playing' || st === 'found') {
-        tryReconnect(); // partie en cours : le délai de grâce nous couvre
-      } else if (st === 'searching') {
-        set({ status: 'error', error: 'Connexion perdue.' });
-      } else {
-        // Connexion de présence : reprise silencieuse, sans urgence.
-        if (lastToken) {
-          reconnectTimer = setTimeout(() => {
-            reconnectTimer = null;
-            if (get().status === 'idle' && lastToken) ensureSocket(lastToken, () => {});
-          }, 30000);
+    // #120 : on demande d'abord un ticket éphémère (authentifié), puis on ouvre
+    // le WS avec ?ticket= — le JWT ne transite jamais dans l'URL.
+    const openWith = (ticket: string) => {
+      ws = new WebSocket(wsUrl(ticket));
+      ws.onopen = onOpen;
+      ws.onmessage = (e) => handleMessage(typeof e.data === 'string' ? e.data : '');
+      // onclose est l'unique point de décision (onerror est toujours suivi de onclose).
+      ws.onclose = () => {
+        ws = null;
+        set({ presence: null }); // chiffres périmés dès qu'on est déconnecté
+        const st = get().status;
+        if (st === 'playing' || st === 'found') {
+          tryReconnect(); // partie en cours : le délai de grâce nous couvre
+        } else if (st === 'searching') {
+          set({ status: 'error', error: 'Connexion perdue.' });
+        } else {
+          // Connexion de présence : reprise silencieuse, sans urgence.
+          if (lastToken) {
+            reconnectTimer = setTimeout(() => {
+              reconnectTimer = null;
+              if (get().status === 'idle' && lastToken) ensureSocket(lastToken, () => {});
+            }, 30000);
+          }
         }
-      }
+      };
     };
+
+    onlineApi.wsTicket(token).then((res) => {
+      if (res.ok && res.data?.ticket) { openWith(res.data.ticket); return; }
+      // Échec d'émission du ticket : traité comme une perte de connexion.
+      const st = get().status;
+      if (st === 'playing' || st === 'found') tryReconnect();
+      else if (st === 'searching') set({ status: 'error', error: 'Connexion perdue.' });
+    });
   }
 
   return {
