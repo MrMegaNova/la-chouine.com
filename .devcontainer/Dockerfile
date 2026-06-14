@@ -90,4 +90,23 @@ USER root
 RUN chmod +x /usr/local/bin/init-firewall.sh && \
   echo "node ALL=(root) NOPASSWD: /usr/local/bin/init-firewall.sh" > /etc/sudoers.d/node-firewall && \
   chmod 0440 /etc/sudoers.d/node-firewall
+
+# Install rtk (Rust Token Killer) — proxy qui compresse la sortie des commandes
+# Bash avant qu'elle n'atteigne l'assistant. crates.io étant bloqué par le
+# firewall en runtime, on récupère le binaire pré-compilé depuis les releases
+# GitHub au build (réseau libre). Le hook PreToolUse est branché plus tard par
+# setup-claude-plugins.sh (postCreateCommand), car il vit dans le volume ~/.claude.
+ARG RTK_VERSION=0.42.4
+RUN ARCH=$(uname -m) && \
+  case "$ARCH" in \
+    x86_64)  RTK_TARGET=x86_64-unknown-linux-musl ;; \
+    aarch64) RTK_TARGET=aarch64-unknown-linux-gnu ;; \
+    *) echo "rtk: architecture non supportée: $ARCH" && exit 1 ;; \
+  esac && \
+  wget -O /tmp/rtk.tar.gz "https://github.com/rtk-ai/rtk/releases/download/v${RTK_VERSION}/rtk-${RTK_TARGET}.tar.gz" && \
+  tar -xzf /tmp/rtk.tar.gz -C /tmp rtk && \
+  install -m 0755 /tmp/rtk /usr/local/bin/rtk && \
+  rm -f /tmp/rtk.tar.gz /tmp/rtk && \
+  rtk --version
+
 USER node

@@ -21,7 +21,12 @@ npm-debug.log*
 Thumbs.db
 .vscode/settings.json
 .idea/
-.claude/
+# Claude Code : on versionne la config partagée (settings projet + agents +
+# CLAUDE.md à la racine), mais pas le perso ni les caches/worktrees.
+.claude/*
+!.claude/settings.json
+!.claude/agents/
+.claude/settings.local.json
 
 # ─── Couverture de tests ──────────────────────────────────────────────────────
 coverage/
