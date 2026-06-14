@@ -22,31 +22,62 @@ const matchmakingStore = require('./matchmakingStore');
 const sessionStore = require('./sessionStore');
 
 const K = {
-  online: (uid) => `online:${uid}`,
-  onlineSet: 'online:set',
+  online: (uid) => `onl:${uid}`,
+  onlineSet: 'onl:set',
+  // `onl:{uid}` (et non `online:{uid}`) : nouveau type (sorted set avec
+  // expiration). Renommé pour ne pas entrer en collision de type avec
+  // d'anciennes clés `online:{uid}` (SET) encore présentes dans un Redis non
+  // vidé après déploiement → évite les erreurs WRONGTYPE.
   grace: (uid) => `grace:${uid}`,
   graceSet: 'grace:set',
 };
 
-/** Marque le joueur connecté sur cette instance. */
+// `online:{uid}` est un SORTED SET { membre: instanceId, score: expiration }.
+// Une instance qui meurt (crash, redéploiement, `node --watch`) ne nettoie pas
+// ses marqueurs : sans expiration, ils resteraient « en ligne » à jamais et
+// `isOnline` renverrait vrai → la détection de déconnexion (#30) ne s'armerait
+// jamais. Le marqueur expire donc (TTL), rafraîchi par le heartbeat tant que le
+// joueur a un socket vivant sur cette instance.
+const ONLINE_TTL_MS = 90_000;
+
+/** Retire les marqueurs expirés ; renvoie le nombre de marqueurs vivants. */
+async function liveMarkers(userId) {
+  const r = getClient();
+  await r.zremrangebyscore(K.online(userId), '-inf', Date.now());
+  const n = await r.zcard(K.online(userId));
+  if (n === 0) { await r.del(K.online(userId)); await r.srem(K.onlineSet, userId); }
+  return n;
+}
+
+/** Marque le joueur connecté sur cette instance (marqueur à durée limitée). */
 async function addOnline(userId) {
   const r = getClient();
-  await r.sadd(K.online(userId), instanceId);
+  await r.zadd(K.online(userId), Date.now() + ONLINE_TTL_MS, instanceId);
   await r.sadd(K.onlineSet, userId);
 }
 
-/** Retire cette instance ; si plus aucune, le joueur n'est plus en ligne. */
-async function removeOnline(userId) {
+/**
+ * Rafraîchit le marqueur de CETTE instance pour des joueurs encore connectés
+ * localement (appelé périodiquement par le heartbeat). Empêche l'expiration des
+ * joueurs réellement en ligne.
+ */
+async function refreshOnline(userIds) {
+  if (!userIds || !userIds.length) return;
   const r = getClient();
-  await r.srem(K.online(userId), instanceId);
-  if ((await r.scard(K.online(userId))) === 0) {
-    await r.del(K.online(userId));
-    await r.srem(K.onlineSet, userId);
-  }
+  const score = Date.now() + ONLINE_TTL_MS;
+  const pipe = r.multi();
+  for (const uid of userIds) { pipe.zadd(K.online(uid), score, instanceId); pipe.sadd(K.onlineSet, uid); }
+  await pipe.exec();
+}
+
+/** Retire le marqueur de cette instance ; nettoie si plus aucun marqueur vivant. */
+async function removeOnline(userId) {
+  await getClient().zrem(K.online(userId), instanceId);
+  await liveMarkers(userId);
 }
 
 async function isOnline(userId) {
-  return (await getClient().scard(K.online(userId))) > 0;
+  return (await liveMarkers(userId)) > 0;
 }
 
 async function onlineCount() {
@@ -87,6 +118,6 @@ async function listGraces() {
 }
 
 module.exports = {
-  K, addOnline, removeOnline, isOnline, onlineCount, counts, userPresence,
-  setGrace, getGrace, clearGrace, listGraces,
+  K, ONLINE_TTL_MS, addOnline, refreshOnline, removeOnline, isOnline,
+  onlineCount, counts, userPresence, setGrace, getGrace, clearGrace, listGraces,
 };

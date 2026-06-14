@@ -526,6 +526,10 @@ async function attachWebSocketServer(httpServer, opts = {}) {
         ws.isAlive = false;
         ws.ping();
       }
+      // Rafraîchit les marqueurs online des joueurs connectés ici (#30) : sinon
+      // ils expireraient (TTL), et les marqueurs d'une instance morte expirent
+      // d'eux-mêmes — débloquant la détection de déconnexion.
+      presenceStore.refreshOnline([...sockets.keys()]).catch(() => {});
     }, heartbeatMs);
     if (heartbeat.unref) heartbeat.unref();
   }
