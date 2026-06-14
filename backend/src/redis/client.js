@@ -41,12 +41,14 @@ function getSubscriber() {
 }
 
 /**
- * Tests : injecte un client (ioredis-mock). Le subscriber est dérivé par
- * duplicate() s'il existe, sinon on réutilise le même (le mock partage l'état).
+ * Tests : injecte un client (ioredis-mock ou vrai ioredis). Le subscriber est
+ * (re)créé paresseusement par getSubscriber() — surtout pas en avance, sinon une
+ * ré-injection (beforeEach) abandonnerait des connexions ouvertes qui
+ * empêcheraient node --test de se terminer.
  */
 function setClient(c) {
   client = c;
-  subscriber = typeof c.duplicate === 'function' ? c.duplicate() : c;
+  subscriber = null;
 }
 
 async function close() {

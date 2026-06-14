@@ -26,11 +26,19 @@ const client = require('../../src/redis/client');
  */
 let current = null;
 
-function useMockRedis() {
+/**
+ * @param {number} [db] index de DB Redis propre au fichier de test (1-15). En CI
+ *   (vrai Redis partagé, fichiers en parallèle), chaque fichier prend sa propre
+ *   DB → `flushdb` n'efface que ses clés, jamais celles d'un autre fichier —
+ *   l'analogue Redis des domaines email distincts sur la base Postgres partagée
+ *   (cf. CLAUDE.md). Sans effet sur le mock (isolé par process). Choisir un index
+ *   distinct par fichier de test touchant Redis.
+ */
+function useMockRedis(db = 1) {
   if (current) { try { current.disconnect(); } catch { /* déjà fermé */ } }
   if (process.env.REDIS_TEST_REAL === '1') {
     const IORedis = require('ioredis');
-    current = new IORedis(process.env.REDIS_URL, { maxRetriesPerRequest: null });
+    current = new IORedis(process.env.REDIS_URL, { maxRetriesPerRequest: null, db });
   } else {
     current = new RedisMock();
   }
@@ -38,9 +46,9 @@ function useMockRedis() {
   return current;
 }
 
-/** Vide le Redis du process (à appeler en début de chaque test). */
+/** Vide la DB Redis du fichier (à appeler en début de chaque test). */
 async function flush(c) {
-  await c.flushall();
+  await c.flushdb();
 }
 
 /**

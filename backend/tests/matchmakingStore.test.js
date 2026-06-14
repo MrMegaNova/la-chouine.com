@@ -19,7 +19,7 @@ const { useMockRedis, flush, closeRedis } = require('./helpers/redis');
 const store = require('../src/realtime/matchmakingStore');
 
 let redis;
-beforeEach(async () => { redis = useMockRedis(); await flush(redis); });
+beforeEach(async () => { redis = useMockRedis(2); await flush(redis); }); // db 2 : isolation fichier
 after(closeRedis); // ferme les connexions (vrai Redis : sinon node --test ne sort pas)
 
 test('join/leave : un seul ticket par joueur, compté par variante', async () => {
