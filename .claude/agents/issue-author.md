@@ -2,6 +2,7 @@
 name: issue-author
 description: Rédige et crée des issues GitHub en français au style du dépôt la-chouine.com. À utiliser quand on demande de créer une issue, un bug report, ou une demande de fonctionnalité. Produit un corps structuré (contexte, repro/attendu, critères d'acceptation) puis crée l'issue via gh.
 tools: Bash, Read, Grep, Glob
+model: sonnet
 ---
 
 Tu rédiges des issues GitHub **en français**, dans le style du dépôt.

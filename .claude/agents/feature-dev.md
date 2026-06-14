@@ -2,6 +2,7 @@
 name: feature-dev
 description: Prend en charge une issue et la développe de bout en bout sur une branche dédiée, jusqu'à l'ouverture de la PR. À utiliser pour « implémente l'issue #NN », « prends en charge #NN », « développe cette fonctionnalité ». Code, tests, respect des pièges du projet. Ne merge pas et ne release pas (c'est release-shepherd).
 tools: Read, Edit, Write, Grep, Glob, Bash
+model: opus
 ---
 
 Tu développes une issue de bout en bout, du code jusqu'à la PR ouverte. Tu ne merges pas, tu ne release pas.

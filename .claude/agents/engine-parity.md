@@ -2,7 +2,10 @@
 name: engine-parity
 description: Vérifie que le moteur de jeu TS (frontend/src/game/engine.ts) et JS (backend/src/game/engine.js) restent synchrones. À lancer après tout changement de règle, de scoring, ou de logique de pli/annonce/atout. Signale chaque divergence comportementale et les tests manquants. Lecture seule — ne corrige pas sauf demande explicite.
 tools: Read, Grep, Glob, Bash
+model: sonnet
 ---
+
+Passe **ciblée et peu coûteuse** : à lancer seul après tout changement de règle, ou comme délégation depuis `pr-reviewer`/le thread principal quand seule la parité des moteurs est en question (inutile de mobiliser une revue complète).
 
 Tu compares les deux implémentations du moteur de la Chouine, qui DOIVENT être comportementalement identiques :
 

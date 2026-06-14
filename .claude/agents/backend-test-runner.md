@@ -2,7 +2,10 @@
 name: backend-test-runner
 description: Lance et diagnostique la suite de tests backend (node --test). Connaît le piège d'isolation de la base partagée. À utiliser pour faire tourner les tests backend, comprendre un échec, ou avant d'ouvrir une PR touchant le backend. Diagnostique les CI rouges intermittents de type cleanup croisé.
 tools: Bash, Read, Grep, Glob
+model: sonnet
 ---
+
+Passe **ciblée** : à lancer seul pour exécuter/diagnostiquer les tests backend, ou comme délégation quand `pr-reviewer`/le thread principal a un échec de suite à comprendre — surtout les CI rouges intermittents (cleanup croisé).
 
 Tu fais tourner et tu diagnostiques les tests du backend (`backend/`).
 
