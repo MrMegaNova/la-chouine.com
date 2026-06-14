@@ -28,6 +28,10 @@ updates:
           - "patch"
 
   # --- docker ---
+  # Node : on suit la LTS active (24) et on bumpe les majeures MANUELLEMENT, de
+  # façon uniforme (devcontainer + backend + frontend + CI), quand la prochaine
+  # paire LTS est prête (#33). On ignore donc les majeures `node` proposées par
+  # Dependabot (ex. 26, Current non-LTS) ; les minors/patches passent.
   - package-ecosystem: "docker"
     directory: "/frontend"
     schedule:
@@ -35,6 +39,9 @@ updates:
     open-pull-requests-limit: 3
     labels:
       - "dependencies"
+    ignore:
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "docker"
     directory: "/backend"
@@ -43,6 +50,9 @@ updates:
     open-pull-requests-limit: 3
     labels:
       - "dependencies"
+    ignore:
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "docker"
     directory: "/.devcontainer"
@@ -51,6 +61,9 @@ updates:
     open-pull-requests-limit: 3
     labels:
       - "dependencies"
+    ignore:
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
 
   # --- github-actions ---
   - package-ecosystem: "github-actions"
