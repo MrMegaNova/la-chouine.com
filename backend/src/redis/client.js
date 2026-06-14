@@ -47,6 +47,12 @@ function getSubscriber() {
  * empêcheraient node --test de se terminer.
  */
 function setClient(c) {
+  // Ferme l'ancien subscriber avant de le remplacer : sinon une ré-injection
+  // (beforeEach) abandonnerait une connexion abonnée ouverte qui empêcherait
+  // node --test de se terminer (event loop maintenu vivant).
+  if (subscriber && subscriber !== client && typeof subscriber.disconnect === 'function') {
+    try { subscriber.disconnect(); } catch { /* déjà fermée */ }
+  }
   client = c;
   subscriber = null;
 }

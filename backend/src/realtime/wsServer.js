@@ -486,6 +486,7 @@ async function attachWebSocketServer(httpServer, opts = {}) {
   // joueur, on le sort de la file et on arme la grâce s'il est en partie.
   async function handleSocketGone(userId, ws) {
     removeSocket(userId, ws);
+    if (stopped) return; // arrêt en cours : ne rien armer ni toucher à Redis
     if (sockets.has(userId)) return; // un autre onglet local reste
     await presenceStore.removeOnline(userId);
     if (await presenceStore.isOnline(userId)) return; // connecté sur une autre instance
