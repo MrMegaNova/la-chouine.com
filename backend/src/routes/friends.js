@@ -4,7 +4,7 @@ const express = require('express');
 const { query } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { notifyUser } = require('../realtime/notifier');
-const { userPresence } = require('../realtime/presence');
+const { userPresence } = require('../realtime/presenceStore');
 
 const router = express.Router();
 
@@ -33,15 +33,16 @@ router.get('/', requireAuth, async (req, res) => {
       [req.user.id]
     );
     // Pastille de présence (#46) : uniquement ici, entre amis acceptés —
-    // jamais dans la recherche d'utilisateurs ni le classement.
-    res.json(rows.map(r => ({
+    // jamais dans la recherche d'utilisateurs ni le classement. Présence agrégée
+    // depuis Redis (#31) → lecture asynchrone par ami.
+    res.json(await Promise.all(rows.map(async r => ({
       id: r.id,
       username: r.username,
       avatar: r.avatar || null,
       wins: Number(r.wins),
       plays: Number(r.plays),
-      ...userPresence(r.id),
-    })));
+      ...(await userPresence(r.id)),
+    }))));
   } catch (err) {
     req.log.error({ err }, 'GET /friends');
     res.status(500).json({ error: 'Erreur interne.' });
