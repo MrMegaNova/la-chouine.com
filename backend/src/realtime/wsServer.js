@@ -338,14 +338,20 @@ async function attachWebSocketServer(httpServer, opts = {}) {
     if (msg.action === 'invite') {
       const to = typeof msg.to === 'string' ? msg.to : null;
       if (!to || to === user.id) return send(ws, { t: 'error', error: 'Destinataire invalide.' });
+      // Conditions sur SOI (ne fuitent rien sur autrui).
       if (await sessionStore.sessionIdForUser(user.id)) return send(ws, { t: 'error', error: 'Une partie est déjà en cours.' });
-      if (await sessionStore.sessionIdForUser(to)) return send(ws, { t: 'error', error: 'Cet ami est déjà en partie.' });
-      if (!(await presenceStore.isOnline(to))) return send(ws, { t: 'error', error: 'Cet ami n’est pas en ligne.' });
       if (await outgoingChallengeOf(user.id)) return send(ws, { t: 'error', error: 'Vous avez déjà un défi en attente.' });
       const variant = msg.variant === 'mondoubleau' ? 'mondoubleau' : 'classic';
       const rated = msg.rated === true;
       try {
+        // SÉCURITÉ (#123) : vérifier l'amitié AVANT tout test sur le statut de
+        // `to`, sinon des messages d'erreur différents (en ligne / en partie /
+        // hors ligne) permettent de sonder la présence de n'importe quel userId
+        // (les UUID sont publics via la recherche). Un non-ami reçoit toujours la
+        // même réponse, quel que soit son état.
         if (!(await areFriends(user.id, to))) return send(ws, { t: 'error', error: 'Vous ne pouvez défier que vos amis.' });
+        if (await sessionStore.sessionIdForUser(to)) return send(ws, { t: 'error', error: 'Cet ami est déjà en partie.' });
+        if (!(await presenceStore.isOnline(to))) return send(ws, { t: 'error', error: 'Cet ami n’est pas en ligne.' });
         const id = randomUUID();
         const expiresAt = Date.now() + challengeTtlMs;
         const r = getClient();

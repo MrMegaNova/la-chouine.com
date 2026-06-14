@@ -145,6 +145,35 @@ test('défi : refusé hors amitié, hors ligne, ou déjà en partie', async (t) 
   void c3;
 });
 
+test('défi : un non-ami renvoie toujours « amis », sans fuiter son statut (#123)', async (t) => {
+  const { connect } = await setup(t);
+  const c1 = await connect('u1', 'Alice');
+  await connect('u3', 'Zoé'); // non-ami, EN LIGNE
+  await delay(40);
+
+  // (1) Non-ami en ligne → « amis » (pas « en partie » ni « pas en ligne »).
+  c1.send({ t: 'challenge', action: 'invite', to: 'u3', variant: 'classic' });
+  await delay(50);
+  assert.match(lastOf(c1.msgs, 'error').error, /amis/i);
+
+  // (2) Non-ami MIS EN PARTIE → toujours « amis », jamais « déjà en partie »
+  // (sinon on sonderait le statut de n'importe quel userId).
+  await sessionStore.createSession({
+    players: [{ userId: 'u3', name: 'Zoé' }, { userId: 'uY', name: 'Y' }],
+    variant: 'classic', target: 3,
+  });
+  c1.msgs.length = 0;
+  c1.send({ t: 'challenge', action: 'invite', to: 'u3', variant: 'classic' });
+  await delay(50);
+  assert.match(lastOf(c1.msgs, 'error').error, /amis/i, 'aucune fuite du statut « en partie » d’un non-ami');
+
+  // (3) Non-ami HORS LIGNE → même réponse « amis ».
+  c1.msgs.length = 0;
+  c1.send({ t: 'challenge', action: 'invite', to: 'u-inconnu', variant: 'classic' });
+  await delay(50);
+  assert.match(lastOf(c1.msgs, 'error').error, /amis/i);
+});
+
 test('défi : refus notifié, annulation notifiée, expiration automatique', async (t) => {
   const { connect } = await setup(t, { challengeTtlMs: 120 });
   const c1 = await connect('u1', 'Alice');
