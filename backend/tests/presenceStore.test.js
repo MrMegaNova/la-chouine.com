@@ -30,6 +30,19 @@ test('online : un joueur est en ligne tant qu’au moins une instance le déclar
   assert.equal(await presence.onlineCount(), 0);
 });
 
+test('online : un marqueur périmé (instance morte/redéployée) n’empêche pas la détection hors-ligne (#30)', async () => {
+  // Simule une instance disparue (redéploiement, crash, node --watch) : un
+  // marqueur d'un autre instanceId, déjà expiré, traîne dans Redis.
+  await redis.zadd(presence.K.online('u1'), Date.now() - 1000, 'instance-morte');
+  await redis.sadd(presence.K.onlineSet, 'u1');
+  // Avant le correctif, isOnline renvoyait vrai à jamais → ni notif ni grâce.
+  assert.equal(await presence.isOnline('u1'), false, 'marqueur expiré ignoré');
+
+  // Un marqueur encore valide d'une autre instance, lui, compte bien.
+  await redis.zadd(presence.K.online('u1'), Date.now() + 60_000, 'autre-instance');
+  assert.equal(await presence.isOnline('u1'), true);
+});
+
 test('counts : agrège online, file et en partie', async () => {
   await presence.addOnline('u1');
   await presence.addOnline('u2');
