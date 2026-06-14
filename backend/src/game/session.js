@@ -15,6 +15,25 @@ const {
 const { PTS, ORDER } = require('./constants');
 const turnClock = require('./turnClock');
 
+// ── Sérialisation de l'état moteur pour Redis (#31) ───────────────────────────
+// L'état du moteur est presque entièrement JSON-isable, à une exception près :
+// chaque joueur porte `declared`, un Set des annonces déjà posées (engine.js).
+// JSON.stringify le réduirait silencieusement à `{}` (perte des annonces → un
+// joueur pourrait ré-annoncer illégalement après un aller-retour Redis). On
+// l'aplatit en tableau au stockage et on le restaure en Set au chargement.
+function serializeState(state) {
+  return {
+    ...state,
+    players: state.players.map(p => ({ ...p, declared: [...p.declared] })),
+  };
+}
+function deserializeState(state) {
+  return {
+    ...state,
+    players: state.players.map(p => ({ ...p, declared: new Set(p.declared) })),
+  };
+}
+
 class GameSession {
   /**
    * @param {object}  o
@@ -329,6 +348,49 @@ class GameSession {
           : undefined,
       })),
     };
+  }
+
+  // ── Sérialisation de session pour Redis (#31) ───────────────────────────────
+  // État partagé entre instances : toJSON aplatit les Set (nextHandAcks +
+  // players[].declared via serializeState) ; fromJSON reconstruit la session
+  // SANS redistribuer de main (le constructeur, lui, distribue) en restaurant
+  // les Set. Le moteur et l'horloge (objets plats) traversent tels quels.
+  toJSON() {
+    return {
+      id: this.id,
+      players: this.players,
+      variant: this.variant,
+      target: this.target,
+      rated: this.rated,
+      finished: this.finished,
+      matchResult: this.matchResult,
+      lastTrick: this.lastTrick,
+      lastTrickBySeat: this.lastTrickBySeat,
+      lastExchange: this.lastExchange,
+      lastHandResult: this.lastHandResult,
+      nextHandAcks: [...this.nextHandAcks],
+      clock: this.clock,
+      state: serializeState(this.state),
+    };
+  }
+
+  static fromJSON(data) {
+    const s = Object.create(GameSession.prototype);
+    s.id = data.id;
+    s.players = data.players;
+    s.variant = data.variant;
+    s.target = data.target;
+    s.rated = data.rated;
+    s.finished = data.finished;
+    s.matchResult = data.matchResult;
+    s.lastTrick = data.lastTrick;
+    s.lastTrickBySeat = data.lastTrickBySeat;
+    s.lastExchange = data.lastExchange;
+    s.lastHandResult = data.lastHandResult;
+    s.nextHandAcks = new Set(data.nextHandAcks);
+    s.clock = data.clock;
+    s.state = deserializeState(data.state);
+    return s;
   }
 }
 

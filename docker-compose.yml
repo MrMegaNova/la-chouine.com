@@ -24,6 +24,18 @@ services:
       timeout: 5s
       retries: 10
 
+  redis:
+    image: redis:8-alpine
+    restart: always
+    networks:
+      - lachouine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   backend:
     image: ghcr.io/mrmeganova/la-chouine.com/backend:${TAG:-latest}
     restart: always
@@ -40,6 +52,8 @@ services:
       PGPASSWORD:     ${POSTGRES_PASSWORD}
       PGDATABASE:     ${POSTGRES_DB}
       PGSSLMODE:      disable
+      # État temps-réel PvP (file, sessions, présence) — Redis obligatoire (#31).
+      REDIS_URL:      redis://redis:6379
       JWT_SECRET:     ${JWT_SECRET}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
       SMTP_HOST:      ${SMTP_HOST}
@@ -51,6 +65,8 @@ services:
       FRONTEND_URL:   ${FRONTEND_URL}
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   frontend:

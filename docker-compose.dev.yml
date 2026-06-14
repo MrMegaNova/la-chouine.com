@@ -28,6 +28,18 @@ services:
       timeout: 5s
       retries: 10
 
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   backend:
     build:
       context: ./backend
@@ -45,6 +57,7 @@ services:
       PGPASSWORD:     chouine_dev
       PGDATABASE:     chouine_dev
       PGSSLMODE:      disable
+      REDIS_URL:      redis://redis:6379
       JWT_SECRET:     dev_jwt_secret_please_change_in_production
       JWT_EXPIRES_IN: 7d
       SMTP_HOST:      mailhog
@@ -61,6 +74,8 @@ services:
       - "3000:3000"
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   frontend:

@@ -8,14 +8,17 @@ process.env.PGUSER = process.env.PGUSER || 'x';
 process.env.PGPASSWORD = process.env.PGPASSWORD || 'x';
 process.env.PGDATABASE = process.env.PGDATABASE || 'x';
 process.env.PGHOST = process.env.PGHOST || 'localhost';
+process.env.REDIS_URL = process.env.REDIS_URL || 'redis://mock';
 
-const { test } = require('node:test');
+const { test, beforeEach, after } = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('http');
 const { WebSocket } = require('ws');
 
+const { useMockRedis, flush, closeRedis } = require('./helpers/redis');
+const bus = require('../src/realtime/bus');
+const sessionStore = require('../src/realtime/sessionStore');
 const { attachWebSocketServer } = require('../src/realtime/wsServer');
-const registry = require('../src/realtime/sessionRegistry');
 const { signToken } = require('../src/middleware/auth');
 
 const c = (s, r) => ({ s, r });
@@ -23,15 +26,17 @@ const p = (hand) => ({ hand, won: [], declared: new Set(), annonce: 0 });
 const delay = (ms) => new Promise(r => setTimeout(r, ms));
 const once = (em, ev) => new Promise(res => em.once(ev, res));
 
+beforeEach(async () => { const r = useMockRedis(7); await flush(r); await bus.stop(); });
+after(closeRedis);
+
 test('WebSocket : auth, état filtré par joueur, validation et diffusion des coups', async (t) => {
-  registry.reset();
   const server = http.createServer();
-  attachWebSocketServer(server);
+  const handle = await attachWebSocketServer(server);
   await new Promise(r => server.listen(0, r));
   const port = server.address().port;
 
   // Session déterministe : siège 0 doit jouer, phase draw (toute carte légale en entame).
-  const session = registry.createSession({
+  const session = await sessionStore.createSession({
     players: [{ userId: 'u1', name: 'Alice' }, { userId: 'u2', name: 'Bob' }],
     variant: 'classic', target: 3,
   });
@@ -40,6 +45,7 @@ test('WebSocket : auth, état filtré par joueur, validation et diffusion des co
     handOver: false,
     players: [p([c('coeur', 'R'), c('trefle', '8')]), p([c('coeur', '9'), c('carreau', '7')])],
   });
+  await sessionStore.save(session);
 
   const t1 = signToken({ id: 'u1', username: 'Alice' });
   const t2 = signToken({ id: 'u2', username: 'Bob' });
@@ -49,7 +55,7 @@ test('WebSocket : auth, état filtré par joueur, validation et diffusion des co
   ws1.on('message', d => msgs1.push(JSON.parse(d.toString())));
   ws2.on('message', d => msgs2.push(JSON.parse(d.toString())));
 
-  t.after(() => { ws1.close(); ws2.close(); server.close(); });
+  t.after(async () => { ws1.close(); ws2.close(); handle.stop(); server.close(); });
 
   await Promise.all([once(ws1, 'open'), once(ws2, 'open')]);
   await delay(60);
@@ -85,14 +91,13 @@ test('WebSocket : auth, état filtré par joueur, validation et diffusion des co
 });
 
 test('WebSocket : validateUser rejette un token révoqué (#117)', async (t) => {
-  registry.reset();
   const server = http.createServer();
   // En production, validateUser compare la version embarquée dans le JWT à
   // celle du compte (token_version). Ici : tout token de version 0 est révoqué.
-  attachWebSocketServer(server, { validateUser: async (u) => (u.ver ?? 0) >= 1 });
+  const handle = await attachWebSocketServer(server, { validateUser: async (u) => (u.ver ?? 0) >= 1 });
   await new Promise(r => server.listen(0, r));
   const port = server.address().port;
-  t.after(() => server.close());
+  t.after(() => { handle.stop(); server.close(); });
 
   // Token « ancien » (ver 0 par défaut) → refusé comme une signature invalide.
   const oldToken = signToken({ id: 'u1', username: 'Alice' });
@@ -112,13 +117,12 @@ test('WebSocket : validateUser rejette un token révoqué (#117)', async (t) => 
 });
 
 test('WebSocket : rate-limit des messages — flood rejeté puis connexion fermée (#124)', async (t) => {
-  registry.reset();
   const server = http.createServer();
   // Budget volontairement petit pour un test rapide et déterministe.
-  attachWebSocketServer(server, { msgRatePerSec: 5, msgBurst: 5, msgFloodKick: 10 });
+  const handle = await attachWebSocketServer(server, { msgRatePerSec: 5, msgBurst: 5, msgFloodKick: 10 });
   await new Promise(r => server.listen(0, r));
   const port = server.address().port;
-  t.after(() => server.close());
+  t.after(() => { handle.stop(); server.close(); });
 
   const token = signToken({ id: 'uflood', username: 'Flood' });
   const ws = new WebSocket(`ws://localhost:${port}/ws?token=${token}`);
@@ -138,12 +142,11 @@ test('WebSocket : rate-limit des messages — flood rejeté puis connexion ferm�
 });
 
 test('WebSocket : le jeu normal n’est jamais rate-limité (#124)', async (t) => {
-  registry.reset();
   const server = http.createServer();
-  attachWebSocketServer(server);
+  const handle = await attachWebSocketServer(server);
   await new Promise(r => server.listen(0, r));
   const port = server.address().port;
-  t.after(() => server.close());
+  t.after(() => { handle.stop(); server.close(); });
 
   const token = signToken({ id: 'ucalm', username: 'Calm' });
   const ws = new WebSocket(`ws://localhost:${port}/ws?token=${token}`);

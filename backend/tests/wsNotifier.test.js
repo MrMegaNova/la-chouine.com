@@ -10,25 +10,29 @@ process.env.PGUSER = process.env.PGUSER || 'x';
 process.env.PGPASSWORD = process.env.PGPASSWORD || 'x';
 process.env.PGDATABASE = process.env.PGDATABASE || 'x';
 process.env.PGHOST = process.env.PGHOST || 'localhost';
+process.env.REDIS_URL = process.env.REDIS_URL || 'redis://mock';
 
-const { test } = require('node:test');
+const { test, beforeEach, after } = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('http');
 const { WebSocket } = require('ws');
 
+const { useMockRedis, flush, closeRedis } = require('./helpers/redis');
+const bus = require('../src/realtime/bus');
 const { attachWebSocketServer } = require('../src/realtime/wsServer');
-const registry = require('../src/realtime/sessionRegistry');
 const notifier = require('../src/realtime/notifier');
 const { signToken } = require('../src/middleware/auth');
 
 const delay = (ms) => new Promise(r => setTimeout(r, ms));
 const once = (em, ev) => new Promise(res => em.once(ev, res));
 
+beforeEach(async () => { const r = useMockRedis(9); await flush(r); await bus.stop(); });
+after(closeRedis);
+
 test('notifier : délivre au bon destinataire (tous ses onglets), silencieux hors ligne', async (t) => {
-  registry.reset();
   notifier.reset();
   const server = http.createServer();
-  const rt = attachWebSocketServer(server, { heartbeatMs: 0 });
+  const rt = await attachWebSocketServer(server, { heartbeatMs: 0 });
   await new Promise(r => server.listen(0, r));
   const port = server.address().port;
 
@@ -43,7 +47,7 @@ test('notifier : délivre au bon destinataire (tous ses onglets), silencieux hor
   const tab1 = await connect('u1', 'Alice');
   const tab2 = await connect('u1', 'Alice');
   const c2 = await connect('u2', 'Bob');
-  t.after(() => { rt.stop(); server.close(); });
+  t.after(async () => { rt.stop(); server.close(); await closeRedis(); });
   await delay(40);
 
   // (1) Notification à u1 : reçue sur SES deux onglets, pas chez u2.
