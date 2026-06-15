@@ -11,6 +11,7 @@
     "dev": "node --watch src/server.js",
     "start:docker-dev": "node src/db/migrate.js && node --watch src/server.js",
     "migrate": "node src/db/migrate.js",
+    "lint": "eslint .",
     "test": "sh -c 'if [ -f .env.test ]; then set -a; . ./.env.test; set +a; fi; : \"${REDIS_URL:=redis://mock}\"; export REDIS_URL; node --test tests/*.test.js'"
   },
   "dependencies": {
@@ -29,6 +30,10 @@
     "ws": "^8.18.0"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.4",
+    "eslint": "^9.39.4",
+    "eslint-plugin-n": "^18.1.0",
+    "globals": "^17.6.0",
     "ioredis-mock": "^8.13.1",
     "supertest": "^7.0.0"
   }

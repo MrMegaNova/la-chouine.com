@@ -72,6 +72,10 @@ jobs:
         working-directory: backend
         run: npm ci
 
+      - name: Lint
+        working-directory: backend
+        run: npm run lint
+
       - name: Run database migrations
         working-directory: backend
         run: npm run migrate
@@ -103,6 +107,10 @@ jobs:
       - name: Type check
         working-directory: frontend
         run: npm run type-check
+
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint
 
       - name: Run tests
         working-directory: frontend
