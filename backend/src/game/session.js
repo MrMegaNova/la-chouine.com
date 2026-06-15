@@ -243,7 +243,7 @@ class GameSession {
 
   /** Échéance atteinte : joue un coup automatique (carte légale la moins chère)
    *  et compte une pénalité ; au quota, clôt par forfait. */
-  clockTimeout(now = Date.now()) {
+  clockTimeout(_now = Date.now()) {
     if (!this.clock || this.finished || this.state.handOver) return { ok: false };
     const seat = this.clock.seat;
     if (seat === null) return { ok: false };
