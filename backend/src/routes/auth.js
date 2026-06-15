@@ -3,7 +3,7 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
-const { query, withTransaction } = require('../db');
+const { query } = require('../db');
 const { signToken } = require('../middleware/auth');
 const { sendVerificationEmail, sendPasswordResetEmail, logMailError } = require('../services/email');
 const { isUsernameAllowed } = require('../services/usernameFilter');
@@ -19,7 +19,7 @@ const router = express.Router();
 
 // ─── Validation ───────────────────────────────────────────────────────────────
 
-const USERNAME_RE = /^[A-Za-z0-9_\-]{2,30}$/;
+const USERNAME_RE = /^[A-Za-z0-9_-]{2,30}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function validateRegister(body) {
