@@ -28,6 +28,10 @@ export default defineConfig({
     emptyOutDir: true,
   },
   test: {
-    environment: 'node', // logique pure (moteur de jeu) — pas besoin de DOM
+    // Env par défaut = node (logique pure : moteur, stores). Les tests de
+    // composants React (#129) optent pour jsdom via `// @vitest-environment
+    // jsdom` en tête de fichier.
+    environment: 'node',
+    setupFiles: ['./src/test/setup.ts'],
   },
 });

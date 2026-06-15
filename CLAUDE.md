@@ -6,7 +6,7 @@ Jeu de cartes français (la Chouine) en ligne, jouable contre l'IA ou en PvP cla
 
 ## Stack
 
-- **Frontend** : Vite 5, React 18, TypeScript, Zustand (+ persist), React Router v6, SCSS, Vitest.
+- **Frontend** : Vite 5, React 18, TypeScript, Zustand (+ persist), React Router v6, SCSS, Vitest. Tests de composants en **React Testing Library + jsdom** (#129) : env Vitest par défaut = `node` (logique pure), un fichier de composant opte pour le DOM via `// @vitest-environment jsdom` en tête ; setup global `src/test/setup.ts` (matchers jest-dom + cleanup).
   - `frontend/src/game/engine.ts` — moteur de jeu (TS).
   - `frontend/src/store/` — stores Zustand (`gameStore`, `onlineStore`, `authStore`, `soundStore`).
 - **Backend** : Node 24, Express 4, PostgreSQL (`pg`), Redis (`ioredis`), WebSocket (`ws`), JWT, bcryptjs, nodemailer, pino.
