@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { friendsApi, usersApi, type Friend, type FriendRequest, type SearchUser } from '@/api/client';
@@ -26,23 +26,23 @@ export default function Friends() {
   // de restaurer la session → redirection vers /connexion qui, token présent,
   // renvoie à l'accueil (#112). On ne redirige que si l'on est vraiment
   // déconnecté (pas de token).
-  useEffect(() => { if (!token) { navigate('/connexion'); return; } load(); }, [token]);
-
-  // La présence (#46) évolue sans nous : recharge au retour sur l'onglet.
-  useEffect(() => {
-    const onFocus = () => load();
-    window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
-  }, [token]);
-
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!token) return;
     const [fr, rq] = await Promise.all([friendsApi.list(token), friendsApi.requests(token)]);
     if (fr.ok) setFriends(fr.data);
     if (rq.ok) setRequests(rq.data);
     // Garde le badge du header (#44) aligné sur ce que la page vient de lire.
     useNotificationStore.getState().refresh(token);
-  };
+  }, [token]);
+
+  useEffect(() => { if (!token) { navigate('/connexion'); return; } load(); }, [token, navigate, load]);
+
+  // La présence (#46) évolue sans nous : recharge au retour sur l'onglet.
+  useEffect(() => {
+    const onFocus = () => load();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [load]);
 
   const toast = (msg: string) => { setToastMsg(msg); setTimeout(() => setToastMsg(''), 2500); };
 
