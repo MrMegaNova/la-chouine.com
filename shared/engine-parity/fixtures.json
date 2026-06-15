@@ -1,0 +1,60 @@
+{
+  "_comment": "Fixtures de parité moteur (#128) — consommées par engine.ts (vitest) ET engine.js (node:test) via shared/engine-parity/runner.js. Couvre : donne (invariants), résolution de pli, coups légaux, annonces, échange du 7, décompte. Toute divergence de règle entre les deux moteurs casse la CI des deux côtés.",
+
+  "cardBeats": [
+    { "name": "même couleur : l'ordre décide (A bat R)", "fn": "cardBeats", "current": { "s": "pique", "r": "R" }, "challenger": { "s": "pique", "r": "A" }, "trump": "coeur", "expect": true },
+    { "name": "même couleur : le 10 bat le R (ordre Chouine)", "fn": "cardBeats", "current": { "s": "pique", "r": "10" }, "challenger": { "s": "pique", "r": "R" }, "trump": null, "expect": false },
+    { "name": "l'atout bat une non-atout d'une autre couleur", "fn": "cardBeats", "current": { "s": "pique", "r": "A" }, "challenger": { "s": "coeur", "r": "7" }, "trump": "coeur", "expect": true },
+    { "name": "une non-atout ne bat pas l'atout en place", "fn": "cardBeats", "current": { "s": "coeur", "r": "7" }, "challenger": { "s": "pique", "r": "A" }, "trump": "coeur", "expect": false },
+    { "name": "couleurs différentes, aucune atout : pas de prise", "fn": "cardBeats", "current": { "s": "pique", "r": "A" }, "challenger": { "s": "carreau", "r": "A" }, "trump": "coeur", "expect": false }
+  ],
+
+  "resolveTrickWinner": [
+    { "name": "même couleur, plus forte l'emporte", "fn": "resolveTrickWinner", "trump": "coeur", "trick": [ { "p": 0, "card": { "s": "pique", "r": "R" } }, { "p": 1, "card": { "s": "pique", "r": "A" } } ], "expect": 1 },
+    { "name": "coupe à l'atout", "fn": "resolveTrickWinner", "trump": "coeur", "trick": [ { "p": 0, "card": { "s": "pique", "r": "A" } }, { "p": 1, "card": { "s": "coeur", "r": "7" } } ], "expect": 1 },
+    { "name": "défausse hors couleur : l'entame gagne", "fn": "resolveTrickWinner", "trump": "coeur", "trick": [ { "p": 1, "card": { "s": "pique", "r": "A" } }, { "p": 0, "card": { "s": "carreau", "r": "A" } } ], "expect": 1 }
+  ],
+
+  "getLegalMoves": [
+    { "name": "entame : toute la main est jouable", "fn": "getLegalMoves", "seat": 0, "state": { "playerCount": 2, "phase": "draw", "trump": "coeur", "trick": [], "players": [ { "hand": [ { "s": "pique", "r": "7" }, { "s": "coeur", "r": "A" } ] }, { "hand": [] } ] }, "expect": [ { "s": "pique", "r": "7" }, { "s": "coeur", "r": "A" } ] },
+    { "name": "phase de pioche : pas d'obligation de fournir", "fn": "getLegalMoves", "seat": 0, "state": { "playerCount": 2, "phase": "draw", "trump": "coeur", "trick": [ { "p": 1, "card": { "s": "pique", "r": "R" } } ], "players": [ { "hand": [ { "s": "coeur", "r": "7" }, { "s": "carreau", "r": "8" } ] }, { "hand": [] } ] }, "expect": [ { "s": "coeur", "r": "7" }, { "s": "carreau", "r": "8" } ] },
+    { "name": "phase finale : on doit fournir la couleur demandée", "fn": "getLegalMoves", "seat": 0, "state": { "playerCount": 2, "phase": "final", "trump": "coeur", "trick": [ { "p": 1, "card": { "s": "pique", "r": "8" } } ], "players": [ { "hand": [ { "s": "pique", "r": "7" }, { "s": "pique", "r": "D" }, { "s": "coeur", "r": "A" } ] }, { "hand": [] } ] }, "expect": [ { "s": "pique", "r": "7" }, { "s": "pique", "r": "D" } ] },
+    { "name": "phase finale, atout demandé : monter si possible", "fn": "getLegalMoves", "seat": 0, "state": { "playerCount": 2, "phase": "final", "trump": "coeur", "trick": [ { "p": 1, "card": { "s": "coeur", "r": "D" } } ], "players": [ { "hand": [ { "s": "coeur", "r": "V" }, { "s": "coeur", "r": "R" }, { "s": "pique", "r": "A" } ] }, { "hand": [] } ] }, "expect": [ { "s": "coeur", "r": "R" } ] },
+    { "name": "phase finale, sans la couleur : on doit couper", "fn": "getLegalMoves", "seat": 0, "state": { "playerCount": 2, "phase": "final", "trump": "coeur", "trick": [ { "p": 1, "card": { "s": "pique", "r": "8" } } ], "players": [ { "hand": [ { "s": "carreau", "r": "7" }, { "s": "coeur", "r": "9" } ] }, { "hand": [] } ] }, "expect": [ { "s": "coeur", "r": "9" } ] },
+    { "name": "phase finale, ni couleur ni atout : on se défausse librement", "fn": "getLegalMoves", "seat": 0, "state": { "playerCount": 2, "phase": "final", "trump": "coeur", "trick": [ { "p": 1, "card": { "s": "pique", "r": "8" } } ], "players": [ { "hand": [ { "s": "carreau", "r": "7" }, { "s": "trefle", "r": "9" } ] }, { "hand": [] } ] }, "expect": [ { "s": "carreau", "r": "7" }, { "s": "trefle", "r": "9" } ] }
+  ],
+
+  "getAvailableCombos": [
+    { "name": "mariage hors atout (valeur simple)", "fn": "getAvailableCombos", "seat": 0, "state": { "playerCount": 2, "variant": "classic", "trump": "pique", "players": [ { "hand": [ { "s": "coeur", "r": "R" }, { "s": "coeur", "r": "D" }, { "s": "pique", "r": "7" }, { "s": "carreau", "r": "8" }, { "s": "trefle", "r": "9" } ], "declared": [] }, { "hand": [], "declared": [] } ] }, "expect": [ { "type": "mariage", "suit": "coeur", "sig": "mariage|coeur", "value": 20, "setsTrump": false } ] },
+    { "name": "tierce dans la couleur d'atout (valeur doublée)", "fn": "getAvailableCombos", "seat": 0, "state": { "playerCount": 2, "variant": "classic", "trump": "pique", "players": [ { "hand": [ { "s": "pique", "r": "R" }, { "s": "pique", "r": "D" }, { "s": "pique", "r": "V" }, { "s": "coeur", "r": "8" }, { "s": "carreau", "r": "9" } ], "declared": [] }, { "hand": [], "declared": [] } ] }, "expect": [ { "type": "tierce", "suit": "pique", "sig": "tierce|pique", "value": 60, "setsTrump": false } ] },
+    { "name": "quinte : cinq brisques", "fn": "getAvailableCombos", "seat": 0, "state": { "playerCount": 2, "variant": "classic", "trump": "trefle", "players": [ { "hand": [ { "s": "pique", "r": "A" }, { "s": "pique", "r": "10" }, { "s": "coeur", "r": "A" }, { "s": "coeur", "r": "10" }, { "s": "carreau", "r": "A" } ], "declared": [] }, { "hand": [], "declared": [] } ] }, "expect": [ { "type": "quinte", "suit": null, "sig": "quinte", "value": 50, "setsTrump": false } ] },
+    { "name": "annonce déjà posée : non reproposée", "fn": "getAvailableCombos", "seat": 0, "state": { "playerCount": 2, "variant": "classic", "trump": "pique", "players": [ { "hand": [ { "s": "coeur", "r": "R" }, { "s": "coeur", "r": "D" }, { "s": "pique", "r": "7" }, { "s": "carreau", "r": "8" }, { "s": "trefle", "r": "9" } ], "declared": [ "mariage|coeur" ] }, { "hand": [], "declared": [] } ] }, "expect": [] },
+    { "name": "mondoubleau sans atout : l'annonce fixe l'atout (setsTrump)", "fn": "getAvailableCombos", "seat": 0, "state": { "playerCount": 2, "variant": "mondoubleau", "trump": null, "players": [ { "hand": [ { "s": "coeur", "r": "R" }, { "s": "coeur", "r": "D" }, { "s": "pique", "r": "7" }, { "s": "carreau", "r": "8" }, { "s": "trefle", "r": "9" } ], "declared": [] }, { "hand": [], "declared": [] } ] }, "expect": [ { "type": "mariage", "suit": "coeur", "sig": "mariage|coeur", "value": 20, "setsTrump": true } ] }
+  ],
+
+  "applyExchangeSeven": [
+    { "name": "échange du 7 d'atout contre la retourne", "fn": "applyExchangeSeven", "seat": 0, "state": { "playerCount": 2, "phase": "draw", "trump": "coeur", "turnUp": { "s": "coeur", "r": "R" }, "players": [ { "hand": [ { "s": "coeur", "r": "7" }, { "s": "pique", "r": "8" }, { "s": "carreau", "r": "9" } ] }, { "hand": [] } ] }, "expect": { "turnUp": { "s": "coeur", "r": "7" }, "hand": [ { "s": "pique", "r": "8" }, { "s": "coeur", "r": "R" }, { "s": "carreau", "r": "9" } ] } },
+    { "name": "pas de 7 d'atout en main : aucun changement", "fn": "applyExchangeSeven", "seat": 0, "state": { "playerCount": 2, "phase": "draw", "trump": "coeur", "turnUp": { "s": "coeur", "r": "R" }, "players": [ { "hand": [ { "s": "pique", "r": "8" }, { "s": "carreau", "r": "9" } ] }, { "hand": [] } ] }, "expect": { "turnUp": { "s": "coeur", "r": "R" }, "hand": [ { "s": "pique", "r": "8" }, { "s": "carreau", "r": "9" } ] } },
+    { "name": "hors phase de pioche : échange refusé", "fn": "applyExchangeSeven", "seat": 0, "state": { "playerCount": 2, "phase": "final", "trump": "coeur", "turnUp": { "s": "coeur", "r": "R" }, "players": [ { "hand": [ { "s": "coeur", "r": "7" }, { "s": "pique", "r": "8" } ] }, { "hand": [] } ] }, "expect": { "turnUp": { "s": "coeur", "r": "R" }, "hand": [ { "s": "coeur", "r": "7" }, { "s": "pique", "r": "8" } ] } }
+  ],
+
+  "computeHandResult": [
+    { "name": "décompte simple : brisques + annonce + dix de der", "fn": "computeHandResult", "state": { "target": 3, "scores": [ 0, 0 ], "lastTrickWinner": 0, "players": [ { "won": [ { "s": "pique", "r": "A" }, { "s": "pique", "r": "10" } ], "annonce": 0 }, { "won": [ { "s": "coeur", "r": "R" } ], "annonce": 20 } ] }, "expect": { "cp": [ 21, 4 ], "ann": [ 0, 20 ], "der": 0, "tot": [ 31, 24 ], "winner": 0, "forced": false, "matchWinner": null } },
+    { "name": "égalité parfaite : aucun vainqueur (main rejouée)", "fn": "computeHandResult", "state": { "target": 3, "scores": [ 0, 0 ], "lastTrickWinner": null, "players": [ { "won": [ { "s": "pique", "r": "10" } ], "annonce": 0 }, { "won": [ { "s": "coeur", "r": "10" } ], "annonce": 0 } ] }, "expect": { "cp": [ 10, 10 ], "ann": [ 0, 0 ], "der": null, "tot": [ 10, 10 ], "winner": -1, "forced": false, "matchWinner": null } },
+    { "name": "la manche fait gagner le match (matchWinner)", "fn": "computeHandResult", "state": { "target": 3, "scores": [ 2, 0 ], "lastTrickWinner": 0, "players": [ { "won": [ { "s": "pique", "r": "A" } ], "annonce": 0 }, { "won": [], "annonce": 0 } ] }, "expect": { "cp": [ 11, 0 ], "ann": [ 0, 0 ], "der": 0, "tot": [ 21, 0 ], "winner": 0, "forced": false, "matchWinner": 0 } },
+    { "name": "vainqueur forcé (chouine / forfait)", "fn": "computeHandResult", "forceWinner": 1, "state": { "target": 3, "scores": [ 0, 0 ], "lastTrickWinner": 0, "players": [ { "won": [ { "s": "pique", "r": "A" } ], "annonce": 0 }, { "won": [], "annonce": 0 } ] }, "expect": { "cp": [ 11, 0 ], "ann": [ 0, 0 ], "der": 0, "tot": [ 21, 0 ], "winner": 1, "forced": true, "matchWinner": null } }
+  ],
+
+  "shouldAnnounceAuSept": [
+    { "name": "talon presque vide + 7 d'atout en main : annonce possible", "fn": "shouldAnnounceAuSept", "state": { "sevenAnnounced": false, "trump": "coeur", "turnUp": { "s": "coeur", "r": "R" }, "turn": 0, "trick": [], "talon": [ { "s": "pique", "r": "7" } ], "players": [ { "hand": [ { "s": "coeur", "r": "7" }, { "s": "pique", "r": "8" } ] }, { "hand": [] } ] }, "expect": true },
+    { "name": "talon encore fourni : trop tôt", "fn": "shouldAnnounceAuSept", "state": { "sevenAnnounced": false, "trump": "coeur", "turnUp": { "s": "coeur", "r": "R" }, "turn": 0, "trick": [], "talon": [ { "s": "pique", "r": "7" }, { "s": "pique", "r": "8" }, { "s": "pique", "r": "9" } ], "players": [ { "hand": [ { "s": "coeur", "r": "7" } ] }, { "hand": [] } ] }, "expect": false },
+    { "name": "déjà annoncé : non répété", "fn": "shouldAnnounceAuSept", "state": { "sevenAnnounced": true, "trump": "coeur", "turnUp": { "s": "coeur", "r": "R" }, "turn": 0, "trick": [], "talon": [ { "s": "pique", "r": "7" } ], "players": [ { "hand": [ { "s": "coeur", "r": "7" } ] }, { "hand": [] } ] }, "expect": false }
+  ],
+
+  "dealInvariants": [
+    { "name": "donne classique 2 joueurs", "fn": "dealInvariants", "variant": "classic", "playerCount": 2, "iterations": 50, "expect": { "handsOk": true, "trumpOk": true, "talonOk": true, "conservationOk": true } },
+    { "name": "donne mondoubleau 2 joueurs (sans atout)", "fn": "dealInvariants", "variant": "mondoubleau", "playerCount": 2, "iterations": 50, "expect": { "handsOk": true, "trumpOk": true, "talonOk": true, "conservationOk": true } },
+    { "name": "donne classique 3 joueurs", "fn": "dealInvariants", "variant": "classic", "playerCount": 3, "iterations": 50, "expect": { "handsOk": true, "trumpOk": true, "talonOk": true, "conservationOk": true } },
+    { "name": "donne classique 4 joueurs", "fn": "dealInvariants", "variant": "classic", "playerCount": 4, "iterations": 50, "expect": { "handsOk": true, "trumpOk": true, "talonOk": true, "conservationOk": true } }
+  ]
+}
