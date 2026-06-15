@@ -343,7 +343,7 @@ export function applyResolveTrick(game: GameState): GameState {
   const winner = resolveTrickWinner(game.trick, game.trump);
 
   const wonCards = game.trick.map(t => t.card);
-  let players = game.players.map((p, i) =>
+  const players = game.players.map((p, i) =>
     i === winner ? { ...p, won: [...p.won, ...wonCards] } : p
   );
 
@@ -378,7 +378,7 @@ export function applyResolveTrick(game: GameState): GameState {
 }
 
 function drawCardsAfterTrick(game: GameState, winner: number): GameState {
-  let talon = [...game.talon];
+  const talon = [...game.talon];
   let turnUp = game.turnUp;
   const players = game.players.map(p => ({ ...p, hand: [...p.hand] }));
 

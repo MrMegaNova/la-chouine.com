@@ -63,7 +63,6 @@ app.use('/api/online',  apiLimiter,  onlineRoutes);
 
 app.use((_req, res) => res.status(404).json({ error: 'Endpoint introuvable.' }));
 
-// eslint-disable-next-line no-unused-vars
 app.use((err, req, res, _next) => {
   (req.log || logger).error({ err }, 'Erreur non gérée');
   res.status(500).json({ error: 'Erreur interne du serveur.' });

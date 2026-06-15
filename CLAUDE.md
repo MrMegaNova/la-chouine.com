@@ -28,13 +28,17 @@ Jeu de cartes français (la Chouine) en ligne, jouable contre l'IA ou en PvP cla
 ```bash
 # Backend
 cd backend && npm test        # node --test (charge .env.test si présent)
+cd backend && npm run lint    # eslint (config Node + plugin n) — bloquant en CI
 cd backend && npm run dev
 
 # Frontend
 cd frontend && npm run build  # tsc && vite build (le tsc bloque sur erreurs de type)
+cd frontend && npm run lint   # eslint (typescript-eslint + react-hooks v5) — bloquant en CI
 cd frontend && npm test       # vitest run
 cd frontend && npm run dev
 ```
+
+ESLint (#127) : un job **Lint** bloquant tourne dans les jobs Backend et Frontend de la CI. `react-hooks` est **épinglé en v5** (règles canoniques `rules-of-hooks` + `exhaustive-deps`) ; les règles expérimentales de la v7 (`set-state-in-effect`, `immutability`) ne sont pas adoptées. `no-explicit-any` est en `warn` (échappatoires assumées : composant générique `BtnGroup`, payloads WS non typés).
 
 ## Workflow (issue → PR → release)
 
@@ -47,7 +51,7 @@ cd frontend && npm run dev
 
 ## CI (GitHub Actions)
 
-Sur push `main` ET pull_request : jobs **Backend** (+ Postgres, `NODE_ENV=test`), **Frontend** (build + vitest), **npm-audit**.
+Sur push `main` ET pull_request : jobs **Backend** (lint + Postgres + tests, `NODE_ENV=test`), **Frontend** (type-check + lint + vitest + build), **npm-audit**.
 
 ## Sous-agents (`.claude/agents/`)
 

@@ -75,7 +75,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const legal = getLegalMoves(game, seat);
     if (!legal.includes(card)) return;
 
-    let next = applyPlayCard(game, seat, card);
+    const next = applyPlayCard(game, seat, card);
 
     if (next.trick.length === next.playerCount) {
       set({ game: next });
