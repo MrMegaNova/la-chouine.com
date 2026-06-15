@@ -1,5 +1,10 @@
 const BASE = '/api';
 
+// Délai max d'une requête (#131) : sans borne, un backend qui ne répond pas
+// laisse l'UI en chargement infini (le `catch` ne couvre que l'échec réseau
+// immédiat). `AbortSignal.timeout` annule la requête au-delà de ce délai.
+const TIMEOUT_MS = 10_000;
+
 interface ApiResponse<T> {
   ok: boolean;
   status: number;
@@ -19,11 +24,17 @@ async function apiCall<T = Record<string, unknown>>(
       method,
       headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal: AbortSignal.timeout(TIMEOUT_MS),
     });
     const data = await res.json().catch(() => ({}) as T);
     return { ok: res.ok, status: res.status, data: data as T };
-  } catch {
-    return { ok: false, status: 0, data: { error: 'Serveur indisponible.' } as T };
+  } catch (err) {
+    // `AbortSignal.timeout` rejette avec une DOMException `TimeoutError` :
+    // message dédié pour distinguer un serveur lent d'un serveur injoignable.
+    const error = err instanceof DOMException && err.name === 'TimeoutError'
+      ? 'Délai dépassé.'
+      : 'Serveur indisponible.';
+    return { ok: false, status: 0, data: { error } as T };
   }
 }
 
