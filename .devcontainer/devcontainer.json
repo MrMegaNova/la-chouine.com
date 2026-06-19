@@ -23,6 +23,7 @@
         "eamodio.gitlens"
       ],
       "settings": {
+        "remote.autoForwardPorts": false,
         "editor.formatOnSave": true,
         "editor.defaultFormatter": null,
         "editor.codeActionsOnSave": {
