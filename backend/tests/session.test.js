@@ -20,6 +20,58 @@ function mkSession(overrides = {}) {
   return sess;
 }
 
+test('coupe (#201) : la partie démarre en phase cut, sans 1ʳᵉ main distribuée', () => {
+  const sess = new GameSession({
+    id: 't', variant: 'classic', target: 3,
+    players: [{ userId: 'u1', name: 'Alice' }, { userId: 'u2', name: 'Bob' }],
+  });
+  assert.equal(sess.state.phase, 'cut');
+  assert.equal(sess.state.handNo, 0, 'aucune main distribuée');
+  assert.deepEqual(sess.state.cut.picks, [null, null]);
+  assert.equal(sess.state.players[0].hand.length, 0);
+  // Le snapshot expose la coupe (cartes révélées par siège) sans le paquet caché.
+  const snap = sess.snapshotFor('u1');
+  assert.deepEqual(snap.cut.picks, [null, null]);
+  assert.equal(snap.cut.deck, undefined, 'le paquet caché ne fuit jamais');
+});
+
+test('coupe (#201) : chaque siège pioche, la plus petite carte désigne le donneur', () => {
+  const sess = new GameSession({
+    id: 't', variant: 'classic', target: 3,
+    players: [{ userId: 'u1', name: 'Alice' }, { userId: 'u2', name: 'Bob' }],
+  });
+  // (1) Premier tirage : carte révélée pour le siège 0, toujours en phase cut.
+  assert.ok(sess.applyAction('u1', { type: 'cut' }).ok);
+  assert.equal(sess.state.phase, 'cut');
+  assert.ok(sess.state.cut.picks[0], 'le siège 0 a tiré');
+  assert.equal(sess.state.cut.picks[1], null);
+  // (2) Re-piocher pour le même siège est refusé.
+  assert.equal(sess.applyAction('u1', { type: 'cut' }).ok, false);
+  // (3) Second tirage : la coupe se termine, la 1ʳᵉ main est distribuée.
+  assert.ok(sess.applyAction('u2', { type: 'cut' }).ok);
+  assert.equal(sess.state.phase, 'draw');
+  assert.equal(sess.state.handNo, 1);
+  assert.equal(sess.state.players[0].hand.length, 5);
+  assert.equal(sess.state.players[1].hand.length, 5);
+  // Le donneur est dans la plage valide ; (4) piocher après la coupe est refusé.
+  assert.ok(sess.state.dealer === 0 || sess.state.dealer === 1);
+  assert.equal(sess.applyAction('u1', { type: 'cut' }).ok, false);
+});
+
+test('coupe (#201) : cutTimeout fait perdre le siège qui n’a pas pioché', () => {
+  const sess = new GameSession({
+    id: 't', variant: 'classic', target: 3,
+    players: [{ userId: 'u1', name: 'Alice' }, { userId: 'u2', name: 'Bob' }],
+  });
+  sess.applyAction('u1', { type: 'cut' }); // seul le siège 0 a pioché
+  const res = sess.cutTimeout();
+  assert.ok(res.ok);
+  assert.equal(res.seat, 1, 'le siège inactif est forfait');
+  assert.equal(sess.finished, true);
+  assert.equal(sess.matchResult.winnerSeat, 0);
+  assert.equal(sess.matchResult.forfeit.reason, 'timeout');
+});
+
 test('snapshotFor : main du joueur visible, main adverse masquée (décompte seulement)', () => {
   const sess = mkSession({
     players: [p([c('pique', 'A'), c('coeur', '7')]), p([c('pique', 'R')])],

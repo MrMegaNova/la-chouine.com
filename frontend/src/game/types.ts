@@ -2,7 +2,7 @@ export type Suit = 'pique' | 'coeur' | 'carreau' | 'trefle';
 export type Rank = '7' | '8' | '9' | '10' | 'V' | 'D' | 'R' | 'A';
 export type Variant = 'classic' | 'mondoubleau';
 export type Mode = 'ai' | 'local' | 'friend' | 'online';
-export type Phase = 'draw' | 'final';
+export type Phase = 'cut' | 'draw' | 'final';
 export type Difficulty = 'easy' | 'normal' | 'hard';
 
 export interface Card {
@@ -64,6 +64,11 @@ export interface GameState {
   // Dernière annonce déclarée : ses cartes sont étalées sur le tapis (#77).
   lastAnnounce: { seat: number; sig: string; label: string; cards: Card[] } | null;
   sevenAnnounced: boolean;
+  // Phase de la coupe (#201) : tirage interactif du donneur au tout premier
+  // coup du match. `deck` est le paquet mélangé caché (le moteur détermine la
+  // carte tirée, jamais le client) ; `picks[seat]` = carte révélée par ce
+  // siège, `null` tant qu'il n'a pas pioché. Vidé une fois en phase `draw`.
+  cut: { deck: Card[]; picks: (Card | null)[] };
 }
 
 export interface GameOpts {

@@ -6,6 +6,7 @@ import { SUIT_SYMBOL } from '@/game/constants';
 import { PlayingCard } from './PlayingCard';
 import { HandResult } from './HandResult';
 import { TurnTimer } from './TurnTimer';
+import { DealerCut } from './DealerCut';
 import type { Card, Combo, GameState, HandResult as HandResultType } from '@/game/types';
 import styles from './GameTable.module.scss';
 
@@ -18,9 +19,12 @@ export interface GameController {
   playCard: (seat: number, card: Card) => void;
   declareCombo: (seat: number, sig: string, card?: Card) => void;
   exchangeSeven: (seat: number) => void;
+  drawCutCard: (seat: number) => void;
   revealForPlayer: (seat: number) => void;
   quitGame: () => void;
   clearPendingResult: () => void;
+  // Échéance de la coupe (#201) pour le compte à rebours en ligne (sinon null).
+  cutDeadline?: number | null;
   // Callbacks de fin de coup/match en mode online (sinon comportement local).
   online?: {
     nextHand: () => void;
@@ -37,7 +41,7 @@ export function GameTable({ controller }: { controller?: GameController } = {}) 
   const localStore = useGameStore();
   const ctrl: GameController = controller ?? localStore;
   const { game, pendingResult, toast, playCard, declareCombo, exchangeSeven,
-    revealForPlayer, quitGame, clearPendingResult } = ctrl;
+    drawCutCard, revealForPlayer, quitGame, clearPendingResult } = ctrl;
   const { user, token } = useAuthStore();
   const toastRef = useRef<HTMLDivElement>(null);
   // Consultation des plis (#74/#95) : 'mine' = ses propres plis, 'opp' = le
@@ -77,6 +81,26 @@ export function GameTable({ controller }: { controller?: GameController } = {}) 
   useEffect(() => { setPendingAnnounce(null); }, [turnNow, trickLen]);
 
   if (!game) return null;
+
+  // Phase de la coupe (#201) : avant la 1ʳᵉ donne, on affiche le tirage du
+  // donneur plutôt que la table. L'humain pioche son slot ; en local, c'est le
+  // siège dont c'est le tour de regarder (viewPlayer), sinon le siège 0.
+  if (game.phase === 'cut') {
+    // En pass-and-play local, on fait piocher chaque siège humain à tour de
+    // rôle : on cible le premier siège pas encore servi. En ligne / vs IA, le
+    // joueur local est le siège 0 (les sièges IA piochent tout seuls).
+    const cutSeat = game.mode === 'local'
+      ? Math.max(0, game.cut.picks.findIndex(p => p === null))
+      : 0;
+    return (
+      <DealerCut
+        game={game}
+        me={cutSeat}
+        onDraw={(seat) => drawCutCard(seat)}
+        deadline={ctrl.cutDeadline ?? null}
+      />
+    );
+  }
 
   const me = game.viewPlayer;
   const n = game.playerCount;

@@ -40,6 +40,11 @@ test('round-trip : les Set declared et nextHandAcks sont restaurés en Set', () 
 
 test('round-trip : après un coup joué, l’état est préservé et reste jouable', () => {
   const s = newSession();
+  // Coupe interactive (#201) : les deux sièges piochent avant la 1ʳᵉ donne.
+  assert.ok(s.applyAction('u1', { type: 'cut' }).ok);
+  assert.ok(s.applyAction('u2', { type: 'cut' }).ok);
+  assert.equal(s.state.phase !== 'cut', true, 'la coupe distribue la 1ʳᵉ main');
+
   const seat = s.state.turn;
   const snap = s.snapshotFor(s.players[seat].userId);
   const res = s.applyAction(s.players[seat].userId, { type: 'play', card: snap.players[seat].legalMoves[0] });

@@ -78,12 +78,35 @@ function createGame(opts) {
     trick: [],
     leader: 0,
     turn: 0,
-    phase: 'draw',
+    phase: 'cut',
     handOver: false,
     lastTrickWinner: null,
     lastAnnounce: null,
     sevenAnnounced: false,
+    // Phase de la coupe (#201) : le paquet mélangé est posé caché, chaque siège
+    // y piochera (carte déterminée par le moteur) avant la 1ʳᵉ donne.
+    cut: { deck: shuffle(buildDeck()), picks: new Array(n).fill(null) },
   };
+}
+
+/**
+ * Compare deux cartes selon le critère du tirage du donneur. Renvoie true si `a`
+ * est **strictement plus petite** que `b` : d'abord la force de la Chouine
+ * (`ORDER`, le 7 étant le plus faible), puis, à force égale, l'ordre de rangement
+ * des couleurs (`SUIT_RANK` : ♠ < ♥ < ♦ < ♣). Comme les 32 cartes sont uniques,
+ * le critère est strict (jamais d'égalité réelle).
+ */
+function cutLess(a, b) {
+  return ORDER[a.r] < ORDER[b.r] || (ORDER[a.r] === ORDER[b.r] && SUIT_RANK[a.s] < SUIT_RANK[b.s]);
+}
+
+/** Siège détenant la plus petite carte du tirage (le donneur). */
+function smallestDrawSeat(draws) {
+  let dealer = 0;
+  for (let i = 1; i < draws.length; i++) {
+    if (cutLess(draws[i], draws[dealer])) dealer = i;
+  }
+  return dealer;
 }
 
 /**
@@ -91,36 +114,56 @@ function createGame(opts) {
  * paquet mélangé, dans l'ordre des sièges (0, 1, … n−1). La **plus petite** carte
  * désigne le donneur, qui distribue le premier coup.
  *
- * « Plus petite » = critère composite `(force, couleur)` : d'abord la force de la
- * Chouine (`ORDER`, le 7 étant le plus faible), puis, à force égale, l'ordre de
- * rangement des couleurs (`SUIT_RANK` : ♠ < ♥ < ♦ < ♣). Comme les 32 cartes sont
- * toutes uniques (couleur + rang), ce critère est **strict** : il n'y a jamais
- * d'égalité réelle, donc le donneur est toujours déterminé sans re-tirage.
+ * Conservé pour les fixtures de parité (#199) ; la version interactive passe par
+ * `drawCut` (#201). Comme les 32 cartes sont toutes uniques, le critère
+ * `(force, couleur)` est **strict** : le donneur est toujours déterminé sans
+ * re-tirage.
  */
 function drawForDealer(playerCount) {
   const deck = shuffle(buildDeck());
   const draws = [];
   for (let i = 0; i < playerCount; i++) draws.push(deck.pop());
-
-  let dealer = 0;
-  for (let i = 1; i < playerCount; i++) {
-    const a = draws[i];
-    const b = draws[dealer];
-    if (ORDER[a.r] < ORDER[b.r] || (ORDER[a.r] === ORDER[b.r] && SUIT_RANK[a.s] < SUIT_RANK[b.s])) {
-      dealer = i;
-    }
-  }
-  return { dealer, draws };
+  return { dealer: smallestDrawSeat(draws), draws };
 }
 
-function dealHand(game) {
+/**
+ * Pioche interactive de la coupe (#201) : le siège `seat` retourne la carte du
+ * dessus du paquet caché (`cut.deck`) — la carte est **déterminée par le moteur**,
+ * jamais par le client (déterminisme + invariant #116). Quand tous les sièges ont
+ * pioché, la plus petite carte désigne le donneur et la 1ʳᵉ main est distribuée
+ * (transition `cut` → `draw`). Sinon, renvoie l'état inchangé (pioche refusée).
+ */
+function drawCut(game, seat) {
+  if (game.phase !== 'cut') return game;
+  if (seat < 0 || seat >= game.playerCount) return game;
+  if (game.cut.picks[seat] !== null) return game; // siège déjà servi
+  if (game.cut.deck.length === 0) return game;
+
+  const deck = [...game.cut.deck];
+  const card = deck.pop();
+  const picks = [...game.cut.picks];
+  picks[seat] = card;
+
+  const next = { ...game, cut: { deck, picks } };
+
+  // Tous les sièges ont tiré → on connaît le donneur, on distribue la 1ʳᵉ main.
+  if (picks.every(p => p !== null)) {
+    const dealer = smallestDrawSeat(picks);
+    return dealHand(next, dealer);
+  }
+  return next;
+}
+
+function dealHand(game, dealerOverride) {
   const n = game.playerCount;
   const cardsEach = n === 2 ? 5 : 3;
   const deck = shuffle(buildDeck());
 
   const handNo = game.handNo + 1;
   let dealer;
-  if (handNo === 1) {
+  if (dealerOverride != null) {
+    dealer = dealerOverride; // donneur imposé par la coupe (#201)
+  } else if (handNo === 1) {
     dealer = drawForDealer(n).dealer; // tirage : la plus petite carte donne
   } else if (game.lastHandDrawn) {
     dealer = game.dealer; // égalité → même donneur
@@ -173,6 +216,8 @@ function dealHand(game) {
     lastAnnounce: null,
     gatePending: false,
     sevenAnnounced: false,
+    // La coupe est consommée : plus de paquet ni de tirages en attente.
+    cut: { deck: [], picks: new Array(n).fill(null) },
   };
 }
 
@@ -498,6 +543,7 @@ module.exports = {
   isBrisque,
   createGame,
   drawForDealer,
+  drawCut,
   dealHand,
   cardBeats,
   resolveTrickWinner,

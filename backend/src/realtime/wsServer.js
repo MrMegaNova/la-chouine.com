@@ -101,6 +101,9 @@ async function attachWebSocketServer(httpServer, opts = {}) {
   const tickMs = opts.tickMs ?? 1000;
   const sweepMs = opts.sweepMs ?? tickMs;
   const graceMs = opts.graceMs ?? 60000;
+  // Délai d'inactivité pendant la coupe (#201) : un joueur qui ne pioche pas
+  // dans ce délai perd par forfait (l'adversaire gagne).
+  const cutMs = opts.cutMs ?? 15000;
   const heartbeatMs = opts.heartbeatMs ?? 30000;
   const challengeTtlMs = opts.challengeTtlMs ?? 60000;
   const msgRatePerSec = opts.msgRatePerSec ?? 20;
@@ -184,7 +187,9 @@ async function attachWebSocketServer(httpServer, opts = {}) {
   function syncClock(session, dseat) {
     if (!session.clock) return;
     const now = Date.now();
-    if (session.finished || session.state.handOver) {
+    // L'horloge de coup ne tourne pas pendant la coupe (#201) : la phase `cut`
+    // a sa propre échéance (cutDeadline).
+    if (session.finished || session.state.handOver || session.state.phase === 'cut') {
       session.clock.seat = null; session.clock.deadline = null; session.clock.paused = false; return;
     }
     if (session.clock.paused) turnClock.resume(session.clock, now);
@@ -194,6 +199,17 @@ async function attachWebSocketServer(httpServer, opts = {}) {
       turnClock.startTurn(session.clock, turn, now);
     }
     if (dseat >= 0 && !session.clock.paused) turnClock.pause(session.clock, dseat, now);
+  }
+
+  // Aligne l'échéance de la coupe (#201) sur l'état : armée tant qu'il reste un
+  // siège à servir en phase `cut`, effacée dès qu'on en sort. Rafraîchie à
+  // chaque pioche (le délai redémarre pour le siège restant).
+  function syncCutDeadline(session) {
+    if (session.finished || session.state.phase !== 'cut') {
+      session.cutDeadline = null;
+      return;
+    }
+    session.cutDeadline = Date.now() + cutMs;
   }
 
   // ── Clôture de match (victoire ou forfait) ──
@@ -215,6 +231,7 @@ async function attachWebSocketServer(httpServer, opts = {}) {
       variant, target: 3, rated, clockOptions,
     });
     syncClock(session, -1); // démarre l'horloge du premier coup (#141)
+    syncCutDeadline(session); // arme l'échéance de la coupe (#201)
     await sessionStore.save(session);
     notify(a.userId, { t: 'matchFound', sessionId: session.id, opponent: b.name, rated });
     notify(b.userId, { t: 'matchFound', sessionId: session.id, opponent: a.name, rated });
@@ -256,6 +273,21 @@ async function attachWebSocketServer(httpServer, opts = {}) {
           const s = await sessionStore.getSession(sid);
           if (!s || s.finished) return;
           if (!s.forfeit(s.seatOf(uid), 'timeout').ok) return;
+          await sessionStore.save(s);
+          broadcastSession(s);
+          await finishSession(s);
+        });
+      }
+      // Coupe (#201) : un siège qui ne pioche pas avant l'échéance perd par
+      // forfait. La phase `cut` précède toute donne ; l'horloge de coup n'y
+      // tourne pas encore, d'où ce balayage dédié.
+      for (const sid of await sessionStore.listActiveSessionIds()) {
+        await sessionStore.withLock(sid, async () => {
+          const s = await sessionStore.getSession(sid);
+          if (!s || s.finished || s.state.phase !== 'cut' || s.cutDeadline === null) return;
+          if (Date.now() < s.cutDeadline) return;
+          const res = s.cutTimeout();
+          if (!res.ok) return;
           await sessionStore.save(s);
           broadcastSession(s);
           await finishSession(s);
@@ -410,6 +442,7 @@ async function attachWebSocketServer(httpServer, opts = {}) {
       if (res.ok) {
         const dseat = await disconnectedSeat(session);
         syncClock(session, dseat);
+        syncCutDeadline(session); // rafraîchit/efface l'échéance de coupe (#201)
       }
       await sessionStore.save(session);
       result = { res, session };

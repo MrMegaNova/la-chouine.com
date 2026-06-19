@@ -1,0 +1,90 @@
+@use '@/styles/variables' as *;
+
+// Phase de la coupe (#201) : overlay plein écran posé par-dessus la table,
+// le temps que chaque joueur pioche sa carte pour désigner le donneur.
+.cut {
+  position: fixed;
+  inset: 0;
+  z-index: 65;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: radial-gradient(120% 80% at 50% 22%, #1a4233 0%, $felt-1 60%, $felt-edge 100%);
+}
+
+.panel {
+  text-align: center;
+  max-width: 560px;
+  width: 100%;
+  padding: 28px 24px;
+  border: 1px solid var(--gold);
+  border-radius: 20px;
+  background: #102a20;
+}
+
+.title {
+  font-family: var(--serif);
+  font-size: 28px;
+  margin: 0 0 6px;
+}
+
+.sub {
+  margin-bottom: 14px;
+}
+
+.timer {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: var(--wine-2);
+}
+
+.seats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  justify-content: center;
+}
+
+.seat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 84px;
+}
+
+.seatName {
+  font-size: 13px;
+  opacity: 0.85;
+}
+.seatMe {
+  color: var(--gold);
+  font-weight: 600;
+  opacity: 1;
+}
+
+.slot {
+  display: grid;
+  place-items: center;
+  min-height: 92px;
+}
+
+// Bouton enveloppant la carte face cachée du joueur : effet de survol pour
+// signaler qu'il est cliquable.
+.drawBtn {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: transform 0.12s ease, filter 0.12s ease;
+
+  &:hover { transform: translateY(-6px); filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.4)); }
+  &:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+}
+
+.pickLabel {
+  font-size: 14px;
+  font-weight: 600;
+}

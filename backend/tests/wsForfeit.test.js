@@ -135,6 +135,51 @@ test('dernier onglet fermé puis reconnexion : opponentReconnected et partie int
   assert.equal(recorded.length, 0);
 });
 
+test('coupe (#201) : un joueur qui ne pioche pas perd par forfait à l’échéance', async (t) => {
+  const recorded = [];
+  const server = http.createServer();
+  const rt = await attachWebSocketServer(server, {
+    tickMs: 15,
+    sweepMs: 20,
+    cutMs: 80,        // échéance de coupe courte → test déterministe
+    heartbeatMs: 0,
+    getRating: () => Promise.resolve(1500),
+    onMatchComplete: (outcome) => recorded.push(outcome),
+  });
+  await new Promise(r => server.listen(0, r));
+  const port = server.address().port;
+
+  const connect = async (userId, name) => {
+    const token = signToken({ id: userId, username: name });
+    const ws = new WebSocket(`ws://localhost:${port}/ws?token=${token}`);
+    const msgs = [];
+    ws.on('message', d => msgs.push(JSON.parse(d.toString())));
+    await once(ws, 'open');
+    return { ws, msgs };
+  };
+  const c1 = await connect('u1', 'Alice');
+  const c2 = await connect('u2', 'Bob');
+  t.after(async () => { rt.stop(); try { c1.ws.close(); c2.ws.close(); } catch { /* ignore */ } server.close(); await closeRedis(); });
+
+  // Appariement → partie en phase de coupe.
+  c1.ws.send(JSON.stringify({ t: 'queue', action: 'join', variant: 'classic' }));
+  c2.ws.send(JSON.stringify({ t: 'queue', action: 'join', variant: 'classic' }));
+  await delay(80);
+  const cutState = c1.msgs.filter(m => m.t === 'state').pop();
+  assert.equal(cutState.state.phase, 'cut', 'la partie démarre par la coupe');
+
+  // Seule Alice pioche ; Bob reste inactif → forfait à l'échéance.
+  c1.ws.send(JSON.stringify({ t: 'action', action: { type: 'cut' } }));
+  await delay(160);
+
+  const finalState = c1.msgs.filter(m => m.t === 'state').pop();
+  assert.equal(finalState.state.finished, true, 'la partie est close par forfait');
+  assert.equal(finalState.state.matchResult.forfeit.by, 1, 'le siège inactif (Bob) est forfait');
+  assert.equal(finalState.state.matchResult.forfeit.reason, 'timeout');
+  assert.equal(recorded.length, 1, 'le match est enregistré');
+  assert.equal(recorded[0].players.find(p => p.userId === 'u1').won, true);
+});
+
 test('abandon volontaire : action forfeit → victoire adverse immédiate, enregistrée', async (t) => {
   const { c1, c2, recorded } = await setup(t);
 

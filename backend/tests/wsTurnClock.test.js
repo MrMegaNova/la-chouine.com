@@ -46,6 +46,11 @@ async function matchTwo(server, { clockOptions }) {
   ws1.send(JSON.stringify({ t: 'queue', action: 'join', variant: 'classic' }));
   ws2.send(JSON.stringify({ t: 'queue', action: 'join', variant: 'classic' }));
   await delay(120);
+  // Coupe interactive (#201) : les deux joueurs piochent pour franchir la phase
+  // `cut` et atteindre le jeu (où tourne l'horloge de coup #141).
+  ws1.send(JSON.stringify({ t: 'action', action: { type: 'cut' } }));
+  ws2.send(JSON.stringify({ t: 'action', action: { type: 'cut' } }));
+  await delay(120);
   return { handle, ws1, ws2, msgs1, msgs2 };
 }
 
