@@ -67,6 +67,49 @@ test('drawForDealer : la plus petite carte tirée désigne le donneur', () => {
   }
 });
 
+test('drawCut : tire siège par siège puis distribue au dernier (donneur = plus petite)', () => {
+  const ORDER = { '7': 0, '8': 1, '9': 2, V: 3, D: 4, R: 5, 10: 6, A: 7 };
+  const SUIT_RANK = { pique: 0, coeur: 1, carreau: 2, trefle: 3 };
+  const less = (a, b) =>
+    ORDER[a.r] < ORDER[b.r] || (ORDER[a.r] === ORDER[b.r] && SUIT_RANK[a.s] < SUIT_RANK[b.s]);
+
+  let g = E.createGame({ mode: 'online', variant: 'classic', playerCount: 2, target: 3, names: ['A', 'B'] });
+  assert.equal(g.phase, 'cut');
+
+  const picks = [];
+  picks[0] = g.cut.deck[g.cut.deck.length - 1];
+  g = E.drawCut(g, 0);
+  assert.equal(g.phase, 'cut'); // il reste un siège à servir
+  assert.deepEqual(g.cut.picks[0], picks[0]);
+
+  picks[1] = g.cut.deck[g.cut.deck.length - 1];
+  g = E.drawCut(g, 1);
+  assert.equal(g.phase, 'draw'); // dernier tirage → 1ʳᵉ main distribuée
+  assert.equal(g.handNo, 1);
+  const expected = less(picks[0], picks[1]) ? 0 : 1;
+  assert.equal(g.dealer, expected);
+});
+
+test('drawCut : gardes — hors phase, siège hors bornes, siège déjà servi, paquet vide → état inchangé', () => {
+  const base = E.createGame({ mode: 'online', variant: 'classic', playerCount: 2, target: 3, names: ['A', 'B'] });
+
+  // Hors phase cut (partie déjà distribuée).
+  const dealt = E.dealHand(E.createGame({ mode: 'online', variant: 'classic', playerCount: 2, target: 3, names: ['A', 'B'] }));
+  assert.equal(E.drawCut(dealt, 0), dealt);
+
+  // Siège hors bornes.
+  assert.equal(E.drawCut(base, -1), base);
+  assert.equal(E.drawCut(base, 2), base);
+
+  // Siège déjà servi.
+  const once = E.drawCut(base, 0);
+  assert.equal(E.drawCut(once, 0), once);
+
+  // Paquet de coupe vide (filet de sécurité).
+  const empty = { ...base, cut: { deck: [], picks: [null, null] } };
+  assert.equal(E.drawCut(empty, 0), empty);
+});
+
 // ─── Comparaison / résolution de pli ──────────────────────────────────────────
 
 test('cardBeats : l’atout bat une non-atout, la plus haute de même couleur gagne', () => {

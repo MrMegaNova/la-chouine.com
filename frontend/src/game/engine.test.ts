@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   buildDeck, shuffle, sortHand, isBrisque,
-  createGame, drawForDealer, dealHand,
+  createGame, drawForDealer, drawCut, dealHand,
   cardBeats, resolveTrickWinner,
   getLegalMoves, getAvailableCombos, comboCards,
   applyDeclareCombo, applyExchangeSeven, applyPlayCard, applyResolveTrick,
@@ -96,6 +96,47 @@ describe('drawForDealer', () => {
         if (i !== dealer) expect(less(draws[i], draws[dealer])).toBe(false);
       }
     }
+  });
+});
+
+// ─── Coupe interactive ──────────────────────────────────────────────────────
+
+describe('drawCut', () => {
+  const ORDER: Record<Rank, number> = { '7': 0, '8': 1, '9': 2, V: 3, D: 4, R: 5, '10': 6, A: 7 };
+  const SUIT_RANK: Record<Suit, number> = { pique: 0, coeur: 1, carreau: 2, trefle: 3 };
+  const less = (a: Card, b: Card) =>
+    ORDER[a.r] < ORDER[b.r] || (ORDER[a.r] === ORDER[b.r] && SUIT_RANK[a.s] < SUIT_RANK[b.s]);
+
+  it('tire siège par siège puis distribue au dernier (donneur = plus petite)', () => {
+    let g = createGame(opts());
+    expect(g.phase).toBe('cut');
+
+    const p0 = g.cut.deck[g.cut.deck.length - 1];
+    g = drawCut(g, 0);
+    expect(g.phase).toBe('cut'); // il reste un siège à servir
+    expect(g.cut.picks[0]).toEqual(p0);
+
+    const p1 = g.cut.deck[g.cut.deck.length - 1];
+    g = drawCut(g, 1);
+    expect(g.phase).toBe('draw'); // dernier tirage → 1ʳᵉ main distribuée
+    expect(g.handNo).toBe(1);
+    expect(g.dealer).toBe(less(p0, p1) ? 0 : 1);
+  });
+
+  it('gardes : hors phase, siège hors bornes, siège déjà servi, paquet vide → état inchangé', () => {
+    const base = createGame(opts());
+
+    const dealt = dealHand(createGame(opts()));
+    expect(drawCut(dealt, 0)).toBe(dealt); // hors phase cut
+
+    expect(drawCut(base, -1)).toBe(base); // hors bornes
+    expect(drawCut(base, 2)).toBe(base);
+
+    const once = drawCut(base, 0);
+    expect(drawCut(once, 0)).toBe(once); // siège déjà servi
+
+    const empty: GameState = { ...base, cut: { deck: [], picks: [null, null] } };
+    expect(drawCut(empty, 0)).toBe(empty); // paquet vide
   });
 });
 
