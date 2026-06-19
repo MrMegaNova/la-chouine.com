@@ -54,14 +54,6 @@ export default function Home() {
                 <Link to="/regles" className="btn btn--ghost">Apprendre les règles</Link>
               </div>
               <OnlineCta />
-              <div style={{ display: 'flex', gap: 26, marginTop: 30, flexWrap: 'wrap' }}>
-                {[['32','cartes'],['8','brisques'],['2–4','joueurs'],['50','la quinte']].map(([n, l]) => (
-                  <div key={l}>
-                    <b style={{ fontFamily: 'var(--serif)', fontSize: 30, color: 'var(--gold-soft)', fontWeight: 900, display: 'block', lineHeight: 1 }}>{n}</b>
-                    <span style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: 2, opacity: .7 }}>{l}</span>
-                  </div>
-                ))}
-              </div>
             </div>
             <HeroFan />
           </div>

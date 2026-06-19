@@ -2,6 +2,8 @@
 // Proust, éditée par l'association de sauvegarde du château de Lavardin
 // (regles_chouine.pdf à la racine du dépôt).
 
+import { Link } from 'react-router-dom';
+
 function Ex({ title, children }: { title?: string; children: React.ReactNode }) {
   return (
     <div className="rules-example">
@@ -22,7 +24,14 @@ export default function Rules() {
 
       <div className="panel rules">
         <h3 style={{ marginTop: 0 }}>Le plus simple pour apprendre, c'est de jouer !</h3>
-        <p>Lien vers jeu contre l'ordi: A faire</p>
+        <p>
+          La Chouine se comprend bien mieux une carte en main qu'en lisant.
+          Lancez une partie contre l'ordinateur : aucune inscription, et vous
+          pouvez revenir ici à tout moment.
+        </p>
+        <Link to="/jouer" className="btn btn--gold" style={{ marginTop: 4 }}>
+          Jouer contre l'ordinateur
+        </Link>
       </div>
       {/* ── Les mots du jeu ─────────────────────────────────────────────── */}
       <div className="panel rules">
