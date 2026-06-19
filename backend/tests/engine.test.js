@@ -48,6 +48,25 @@ test('dealHand mondoubleau : pas d’atout ni de retourne, talon de 22', () => {
   assert.equal(d.talon.length, 22); // 32 - 10
 });
 
+test('drawForDealer : la plus petite carte tirée désigne le donneur', () => {
+  const ORDER = { '7': 0, '8': 1, '9': 2, V: 3, D: 4, R: 5, 10: 6, A: 7 };
+  const SUIT_RANK = { pique: 0, coeur: 1, carreau: 2, trefle: 3 };
+  const less = (a, b) =>
+    ORDER[a.r] < ORDER[b.r] || (ORDER[a.r] === ORDER[b.r] && SUIT_RANK[a.s] < SUIT_RANK[b.s]);
+
+  for (let n = 2; n <= 4; n++) {
+    for (let it = 0; it < 200; it++) {
+      const { dealer, draws } = E.drawForDealer(n);
+      assert.equal(draws.length, n);
+      assert.equal(new Set(draws.map(c => `${c.s}|${c.r}`)).size, n);
+      assert.ok(dealer >= 0 && dealer < n);
+      for (let i = 0; i < n; i++) {
+        if (i !== dealer) assert.equal(less(draws[i], draws[dealer]), false);
+      }
+    }
+  }
+});
+
 // ─── Comparaison / résolution de pli ──────────────────────────────────────────
 
 test('cardBeats : l’atout bat une non-atout, la plus haute de même couleur gagne', () => {
