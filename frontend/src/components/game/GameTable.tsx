@@ -6,6 +6,8 @@ import { SUIT_SYMBOL } from '@/game/constants';
 import { PlayingCard } from './PlayingCard';
 import { HandResult } from './HandResult';
 import { TurnTimer } from './TurnTimer';
+import { SoundToggle } from './SoundToggle';
+import { playSound } from '@/sound/sounds';
 import type { Card, Combo, GameState, HandResult as HandResultType } from '@/game/types';
 import styles from './GameTable.module.scss';
 
@@ -76,6 +78,29 @@ export function GameTable({ controller }: { controller?: GameController } = {}) 
   const trickLen = game?.trick.length;
   useEffect(() => { setPendingAnnounce(null); }, [turnNow, trickLen]);
 
+  // ── Sons (#155) ── déclenchés sur les transitions d'état, donc valables en
+  // local comme en ligne (GameTable voit les deux). Refs pour comparer au tour
+  // précédent (la première valeur ne joue rien).
+  const handNo = game?.handNo;
+  const playerCount = game?.playerCount ?? 2;
+  const prevHandNo = useRef<number | undefined>(undefined);
+  const prevTrickLen = useRef<number | undefined>(trickLen);
+
+  useEffect(() => {
+    if (handNo === undefined || handNo === prevHandNo.current) return;
+    playSound('deal'); // donne distribuée (première donne comprise)
+    prevHandNo.current = handNo;
+    prevTrickLen.current = 0;
+  }, [handNo]);
+
+  useEffect(() => {
+    if (trickLen === undefined) return;
+    const prev = prevTrickLen.current ?? trickLen;
+    if (trickLen > prev) playSound('play');                       // carte posée
+    else if (trickLen === 0 && prev >= playerCount) playSound('trick'); // pli résolu / pioche
+    prevTrickLen.current = trickLen;
+  }, [trickLen, playerCount]);
+
   if (!game) return null;
 
   const me = game.viewPlayer;
@@ -129,7 +154,10 @@ export function GameTable({ controller }: { controller?: GameController } = {}) 
             </div>
           ))}
         </div>
-        <TrumpBadge trump={game.trump} variant={game.variant} target={game.target} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <SoundToggle />
+          <TrumpBadge trump={game.trump} variant={game.variant} target={game.target} />
+        </div>
       </div>
 
       {/* Horloge de coup (#141) — partie classée en ligne, visible des deux. */}
