@@ -72,6 +72,9 @@ function runCase(engine, fx) {
     case 'dealInvariants':
       return dealInvariants(engine, fx);
 
+    case 'drawDealerInvariants':
+      return drawDealerInvariants(engine, fx);
+
     default:
       throw new Error(`Fixture de parité : fonction inconnue « ${fx.fn} »`);
   }
@@ -121,6 +124,43 @@ function dealInvariants(engine, fx) {
   }
 
   return { handsOk, trumpOk, talonOk, conservationOk };
+}
+
+// Le tirage du donneur initial est aléatoire (shuffle) : on vérifie des
+// INVARIANTS que les deux moteurs doivent satisfaire à chaque tirage plutôt
+// qu'une sortie exacte. Critère « plus petite carte » dupliqué ici pour rester
+// agnostique du moteur (le runner ne dépend d'aucune constante de jeu).
+const DRAW_ORDER = { '7': 0, '8': 1, '9': 2, V: 3, D: 4, R: 5, 10: 6, A: 7 };
+const DRAW_SUIT = { pique: 0, coeur: 1, carreau: 2, trefle: 3 };
+
+function drawDealerInvariants(engine, fx) {
+  const { playerCount, iterations = 200 } = fx;
+
+  let dealerInRange = true;
+  let drawCountOk = true;
+  let drawsUnique = true;
+  let dealerIsSmallest = true;
+
+  const less = (a, b) =>
+    DRAW_ORDER[a.r] < DRAW_ORDER[b.r] ||
+    (DRAW_ORDER[a.r] === DRAW_ORDER[b.r] && DRAW_SUIT[a.s] < DRAW_SUIT[b.s]);
+
+  for (let it = 0; it < iterations; it++) {
+    const { dealer, draws } = engine.drawForDealer(playerCount);
+
+    if (!(Number.isInteger(dealer) && dealer >= 0 && dealer < playerCount)) dealerInRange = false;
+    if (!Array.isArray(draws) || draws.length !== playerCount) { drawCountOk = false; continue; }
+
+    const keys = new Set(draws.map((c) => `${c.s}|${c.r}`));
+    if (keys.size !== playerCount) drawsUnique = false;
+
+    // Le siège désigné doit détenir la carte strictement minimale du tirage.
+    for (let i = 0; i < playerCount; i++) {
+      if (i !== dealer && less(draws[i], draws[dealer])) dealerIsSmallest = false;
+    }
+  }
+
+  return { dealerInRange, drawCountOk, drawsUnique, dealerIsSmallest };
 }
 
 module.exports = { runCase };

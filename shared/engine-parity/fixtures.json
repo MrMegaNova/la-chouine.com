@@ -56,5 +56,11 @@
     { "name": "donne mondoubleau 2 joueurs (sans atout)", "fn": "dealInvariants", "variant": "mondoubleau", "playerCount": 2, "iterations": 50, "expect": { "handsOk": true, "trumpOk": true, "talonOk": true, "conservationOk": true } },
     { "name": "donne classique 3 joueurs", "fn": "dealInvariants", "variant": "classic", "playerCount": 3, "iterations": 50, "expect": { "handsOk": true, "trumpOk": true, "talonOk": true, "conservationOk": true } },
     { "name": "donne classique 4 joueurs", "fn": "dealInvariants", "variant": "classic", "playerCount": 4, "iterations": 50, "expect": { "handsOk": true, "trumpOk": true, "talonOk": true, "conservationOk": true } }
+  ],
+
+  "drawDealerInvariants": [
+    { "name": "tirage du donneur à 2 joueurs : la plus petite carte donne", "fn": "drawDealerInvariants", "playerCount": 2, "iterations": 300, "expect": { "dealerInRange": true, "drawCountOk": true, "drawsUnique": true, "dealerIsSmallest": true } },
+    { "name": "tirage du donneur à 3 joueurs : la plus petite carte donne", "fn": "drawDealerInvariants", "playerCount": 3, "iterations": 300, "expect": { "dealerInRange": true, "drawCountOk": true, "drawsUnique": true, "dealerIsSmallest": true } },
+    { "name": "tirage du donneur à 4 joueurs : la plus petite carte donne", "fn": "drawDealerInvariants", "playerCount": 4, "iterations": 300, "expect": { "dealerInRange": true, "drawCountOk": true, "drawsUnique": true, "dealerIsSmallest": true } }
   ]
 }

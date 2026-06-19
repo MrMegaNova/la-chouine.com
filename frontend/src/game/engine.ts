@@ -72,6 +72,33 @@ export function createGame(opts: GameOpts): GameState {
   };
 }
 
+/**
+ * Tirage du donneur initial (début de match) : chaque siège tire une carte d'un
+ * paquet mélangé, dans l'ordre des sièges (0, 1, … n−1). La **plus petite** carte
+ * désigne le donneur, qui distribue le premier coup.
+ *
+ * « Plus petite » = critère composite `(force, couleur)` : d'abord la force de la
+ * Chouine (`ORDER`, le 7 étant le plus faible), puis, à force égale, l'ordre de
+ * rangement des couleurs (`SUIT_RANK` : ♠ < ♥ < ♦ < ♣). Comme les 32 cartes sont
+ * toutes uniques (couleur + rang), ce critère est **strict** : il n'y a jamais
+ * d'égalité réelle, donc le donneur est toujours déterminé sans re-tirage.
+ */
+export function drawForDealer(playerCount: number): { dealer: number; draws: Card[] } {
+  const deck = shuffle(buildDeck());
+  const draws: Card[] = [];
+  for (let i = 0; i < playerCount; i++) draws.push(deck.pop()!);
+
+  let dealer = 0;
+  for (let i = 1; i < playerCount; i++) {
+    const a = draws[i];
+    const b = draws[dealer];
+    if (ORDER[a.r] < ORDER[b.r] || (ORDER[a.r] === ORDER[b.r] && SUIT_RANK[a.s] < SUIT_RANK[b.s])) {
+      dealer = i;
+    }
+  }
+  return { dealer, draws };
+}
+
 export function dealHand(game: GameState): GameState {
   const n = game.playerCount;
   const cardsEach = n === 2 ? 5 : 3;
@@ -80,7 +107,7 @@ export function dealHand(game: GameState): GameState {
   const handNo = game.handNo + 1;
   let dealer: number;
   if (handNo === 1) {
-    dealer = Math.floor(Math.random() * n);
+    dealer = drawForDealer(n).dealer; // tirage : la plus petite carte donne
   } else if (game.lastHandDrawn) {
     dealer = game.dealer; // égalité → même donneur
   } else {

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   buildDeck, shuffle, sortHand, isBrisque,
-  createGame, dealHand,
+  createGame, drawForDealer, dealHand,
   cardBeats, resolveTrickWinner,
   getLegalMoves, getAvailableCombos, comboCards,
   applyDeclareCombo, applyExchangeSeven, applyPlayCard, applyResolveTrick,
@@ -68,6 +68,34 @@ describe('isBrisque', () => {
     expect(isBrisque(c('pique', 'A'))).toBe(true);
     expect(isBrisque(c('coeur', '10'))).toBe(true);
     expect(isBrisque(c('coeur', 'R'))).toBe(false);
+  });
+});
+
+// ─── Tirage du donneur ──────────────────────────────────────────────────────
+
+describe('drawForDealer', () => {
+  const ORDER: Record<Rank, number> = { '7': 0, '8': 1, '9': 2, V: 3, D: 4, R: 5, '10': 6, A: 7 };
+  const SUIT_RANK: Record<Suit, number> = { pique: 0, coeur: 1, carreau: 2, trefle: 3 };
+  const less = (a: Card, b: Card) =>
+    ORDER[a.r] < ORDER[b.r] || (ORDER[a.r] === ORDER[b.r] && SUIT_RANK[a.s] < SUIT_RANK[b.s]);
+
+  it('tire une carte par siège, toutes distinctes', () => {
+    for (let n = 2; n <= 4; n++) {
+      const { dealer, draws } = drawForDealer(n);
+      expect(draws).toHaveLength(n);
+      expect(new Set(draws.map(d => `${d.s}|${d.r}`)).size).toBe(n);
+      expect(dealer).toBeGreaterThanOrEqual(0);
+      expect(dealer).toBeLessThan(n);
+    }
+  });
+
+  it('désigne le siège ayant tiré la plus petite carte (force puis couleur)', () => {
+    for (let it = 0; it < 200; it++) {
+      const { dealer, draws } = drawForDealer(4);
+      for (let i = 0; i < draws.length; i++) {
+        if (i !== dealer) expect(less(draws[i], draws[dealer])).toBe(false);
+      }
+    }
   });
 });
 
