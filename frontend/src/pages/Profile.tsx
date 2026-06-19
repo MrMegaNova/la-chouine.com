@@ -25,14 +25,13 @@ export default function Profile() {
 
   return (
     <div className="wrap" style={{ paddingTop: 36, paddingBottom: 60 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 18, marginBottom: 26 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 18, marginBottom: 26, flexWrap: 'wrap' }}>
         <AvatarEditor />
-        <div>
+        <div style={{ minWidth: 0 }}>
           <h2 className="section-title" style={{ margin: 0 }}>{user.username}</h2>
           <p className="section-sub" style={{ margin: 0 }}>Membre depuis {joined}</p>
         </div>
-        <div style={{ flex: 1 }} />
-        <button className="btn btn--ghost btn--sm" onClick={handleLogout}>Se déconnecter</button>
+        <button className="btn btn--ghost btn--sm" style={{ marginLeft: 'auto' }} onClick={handleLogout}>Se déconnecter</button>
       </div>
 
       <div style={{ display: 'flex', gap: 26, marginBottom: 26, flexWrap: 'wrap' }}>
