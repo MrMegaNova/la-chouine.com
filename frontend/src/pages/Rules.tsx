@@ -34,7 +34,7 @@ export default function Rules() {
         </Link>
       </div>
       {/* ── Les mots du jeu ─────────────────────────────────────────────── */}
-      <div className="panel rules">
+      <div className="panel rules" style={{ marginTop: 24 }}>
         <h3 style={{ marginTop: 0 }}>Avant de jouer : le vocabulaire de la Chouine</h3>
         <p>
           Quatre notions suffisent pour comprendre une table de Chouine : la <b>donne</b>,
