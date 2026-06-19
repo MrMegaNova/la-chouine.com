@@ -130,8 +130,10 @@ function drawForDealer(playerCount) {
  * Pioche interactive de la coupe (#201) : le siège `seat` retourne la carte du
  * dessus du paquet caché (`cut.deck`) — la carte est **déterminée par le moteur**,
  * jamais par le client (déterminisme + invariant #116). Quand tous les sièges ont
- * pioché, la plus petite carte désigne le donneur et la 1ʳᵉ main est distribuée
- * (transition `cut` → `draw`). Sinon, renvoie l'état inchangé (pioche refusée).
+ * pioché, on passe en `phase: 'cutReveal'` **sans distribuer** : les cartes tirées
+ * restent affichées (`cut.picks` conservé) le temps d'annoncer le donneur. La donne
+ * proprement dite est ensuite déclenchée par `finishCut` (#201). Sinon, renvoie
+ * l'état inchangé (pioche refusée).
  */
 function drawCut(game, seat) {
   if (game.phase !== 'cut') return game;
@@ -146,12 +148,24 @@ function drawCut(game, seat) {
 
   const next = { ...game, cut: { deck, picks } };
 
-  // Tous les sièges ont tiré → on connaît le donneur, on distribue la 1ʳᵉ main.
+  // Tous les sièges ont tiré → on connaît le donneur, mais on diffère la donne :
+  // les cartes restent révélées (phase de transition `cutReveal`).
   if (picks.every(p => p !== null)) {
-    const dealer = smallestDrawSeat(picks);
-    return dealHand(next, dealer);
+    return { ...next, phase: 'cutReveal' };
   }
   return next;
+}
+
+/**
+ * Clôture de la phase de révélation (#201) : valide `phase === 'cutReveal'`,
+ * détermine le donneur via la plus petite carte (`cut.picks`) et distribue la
+ * 1ʳᵉ main (`dealHand`, transition `cutReveal` → `draw`, `cut` remis à zéro).
+ * Hors phase `cutReveal`, renvoie l'état inchangé.
+ */
+function finishCut(game) {
+  if (game.phase !== 'cutReveal') return game;
+  const dealer = smallestDrawSeat(game.cut.picks);
+  return dealHand(game, dealer);
 }
 
 function dealHand(game, dealerOverride) {
@@ -543,7 +557,9 @@ module.exports = {
   isBrisque,
   createGame,
   drawForDealer,
+  smallestDrawSeat,
   drawCut,
+  finishCut,
   dealHand,
   cardBeats,
   resolveTrickWinner,

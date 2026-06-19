@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   buildDeck, shuffle, sortHand, isBrisque,
-  createGame, drawForDealer, drawCut, dealHand,
+  createGame, drawForDealer, drawCut, finishCut, dealHand,
   cardBeats, resolveTrickWinner,
   getLegalMoves, getAvailableCombos, comboCards,
   applyDeclareCombo, applyExchangeSeven, applyPlayCard, applyResolveTrick,
@@ -107,7 +107,7 @@ describe('drawCut', () => {
   const less = (a: Card, b: Card) =>
     ORDER[a.r] < ORDER[b.r] || (ORDER[a.r] === ORDER[b.r] && SUIT_RANK[a.s] < SUIT_RANK[b.s]);
 
-  it('tire siège par siège puis distribue au dernier (donneur = plus petite)', () => {
+  it('tire siège par siège puis révèle au dernier (cut → cutReveal, donne différée)', () => {
     let g = createGame(opts());
     expect(g.phase).toBe('cut');
 
@@ -118,9 +118,28 @@ describe('drawCut', () => {
 
     const p1 = g.cut.deck[g.cut.deck.length - 1];
     g = drawCut(g, 1);
-    expect(g.phase).toBe('draw'); // dernier tirage → 1ʳᵉ main distribuée
+    expect(g.phase).toBe('cutReveal'); // dernier tirage → révélation, donne différée
+    expect(g.handNo).toBe(0); // main NON distribuée
+    expect(g.players.every(p => p.hand.length === 0)).toBe(true);
+    expect(g.cut.picks.every(p => p !== null)).toBe(true); // cartes conservées
+
+    const expected = less(p0, p1) ? 0 : 1;
+
+    // finishCut : distribue la 1ʳᵉ main, donneur = plus petite carte, leader à gauche.
+    g = finishCut(g);
+    expect(g.phase).toBe('draw');
     expect(g.handNo).toBe(1);
-    expect(g.dealer).toBe(less(p0, p1) ? 0 : 1);
+    expect(g.dealer).toBe(expected);
+    expect(g.leader).toBe((expected + 1) % 2);
+    expect(g.players.every(p => p.hand.length === 5)).toBe(true);
+  });
+
+  it('finishCut : hors phase cutReveal → état inchangé', () => {
+    const inCut = createGame(opts());
+    expect(finishCut(inCut)).toBe(inCut); // phase cut
+
+    const dealt = dealHand(createGame(opts()));
+    expect(finishCut(dealt)).toBe(dealt); // phase draw
   });
 
   it('gardes : hors phase, siège hors bornes, siège déjà servi, paquet vide → état inchangé', () => {

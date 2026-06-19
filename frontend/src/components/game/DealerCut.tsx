@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { PlayingCard } from './PlayingCard';
 import { SUIT_SYMBOL } from '@/game/constants';
-import type { GameState } from '@/game/types';
+import { smallestDrawSeat } from '@/game/engine';
+import type { Card, GameState } from '@/game/types';
 import styles from './DealerCut.module.scss';
 
 // Phase de la coupe (#201) : tirage interactif du donneur au tout premier coup
@@ -23,20 +24,29 @@ export function DealerCut({
   const picks = game.cut.picks;
   const myPick = picks[me];
   const allPicked = picks.every(p => p !== null);
+  // Phase de révélation (#201) : toutes les cartes sont tirées, on annonce qui
+  // commence (plus petite carte → donneur, le joueur à sa gauche ouvre).
+  const isReveal = game.phase === 'cutReveal';
+  const starter = isReveal
+    ? game.names[(smallestDrawSeat(picks as Card[]) + 1) % n]
+    : null;
 
   return (
     <div className={styles.cut} role="dialog" aria-label="Tirage du donneur">
       <div className={styles.panel}>
         <h2 className={styles.title}>La coupe</h2>
         <p className={`note ${styles.sub}`}>
-          {myPick === null
-            ? 'Tirez une carte : la plus petite désigne le donneur.'
-            : allPicked
-              ? 'Toutes les cartes sont tirées…'
-              : 'En attente des autres joueurs…'}
+          {isReveal
+            ? `${starter} commence`
+            : myPick === null
+              ? 'Tirez une carte : la plus petite désigne le donneur.'
+              : allPicked
+                ? 'Toutes les cartes sont tirées…'
+                : 'En attente des autres joueurs…'}
         </p>
 
-        {deadline != null && myPick === null && <Countdown deadline={deadline} />}
+        {/* Pas de compte à rebours de forfait pendant la révélation. */}
+        {!isReveal && deadline != null && myPick === null && <Countdown deadline={deadline} />}
 
         <div className={styles.seats}>
           {Array.from({ length: n }, (_, j) => {

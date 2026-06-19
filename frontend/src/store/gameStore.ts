@@ -1,9 +1,9 @@
 import { create } from 'zustand';
 import {
-  createGame, dealHand, drawCut, applyPlayCard, applyResolveTrick,
+  createGame, dealHand, drawCut, finishCut, applyPlayCard, applyResolveTrick,
   applyDeclareCombo, applyExchangeSeven, computeHandResult,
   applyHandResult, getAvailableCombos, getLegalMoves, shouldAnnounceAuSept,
-  comboCards,
+  comboCards, smallestDrawSeat,
 } from '@/game/engine';
 import { aiChooseLead, aiChooseResponse, aiChooseCombos } from '@/game/ai';
 import { SUIT_SYMBOL, PTS, ORDER } from '@/game/constants';
@@ -33,6 +33,11 @@ let aiTimer: ReturnType<typeof setTimeout> | null = null;
 // Maintien du pli résolu (#97) : le pli complet reste affiché ce temps-là
 // avant d'être ramassé, pour qu'on lise la dernière carte jouée.
 const TRICK_HOLD_MS = 2000;
+
+// Révélation de la coupe (#201) : une fois toutes les cartes tirées, elles
+// restent affichées ce temps-là (avec l'indication « qui commence ») avant que
+// la 1ʳᵉ main soit distribuée et que le plateau apparaisse.
+const CUT_REVEAL_MS = 2000;
 
 // Valeur « à protéger » d'une carte (pour choisir laquelle jouer dans une annonce).
 const PTS_ORDER = (c: Card) => PTS[c.r] * 10 + ORDER[c.r];
@@ -66,19 +71,27 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
 
   // Coupe interactive (#201) : le siège signale qu'il pioche ; le moteur
-  // détermine la carte. Quand tous les sièges ont tiré, la 1ʳᵉ main est
-  // distribuée et l'enchaînement IA reprend.
+  // détermine la carte. Quand tous les sièges ont tiré, on entre en phase de
+  // révélation : les cartes restent affichées CUT_REVEAL_MS avec l'indication
+  // « qui commence », puis la 1ʳᵉ main est distribuée et l'enchaînement IA reprend.
   drawCutCard: (seat) => {
     const { game } = get();
     if (!game || game.phase !== 'cut') return;
     if (game.cut.picks[seat] !== null) return;
     const next = drawCut(game, seat);
     if (next === game) return;
-    if (next.phase === 'draw') {
-      // La coupe vient de se terminer : la main est distribuée.
+    if (next.phase === 'cutReveal') {
+      // Dernier tirage : on révèle et on annonce qui commence (même canal toast
+      // qu'une annonce), puis on diffère la donne de 2 s.
       clearAiTimer();
-      set({ game: next, toast: buildDealToast(next) });
-      scheduleAiIfNeeded(next);
+      set({ game: next, toast: buildStartToast(next) });
+      aiTimer = setTimeout(() => {
+        const { game: g } = get();
+        if (!g || g.phase !== 'cutReveal') return;
+        const dealt = finishCut(g);
+        set({ game: dealt, toast: buildDealToast(dealt) });
+        scheduleAiIfNeeded(dealt);
+      }, CUT_REVEAL_MS);
     } else {
       set({ game: next });
       scheduleCutIfNeeded(next);
@@ -301,6 +314,15 @@ function checkAuSept(game: GameState) {
     useGameStore.setState({ game: g });
   }
   scheduleAiIfNeeded(g);
+}
+
+// Indication « qui commence » affichée pendant la révélation de la coupe (#201),
+// via le même canal toast qu'une annonce. Le donneur est la plus petite carte
+// tirée ; le joueur à sa gauche `(dealer + 1) % n` ouvre la partie.
+function buildStartToast(game: GameState): string {
+  const dealer = smallestDrawSeat(game.cut.picks as Card[]);
+  const leader = (dealer + 1) % game.playerCount;
+  return `${game.names[leader]} commence`;
 }
 
 function buildDealToast(game: GameState): string {

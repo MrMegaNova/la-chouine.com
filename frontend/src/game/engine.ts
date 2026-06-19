@@ -87,7 +87,7 @@ function cutLess(a: Card, b: Card): boolean {
 }
 
 /** Siège détenant la plus petite carte du tirage (le donneur). */
-function smallestDrawSeat(draws: Card[]): number {
+export function smallestDrawSeat(draws: Card[]): number {
   let dealer = 0;
   for (let i = 1; i < draws.length; i++) {
     if (cutLess(draws[i], draws[dealer])) dealer = i;
@@ -116,8 +116,10 @@ export function drawForDealer(playerCount: number): { dealer: number; draws: Car
  * Pioche interactive de la coupe (#201) : le siège `seat` retourne la carte du
  * dessus du paquet caché (`cut.deck`) — la carte est **déterminée par le moteur**,
  * jamais par le client (déterminisme + invariant #116). Quand tous les sièges ont
- * pioché, la plus petite carte désigne le donneur et la 1ʳᵉ main est distribuée
- * (transition `cut` → `draw`). Sinon, renvoie l'état inchangé (pioche refusée).
+ * pioché, on passe en `phase: 'cutReveal'` **sans distribuer** : les cartes tirées
+ * restent affichées (`cut.picks` conservé) le temps d'annoncer le donneur. La donne
+ * proprement dite est ensuite déclenchée par `finishCut` (#201). Sinon, renvoie
+ * l'état inchangé (pioche refusée).
  */
 export function drawCut(game: GameState, seat: number): GameState {
   if (game.phase !== 'cut') return game;
@@ -132,12 +134,24 @@ export function drawCut(game: GameState, seat: number): GameState {
 
   const next: GameState = { ...game, cut: { deck, picks } };
 
-  // Tous les sièges ont tiré → on connaît le donneur, on distribue la 1ʳᵉ main.
+  // Tous les sièges ont tiré → on connaît le donneur, mais on diffère la donne :
+  // les cartes restent révélées (phase de transition `cutReveal`).
   if (picks.every(p => p !== null)) {
-    const dealer = smallestDrawSeat(picks as Card[]);
-    return dealHand(next, dealer);
+    return { ...next, phase: 'cutReveal' };
   }
   return next;
+}
+
+/**
+ * Clôture de la phase de révélation (#201) : valide `phase === 'cutReveal'`,
+ * détermine le donneur via la plus petite carte (`cut.picks`) et distribue la
+ * 1ʳᵉ main (`dealHand`, transition `cutReveal` → `draw`, `cut` remis à zéro).
+ * Hors phase `cutReveal`, renvoie l'état inchangé.
+ */
+export function finishCut(game: GameState): GameState {
+  if (game.phase !== 'cutReveal') return game;
+  const dealer = smallestDrawSeat(game.cut.picks as Card[]);
+  return dealHand(game, dealer);
 }
 
 export function dealHand(game: GameState, dealerOverride?: number): GameState {

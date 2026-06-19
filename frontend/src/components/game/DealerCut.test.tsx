@@ -50,4 +50,16 @@ describe('<DealerCut> — tirage du donneur (#201)', () => {
     expect(screen.getByText('7♠')).toBeInTheDocument();
     expect(screen.getByText(/En attente des autres joueurs/)).toBeInTheDocument();
   });
+
+  it('en phase cutReveal : toutes les cartes révélées, indication « qui commence », pas de compte à rebours', () => {
+    // Moi (siège 0) tire 7♠, Bot (siège 1) tire un Roi : la plus petite (7♠) est
+    // le donneur → le joueur à sa gauche (Bot) commence.
+    const game = { ...makeGame([c('pique', '7'), c('coeur', 'R')]), phase: 'cutReveal' as const };
+    render(<DealerCut game={game} me={0} onDraw={vi.fn()} deadline={Date.now() + 2000} />);
+
+    expect(screen.getByText('Bot commence')).toBeInTheDocument();
+    // Aucun bouton de tirage et aucun compte à rebours de forfait.
+    expect(screen.queryByRole('button', { name: /Tirer ma carte/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/perdez par forfait/)).not.toBeInTheDocument();
+  });
 });

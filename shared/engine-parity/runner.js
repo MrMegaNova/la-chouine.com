@@ -179,7 +179,9 @@ function drawCutInvariants(engine, fx) {
   let staysCutUntilLast = true;
   let picksUnique = true;
   let dealerIsSmallest = true;
-  let dealtAtEnd = true;
+  let revealsAtEnd = true;
+  let dealtAfterFinish = true;
+  let finishCutIsGuarded = true;
 
   const less = (a, b) =>
     DRAW_ORDER[a.r] < DRAW_ORDER[b.r] ||
@@ -195,9 +197,8 @@ function drawCutInvariants(engine, fx) {
     });
     if (g.phase !== 'cut') startsInCut = false;
 
-    // On mémorise les cartes tirées au fil de l'eau : `dealHand` réinitialise
-    // `cut.picks` au dernier tirage, donc on ne peut plus les lire après. La
-    // carte qui sera tirée est le dessus du paquet (dernier élément).
+    // On mémorise les cartes tirées au fil de l'eau. La carte qui sera tirée est
+    // le dessus du paquet (dernier élément).
     const picks = [];
     for (let seat = 0; seat < playerCount; seat++) {
       picks[seat] = g.cut.deck[g.cut.deck.length - 1];
@@ -210,19 +211,45 @@ function drawCutInvariants(engine, fx) {
     const keys = new Set(picks.map((c) => `${c.s}|${c.r}`));
     if (keys.size !== playerCount) picksUnique = false;
 
-    // Donneur = plus petite carte tirée.
+    // Au dernier tirage : on passe en `cutReveal`, cartes conservées, main NON
+    // distribuée (donne différée).
+    if (g.phase !== 'cutReveal' || g.handNo !== 0) revealsAtEnd = false;
+    if (!g.players.every((p) => p.hand.length === 0)) revealsAtEnd = false;
+    if (!g.cut.picks.every((p) => p !== null)) revealsAtEnd = false;
+
+    // Garde de `finishCut` : hors phase `cutReveal`, état inchangé. On vérifie sur
+    // une partie fraîche encore en `cut`.
+    const fresh = engine.createGame({
+      mode: 'online',
+      variant,
+      playerCount,
+      target: 3,
+      names: Array.from({ length: playerCount }, (_, i) => `P${i}`),
+    });
+    if (engine.finishCut(fresh).phase !== 'cut') finishCutIsGuarded = false;
+
+    // `finishCut` distribue : phase `draw`, 1ʳᵉ main, donne complète, donneur =
+    // plus petite carte tirée.
+    g = engine.finishCut(g);
     let smallest = 0;
     for (let i = 1; i < picks.length; i++) {
       if (less(picks[i], picks[smallest])) smallest = i;
     }
     if (g.dealer !== smallest) dealerIsSmallest = false;
-
-    // À la fin : phase `draw`, 1ʳᵉ main distribuée, donne complète.
-    if (g.phase !== 'draw' || g.handNo !== 1) dealtAtEnd = false;
-    if (!g.players.every((p) => p.hand.length === cardsEach)) dealtAtEnd = false;
+    if (g.leader !== (smallest + 1) % playerCount) dealerIsSmallest = false;
+    if (g.phase !== 'draw' || g.handNo !== 1) dealtAfterFinish = false;
+    if (!g.players.every((p) => p.hand.length === cardsEach)) dealtAfterFinish = false;
   }
 
-  return { startsInCut, staysCutUntilLast, picksUnique, dealerIsSmallest, dealtAtEnd };
+  return {
+    startsInCut,
+    staysCutUntilLast,
+    picksUnique,
+    dealerIsSmallest,
+    revealsAtEnd,
+    dealtAfterFinish,
+    finishCutIsGuarded,
+  };
 }
 
 module.exports = { runCase };

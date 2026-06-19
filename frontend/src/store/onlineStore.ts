@@ -33,12 +33,19 @@ interface ServerSnapshot {
   trick: TrickEntry[];
   leader: number;
   turn: number;
-  phase: 'cut' | 'draw' | 'final';
+  phase: 'cut' | 'cutReveal' | 'draw' | 'final';
   handOver: boolean;
   handNo: number;
   // Coupe (#201) : cartes révélées par siège (le paquet caché n'est jamais
-  // transmis) + échéance de forfait. null hors phase cut.
-  cut: { picks: (Card | null)[]; deadline: number | null } | null;
+  // transmis) + échéance. En phase `cut`, `deadline` est l'échéance de forfait ;
+  // en `cutReveal`, toutes les cartes sont révélées, `reveal` est vrai et
+  // `dealer` désigne le donneur (pour afficher « qui commence »). null hors coupe.
+  cut: {
+    picks: (Card | null)[];
+    deadline: number | null;
+    reveal?: boolean;
+    dealer?: number;
+  } | null;
   lastTrick: { cards: TrickEntry[]; winner: number } | null;
   opponentLastTrick: { cards: TrickEntry[]; winner: number } | null; // (#95)
   clock: TurnClockView | null; // horloge de coup (#141), null hors partie classée
@@ -234,6 +241,10 @@ export const useOnlineStore = create<OnlineState>((set, get) => {
   // Déduplication du toast d'échange du 7 (#76) : l'état est repoussé à chaque
   // action, on ne notifie qu'au premier snapshot portant un nouvel échange.
   let lastExchangeKey: string | null = null;
+  // Indication « qui commence » (#201) : émise une seule fois à l'entrée en
+  // phase de révélation (le snapshot `cutReveal` peut être repoussé plusieurs
+  // fois — heartbeat, reconnexion).
+  let revealAnnounced = false;
 
   // Applique un snapshot serveur à l'état du store (état autoritaire).
   function applySnapshot(snap: ServerSnapshot) {
@@ -258,6 +269,18 @@ export const useOnlineStore = create<OnlineState>((set, get) => {
           : `${snap.names[ex.seat] ?? 'L’adversaire'} échange le 7 d’atout`;
       }
     }
+    // Indication « qui commence » (#201) : à l'entrée en phase de révélation, on
+    // affiche via le même canal toast que les annonces qui ouvre la partie
+    // (donneur = plus petite carte ; le joueur à sa gauche commence).
+    let revealToast: string | null = null;
+    if (snap.phase === 'cutReveal' && snap.cut?.reveal && !revealAnnounced) {
+      revealAnnounced = true;
+      const dealer = snap.cut.dealer ?? 0;
+      const leader = (dealer + 1) % snap.names.length;
+      revealToast = `${snap.names[leader] ?? 'L’adversaire'} commence`;
+    }
+    if (snap.phase !== 'cutReveal') revealAnnounced = false;
+
     set({
       game,
       pendingResult,
@@ -268,6 +291,7 @@ export const useOnlineStore = create<OnlineState>((set, get) => {
       status: snap.finished ? 'over' : 'playing',
       opponent: snap.names[1 - snap.you] ?? get().opponent,
       ...(exchangeToast ? { toast: exchangeToast } : {}),
+      ...(revealToast ? { toast: revealToast } : {}),
       // Un match clos (forfait compris) efface l'alerte de déconnexion adverse.
       ...(snap.finished ? { opponentDisconnected: false, opponentDeadline: null } : {}),
     });

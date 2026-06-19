@@ -47,15 +47,26 @@ test('coupe (#201) : chaque siège pioche, la plus petite carte désigne le donn
   assert.equal(sess.state.cut.picks[1], null);
   // (2) Re-piocher pour le même siège est refusé.
   assert.equal(sess.applyAction('u1', { type: 'cut' }).ok, false);
-  // (3) Second tirage : la coupe se termine, la 1ʳᵉ main est distribuée.
+  // (3) Second tirage : la coupe entre en phase de révélation (donne différée),
+  // les cartes restent affichées, la main n'est PAS encore distribuée.
   assert.ok(sess.applyAction('u2', { type: 'cut' }).ok);
+  assert.equal(sess.state.phase, 'cutReveal');
+  assert.equal(sess.state.handNo, 0);
+  assert.equal(sess.state.players[0].hand.length, 0);
+  assert.ok(sess.state.cut.picks.every(p => p !== null), 'cartes conservées');
+  // Piocher pendant la révélation est refusé.
+  assert.equal(sess.applyAction('u1', { type: 'cut' }).ok, false);
+  // (4) Fin de la révélation : la 1ʳᵉ main est distribuée.
+  assert.ok(sess.finishReveal().ok);
   assert.equal(sess.state.phase, 'draw');
   assert.equal(sess.state.handNo, 1);
   assert.equal(sess.state.players[0].hand.length, 5);
   assert.equal(sess.state.players[1].hand.length, 5);
-  // Le donneur est dans la plage valide ; (4) piocher après la coupe est refusé.
+  // Le donneur est dans la plage valide ; piocher après la coupe est refusé.
   assert.ok(sess.state.dealer === 0 || sess.state.dealer === 1);
   assert.equal(sess.applyAction('u1', { type: 'cut' }).ok, false);
+  // finishReveal hors phase cutReveal est refusé.
+  assert.equal(sess.finishReveal().ok, false);
 });
 
 test('coupe (#201) : cutTimeout fait perdre le siège qui n’a pas pioché', () => {

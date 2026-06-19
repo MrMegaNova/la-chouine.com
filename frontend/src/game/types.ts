@@ -2,7 +2,7 @@ export type Suit = 'pique' | 'coeur' | 'carreau' | 'trefle';
 export type Rank = '7' | '8' | '9' | '10' | 'V' | 'D' | 'R' | 'A';
 export type Variant = 'classic' | 'mondoubleau';
 export type Mode = 'ai' | 'local' | 'friend' | 'online';
-export type Phase = 'cut' | 'draw' | 'final';
+export type Phase = 'cut' | 'cutReveal' | 'draw' | 'final';
 export type Difficulty = 'easy' | 'normal' | 'hard';
 
 export interface Card {

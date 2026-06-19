@@ -7,7 +7,8 @@
 // des mains adverses). Aucune logique de jeu ne vit côté client pour le PvP.
 
 const {
-  createGame, dealHand, drawCut, applyPlayCard, applyResolveTrick, applyDeclareCombo,
+  createGame, dealHand, drawCut, finishCut, smallestDrawSeat,
+  applyPlayCard, applyResolveTrick, applyDeclareCombo,
   applyExchangeSeven, computeHandResult, applyHandResult, getAvailableCombos,
   isLegalMove, resolveTrickWinner, shouldAnnounceAuSept, getLegalMoves,
   comboCards, sameCard,
@@ -64,6 +65,12 @@ class GameSession {
     // pioche pas dans le délai imparti perd par forfait. Posée/rafraîchie par le
     // driver temps réel (wsServer) ; balayée par le sweep. null hors phase cut.
     this.cutDeadline = null;
+    // Échéance de révélation de la coupe (#201) : une fois les deux sièges
+    // tirés, on entre en phase `cutReveal` ; les cartes restent affichées (avec
+    // l'indication « qui commence ») jusqu'à cette échéance, puis la 1ʳᵉ main est
+    // distribuée. Posée par le driver temps réel (wsServer) ; balayée par le
+    // sweep. null hors phase cutReveal.
+    this.revealDeadline = null;
     // Horloge de coup (#141) — parties classées uniquement ; pilotée par le
     // driver temps réel (wsServer), qui arme l'échéance et gère la pause.
     this.clock = this.rated ? turnClock.createClock(clockOptions) : null;
@@ -125,8 +132,9 @@ class GameSession {
 
   // Coupe interactive (#201) : le joueur signale qu'il pioche ; le moteur
   // détermine la carte (déterminisme serveur, invariant #116). Quand les deux
-  // sièges ont pioché, le donneur est désigné (plus petite carte) et la 1ʳᵉ
-  // main est distribuée — transition `cut` → `draw`.
+  // sièges ont pioché, on entre en phase de révélation (`cut` → `cutReveal`) :
+  // les cartes restent affichées le temps d'annoncer qui commence ; la donne est
+  // ensuite déclenchée par `finishReveal` (échéance armée par le driver wsServer).
   _cut(seat) {
     const s = this.state;
     if (s.phase !== 'cut') return { ok: false, error: 'La coupe est terminée.' };
@@ -290,6 +298,17 @@ class GameSession {
     return res.ok ? { ok: true, seat } : { ok: false };
   }
 
+  /** Échéance de révélation atteinte (#201) : on clôt la phase `cutReveal` et on
+   *  distribue la 1ʳᵉ main (donneur = plus petite carte). Renvoie { ok }. */
+  finishReveal() {
+    if (this.finished || this.state.phase !== 'cutReveal') return { ok: false };
+    const next = finishCut(this.state);
+    if (next === this.state) return { ok: false };
+    this.state = next;
+    this.revealDeadline = null;
+    return { ok: true };
+  }
+
   /** Carte « la moins coûteuse » parmi les coups légaux (heuristique du coup auto). */
   _autoCard(seat) {
     const legal = getLegalMoves(this.state, seat);
@@ -353,8 +372,15 @@ class GameSession {
       handOver: s.handOver,
       handNo: s.handNo,
       // Coupe (#201) : cartes déjà révélées par siège. Le paquet caché n'est
-      // JAMAIS transmis (sinon le client connaîtrait les futures cartes).
-      cut: s.phase === 'cut' ? { picks: s.cut.picks, deadline: this.cutDeadline } : null,
+      // JAMAIS transmis (sinon le client connaîtrait les futures cartes). En
+      // phase `cut`, on expose l'échéance de forfait ; en `cutReveal`, toutes les
+      // cartes sont visibles et on expose l'échéance de révélation + le donneur
+      // (pour afficher « qui commence »).
+      cut: s.phase === 'cut'
+        ? { picks: s.cut.picks, deadline: this.cutDeadline }
+        : s.phase === 'cutReveal'
+          ? { picks: s.cut.picks, reveal: true, deadline: this.revealDeadline, dealer: smallestDrawSeat(s.cut.picks) }
+          : null,
       lastTrick: this.lastTrick,
       // Dernier pli ramassé par l'adversaire (#95) : seul pli adverse que la
       // règle autorise à consulter — même si on a ramassé des plis depuis.
@@ -406,6 +432,7 @@ class GameSession {
       nextHandAcks: [...this.nextHandAcks],
       clock: this.clock,
       cutDeadline: this.cutDeadline,
+      revealDeadline: this.revealDeadline,
       state: serializeState(this.state),
     };
   }
@@ -426,6 +453,7 @@ class GameSession {
     s.nextHandAcks = new Set(data.nextHandAcks);
     s.clock = data.clock;
     s.cutDeadline = data.cutDeadline ?? null;
+    s.revealDeadline = data.revealDeadline ?? null;
     s.state = deserializeState(data.state);
     return s;
   }

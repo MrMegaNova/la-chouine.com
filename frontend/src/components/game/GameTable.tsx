@@ -85,10 +85,12 @@ export function GameTable({ controller }: { controller?: GameController } = {}) 
   // Phase de la coupe (#201) : avant la 1ʳᵉ donne, on affiche le tirage du
   // donneur plutôt que la table. L'humain pioche son slot ; en local, c'est le
   // siège dont c'est le tour de regarder (viewPlayer), sinon le siège 0.
-  if (game.phase === 'cut') {
+  if (game.phase === 'cut' || game.phase === 'cutReveal') {
     // En pass-and-play local, on fait piocher chaque siège humain à tour de
     // rôle : on cible le premier siège pas encore servi. En ligne / vs IA, le
-    // joueur local est le siège 0 (les sièges IA piochent tout seuls).
+    // joueur local est le siège 0 (les sièges IA piochent tout seuls). En
+    // révélation (cutReveal), toutes les cartes sont tirées : cutSeat est sans
+    // effet (DealerCut n'affiche plus de slot cliquable).
     const cutSeat = game.mode === 'local'
       ? Math.max(0, game.cut.picks.findIndex(p => p === null))
       : 0;
