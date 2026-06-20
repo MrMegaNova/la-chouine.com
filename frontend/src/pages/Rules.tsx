@@ -25,7 +25,7 @@ export default function Rules() {
       <div className="panel rules">
         <h3 style={{ marginTop: 0 }}>Le plus simple pour apprendre, c'est de jouer !</h3>
         <p>
-          La Chouine se comprend bien mieux une carte en main qu'en lisant.
+          La Chouine se comprend bien mieux en jouant qu'en lisant.
           Lancez une partie contre l'ordinateur : aucune inscription, et vous
           pouvez revenir ici à tout moment.
         </p>
@@ -109,17 +109,17 @@ export default function Rules() {
         <p>
           La <b>retourne</b> reste visible à côté du talon pendant toute la phase de
           pioche. Le joueur qui détient le <b>7 d'atout</b> peut, à son tour de jeu,
-          l'<b>échanger contre la retourne</b> — un troc presque toujours gagnant,
-          la retourne étant souvent plus forte. Quand il ne reste plus que <b>deux
-          cartes au talon</b>, le joueur qui s'apprête à entamer doit annoncer
+          l'<b>échanger contre la retourne</b> : un troc toujours gagnant,
+          la retourne étant souvent plus forte. Quand il ne reste plus qu' <b>une
+          carte au talon et la retourne</b>, le joueur qui s'apprête à entamer doit annoncer
           « <b>au sept</b> » si l'échange n'a pas encore été fait : dernier appel
           avant que la retourne ne soit ramassée.
         </p>
         <Ex title="Exemple">
           <p>
             La retourne est la <b>D♠</b> (atout pique). Léa pioche le <b>7♠</b> : à son
-            prochain tour, elle pose le 7♠ sous le talon et prend la Dame — 3 points de
-            mieux dans sa main, et une future annonce de mariage peut-être…
+            prochain tour, elle pose le <b>7♠</b> à la place de la Dame qu'elle prend: 3 points de
+            plus dans sa main!
           </p>
         </Ex>
 
@@ -128,9 +128,7 @@ export default function Rules() {
           Les <b>As et les Dix</b> s'appellent <b>brisques</b>. Il y en a donc{' '}
           <b>huit</b> dans le jeu (4 As + 4 Dix). Ce sont les cartes qui font les
           points : à elles seules, elles valent <b>84 des 120 points</b> de cartes du
-          jeu (4 × 11 + 4 × 10). Gagner des plis ne sert à rien si l'on n'y ramasse pas
-          de brisques — toute la stratégie de la Chouine tourne autour de leur capture
-          et de leur protection.
+          jeu (4 × 11 + 4 × 10).
         </p>
         <Ex title="Exemple">
           <p>
