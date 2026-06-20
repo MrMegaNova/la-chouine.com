@@ -43,6 +43,8 @@ export function OnlinePvP() {
     playCard: o.playCard,
     declareCombo: o.declareCombo,
     exchangeSeven: o.exchangeSeven,
+    drawCutCard: o.drawCutCard,
+    cutDeadline: o.cutDeadline,
     revealForPlayer: () => {},
     quitGame: () => {
       // Quitter en pleine partie = abandon : l'adversaire gagne par forfait.

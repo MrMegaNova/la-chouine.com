@@ -29,6 +29,9 @@ after(closeRedis);
 async function matchTwo(server, { clockOptions }) {
   const handle = await attachWebSocketServer(server, {
     tickMs: 15,
+    // Révélation de la coupe instantanée (#201) : le sweep distribue la 1ʳᵉ main
+    // dès que les deux sièges ont pioché, sans attendre l'affichage de 2 s.
+    revealMs: 0,
     getRating: () => Promise.resolve(1500),
     onMatchComplete: () => {},
     clockOptions,
@@ -45,6 +48,12 @@ async function matchTwo(server, { clockOptions }) {
   await Promise.all([once(ws1, 'open'), once(ws2, 'open')]);
   ws1.send(JSON.stringify({ t: 'queue', action: 'join', variant: 'classic' }));
   ws2.send(JSON.stringify({ t: 'queue', action: 'join', variant: 'classic' }));
+  await delay(120);
+  // Coupe interactive (#201) : les deux joueurs piochent pour franchir la phase
+  // `cut` et atteindre le jeu (où tourne l'horloge de coup #141).
+  ws1.send(JSON.stringify({ t: 'action', action: { type: 'cut' } }));
+  ws2.send(JSON.stringify({ t: 'action', action: { type: 'cut' } }));
+  // On laisse le sweep clore la révélation (revealMs: 0) et distribuer la main.
   await delay(120);
   return { handle, ws1, ws2, msgs1, msgs2 };
 }

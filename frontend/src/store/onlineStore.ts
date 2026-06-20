@@ -33,9 +33,19 @@ interface ServerSnapshot {
   trick: TrickEntry[];
   leader: number;
   turn: number;
-  phase: 'draw' | 'final';
+  phase: 'cut' | 'cutReveal' | 'draw' | 'final';
   handOver: boolean;
   handNo: number;
+  // Coupe (#201) : cartes révélées par siège (le paquet caché n'est jamais
+  // transmis) + échéance. En phase `cut`, `deadline` est l'échéance de forfait ;
+  // en `cutReveal`, toutes les cartes sont révélées, `reveal` est vrai et
+  // `dealer` désigne le donneur (pour afficher « qui commence »). null hors coupe.
+  cut: {
+    picks: (Card | null)[];
+    deadline: number | null;
+    reveal?: boolean;
+    dealer?: number;
+  } | null;
   lastTrick: { cards: TrickEntry[]; winner: number } | null;
   opponentLastTrick: { cards: TrickEntry[]; winner: number } | null; // (#95)
   clock: TurnClockView | null; // horloge de coup (#141), null hors partie classée
@@ -111,6 +121,7 @@ interface OnlineState {
   outgoingChallenge: OutgoingChallenge | null;
   gameRated: boolean | null;       // type de la partie en cours (true = classée)
   clock: TurnClockView | null;     // horloge de coup (#141)
+  cutDeadline: number | null;      // échéance de la coupe (#201), ms epoch
 
   connectPresence: (token: string) => void;
   disconnectPresence: () => void;
@@ -120,6 +131,7 @@ interface OnlineState {
   declineChallenge: () => void;
   findOpponent: (variant: Variant, token: string) => void;
   cancelSearch: () => void;
+  drawCutCard: (seat: number) => void;
   playCard: (seat: number, card: Card) => void;
   declareCombo: (seat: number, sig: string, card?: Card) => void;
   exchangeSeven: (seat: number) => void;
@@ -203,6 +215,12 @@ function mapSnapshot(s: ServerSnapshot): GameState {
     ),
     lastAnnounce: s.lastAnnounce ?? null,
     sevenAnnounced: false,
+    // Coupe (#201) : seules les cartes révélées sont connues du client ; le
+    // paquet caché reste côté serveur (déterminisme, #116).
+    cut: {
+      deck: [],
+      picks: s.cut ? s.cut.picks : Array.from({ length: n }, () => null),
+    },
   };
 }
 
@@ -223,6 +241,10 @@ export const useOnlineStore = create<OnlineState>((set, get) => {
   // Déduplication du toast d'échange du 7 (#76) : l'état est repoussé à chaque
   // action, on ne notifie qu'au premier snapshot portant un nouvel échange.
   let lastExchangeKey: string | null = null;
+  // Indication « qui commence » (#201) : émise une seule fois à l'entrée en
+  // phase de révélation (le snapshot `cutReveal` peut être repoussé plusieurs
+  // fois — heartbeat, reconnexion).
+  let revealAnnounced = false;
 
   // Applique un snapshot serveur à l'état du store (état autoritaire).
   function applySnapshot(snap: ServerSnapshot) {
@@ -247,15 +269,29 @@ export const useOnlineStore = create<OnlineState>((set, get) => {
           : `${snap.names[ex.seat] ?? 'L’adversaire'} échange le 7 d’atout`;
       }
     }
+    // Indication « qui commence » (#201) : à l'entrée en phase de révélation, on
+    // affiche via le même canal toast que les annonces qui ouvre la partie
+    // (donneur = plus petite carte ; le joueur à sa gauche commence).
+    let revealToast: string | null = null;
+    if (snap.phase === 'cutReveal' && snap.cut?.reveal && !revealAnnounced) {
+      revealAnnounced = true;
+      const dealer = snap.cut.dealer ?? 0;
+      const leader = (dealer + 1) % snap.names.length;
+      revealToast = `${snap.names[leader] ?? 'L’adversaire'} commence`;
+    }
+    if (snap.phase !== 'cutReveal') revealAnnounced = false;
+
     set({
       game,
       pendingResult,
       forfeit,
       gameRated: snap.rated ?? get().gameRated,
       clock: snap.finished ? null : (snap.clock ?? null), // horloge de coup (#141)
+      cutDeadline: snap.finished ? null : (snap.cut?.deadline ?? null), // coupe (#201)
       status: snap.finished ? 'over' : 'playing',
       opponent: snap.names[1 - snap.you] ?? get().opponent,
       ...(exchangeToast ? { toast: exchangeToast } : {}),
+      ...(revealToast ? { toast: revealToast } : {}),
       // Un match clos (forfait compris) efface l'alerte de déconnexion adverse.
       ...(snap.finished ? { opponentDisconnected: false, opponentDeadline: null } : {}),
     });
@@ -464,6 +500,7 @@ export const useOnlineStore = create<OnlineState>((set, get) => {
     outgoingChallenge: null,
     gameRated: null,
     clock: null,
+    cutDeadline: null,
 
     // Présence : socket ouvert dès la connexion de l'utilisateur (#43). Sert
     // aussi de canal de reprise si une partie était en cours (le serveur
@@ -524,6 +561,8 @@ export const useOnlineStore = create<OnlineState>((set, get) => {
       set({ status: 'idle', searchStartedAt: null, opponent: null });
     },
 
+    // Coupe (#201) : on signale qu'on pioche, le serveur détermine la carte (#116).
+    drawCutCard: (_seat) => send({ t: 'action', action: { type: 'cut' } }),
     playCard: (_seat, card) => send({ t: 'action', action: { type: 'play', card: { s: card.s, r: card.r } } }),
     // L'annonce accompagne une carte de la combinaison (#77) — action atomique.
     declareCombo: (_seat, sig, card) => send({
@@ -555,7 +594,7 @@ export const useOnlineStore = create<OnlineState>((set, get) => {
       reconnectAttempts = 0;
       set({
         status: 'idle', game: null, pendingResult: null, opponent: null,
-        searchStartedAt: null, error: null, gameRated: null, clock: null,
+        searchStartedAt: null, error: null, gameRated: null, clock: null, cutDeadline: null,
         opponentDisconnected: false, opponentDeadline: null, reconnecting: false, forfeit: null,
       });
       // Le socket reste ouvert (présence) ; s'il était tombé, on le relance.

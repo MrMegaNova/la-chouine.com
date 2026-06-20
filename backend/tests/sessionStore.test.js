@@ -34,6 +34,11 @@ test('create/get : persiste et recharge une session jouable', async () => {
 
 test('save : un coup appliqué est bien persisté', async () => {
   const s = await store.createSession({ players: PLAYERS, rated: true });
+  // Coupe interactive (#201) : les deux sièges piochent (→ révélation), puis on
+  // clôt la révélation pour distribuer la 1ʳᵉ main.
+  s.applyAction('u1', { type: 'cut' });
+  s.applyAction('u2', { type: 'cut' });
+  s.finishReveal();
   const seat = s.state.turn;
   const snap = s.snapshotFor(s.players[seat].userId);
   assert.ok(s.applyAction(s.players[seat].userId, { type: 'play', card: snap.players[seat].legalMoves[0] }).ok);

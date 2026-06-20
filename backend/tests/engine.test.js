@@ -67,6 +67,69 @@ test('drawForDealer : la plus petite carte tirée désigne le donneur', () => {
   }
 });
 
+test('drawCut : tire siège par siège puis révèle au dernier (cut → cutReveal, donne différée)', () => {
+  const ORDER = { '7': 0, '8': 1, '9': 2, V: 3, D: 4, R: 5, 10: 6, A: 7 };
+  const SUIT_RANK = { pique: 0, coeur: 1, carreau: 2, trefle: 3 };
+  const less = (a, b) =>
+    ORDER[a.r] < ORDER[b.r] || (ORDER[a.r] === ORDER[b.r] && SUIT_RANK[a.s] < SUIT_RANK[b.s]);
+
+  let g = E.createGame({ mode: 'online', variant: 'classic', playerCount: 2, target: 3, names: ['A', 'B'] });
+  assert.equal(g.phase, 'cut');
+
+  const picks = [];
+  picks[0] = g.cut.deck[g.cut.deck.length - 1];
+  g = E.drawCut(g, 0);
+  assert.equal(g.phase, 'cut'); // il reste un siège à servir
+  assert.deepEqual(g.cut.picks[0], picks[0]);
+
+  picks[1] = g.cut.deck[g.cut.deck.length - 1];
+  g = E.drawCut(g, 1);
+  assert.equal(g.phase, 'cutReveal'); // dernier tirage → révélation, donne différée
+  assert.equal(g.handNo, 0); // main NON distribuée
+  assert.ok(g.players.every((p) => p.hand.length === 0));
+  assert.ok(g.cut.picks.every((p) => p !== null)); // cartes conservées pour l'affichage
+
+  const expected = less(picks[0], picks[1]) ? 0 : 1;
+
+  // finishCut : distribue la 1ʳᵉ main, donneur = plus petite carte, leader à gauche.
+  g = E.finishCut(g);
+  assert.equal(g.phase, 'draw');
+  assert.equal(g.handNo, 1);
+  assert.equal(g.dealer, expected);
+  assert.equal(g.leader, (expected + 1) % 2);
+  assert.ok(g.players.every((p) => p.hand.length === 5));
+});
+
+test('finishCut : hors phase cutReveal → état inchangé', () => {
+  // En phase cut.
+  const inCut = E.createGame({ mode: 'online', variant: 'classic', playerCount: 2, target: 3, names: ['A', 'B'] });
+  assert.equal(E.finishCut(inCut), inCut);
+
+  // En phase draw (déjà distribuée).
+  const dealt = E.dealHand(E.createGame({ mode: 'online', variant: 'classic', playerCount: 2, target: 3, names: ['A', 'B'] }));
+  assert.equal(E.finishCut(dealt), dealt);
+});
+
+test('drawCut : gardes — hors phase, siège hors bornes, siège déjà servi, paquet vide → état inchangé', () => {
+  const base = E.createGame({ mode: 'online', variant: 'classic', playerCount: 2, target: 3, names: ['A', 'B'] });
+
+  // Hors phase cut (partie déjà distribuée).
+  const dealt = E.dealHand(E.createGame({ mode: 'online', variant: 'classic', playerCount: 2, target: 3, names: ['A', 'B'] }));
+  assert.equal(E.drawCut(dealt, 0), dealt);
+
+  // Siège hors bornes.
+  assert.equal(E.drawCut(base, -1), base);
+  assert.equal(E.drawCut(base, 2), base);
+
+  // Siège déjà servi.
+  const once = E.drawCut(base, 0);
+  assert.equal(E.drawCut(once, 0), once);
+
+  // Paquet de coupe vide (filet de sécurité).
+  const empty = { ...base, cut: { deck: [], picks: [null, null] } };
+  assert.equal(E.drawCut(empty, 0), empty);
+});
+
 // ─── Comparaison / résolution de pli ──────────────────────────────────────────
 
 test('cardBeats : l’atout bat une non-atout, la plus haute de même couleur gagne', () => {

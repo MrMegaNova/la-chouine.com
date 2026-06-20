@@ -40,6 +40,14 @@ test('round-trip : les Set declared et nextHandAcks sont restaurés en Set', () 
 
 test('round-trip : après un coup joué, l’état est préservé et reste jouable', () => {
   const s = newSession();
+  // Coupe interactive (#201) : les deux sièges piochent (→ révélation), puis la
+  // révélation se clôt et distribue la 1ʳᵉ main.
+  assert.ok(s.applyAction('u1', { type: 'cut' }).ok);
+  assert.ok(s.applyAction('u2', { type: 'cut' }).ok);
+  assert.equal(s.state.phase, 'cutReveal');
+  assert.ok(s.finishReveal().ok, 'la révélation distribue la 1ʳᵉ main');
+  assert.equal(s.state.phase, 'draw');
+
   const seat = s.state.turn;
   const snap = s.snapshotFor(s.players[seat].userId);
   const res = s.applyAction(s.players[seat].userId, { type: 'play', card: snap.players[seat].legalMoves[0] });

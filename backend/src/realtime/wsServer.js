@@ -101,6 +101,13 @@ async function attachWebSocketServer(httpServer, opts = {}) {
   const tickMs = opts.tickMs ?? 1000;
   const sweepMs = opts.sweepMs ?? tickMs;
   const graceMs = opts.graceMs ?? 60000;
+  // Délai d'inactivité pendant la coupe (#201) : un joueur qui ne pioche pas
+  // dans ce délai perd par forfait (l'adversaire gagne).
+  const cutMs = opts.cutMs ?? 15000;
+  // Durée d'affichage des cartes en phase de révélation (#201) : une fois les
+  // deux sièges tirés, les cartes restent visibles ce temps-là (avec « qui
+  // commence ») avant que la 1ʳᵉ main soit distribuée.
+  const revealMs = opts.revealMs ?? 2000;
   const heartbeatMs = opts.heartbeatMs ?? 30000;
   const challengeTtlMs = opts.challengeTtlMs ?? 60000;
   const msgRatePerSec = opts.msgRatePerSec ?? 20;
@@ -184,7 +191,11 @@ async function attachWebSocketServer(httpServer, opts = {}) {
   function syncClock(session, dseat) {
     if (!session.clock) return;
     const now = Date.now();
-    if (session.finished || session.state.handOver) {
+    // L'horloge de coup ne tourne pas pendant la coupe (#201) : les phases `cut`
+    // (échéance cutDeadline) et `cutReveal` (échéance revealDeadline) ont leurs
+    // propres échéances ; l'horloge ne démarre qu'à la 1ʳᵉ donne.
+    if (session.finished || session.state.handOver
+        || session.state.phase === 'cut' || session.state.phase === 'cutReveal') {
       session.clock.seat = null; session.clock.deadline = null; session.clock.paused = false; return;
     }
     if (session.clock.paused) turnClock.resume(session.clock, now);
@@ -194,6 +205,29 @@ async function attachWebSocketServer(httpServer, opts = {}) {
       turnClock.startTurn(session.clock, turn, now);
     }
     if (dseat >= 0 && !session.clock.paused) turnClock.pause(session.clock, dseat, now);
+  }
+
+  // Aligne l'échéance de la coupe (#201) sur l'état : armée tant qu'il reste un
+  // siège à servir en phase `cut`, effacée dès qu'on en sort. Rafraîchie à
+  // chaque pioche (le délai redémarre pour le siège restant).
+  function syncCutDeadline(session) {
+    if (session.finished || session.state.phase !== 'cut') {
+      session.cutDeadline = null;
+      return;
+    }
+    session.cutDeadline = Date.now() + cutMs;
+  }
+
+  // Aligne l'échéance de révélation (#201) sur l'état : armée à l'entrée en
+  // phase `cutReveal` (si elle ne l'est pas déjà — ne pas la repousser à chaque
+  // sync, sinon les cartes resteraient indéfiniment), effacée hors de cette
+  // phase. Au passage à `draw`, c'est `finishReveal` qui la remet à null.
+  function syncRevealDeadline(session) {
+    if (session.finished || session.state.phase !== 'cutReveal') {
+      session.revealDeadline = null;
+      return;
+    }
+    if (session.revealDeadline === null) session.revealDeadline = Date.now() + revealMs;
   }
 
   // ── Clôture de match (victoire ou forfait) ──
@@ -215,6 +249,7 @@ async function attachWebSocketServer(httpServer, opts = {}) {
       variant, target: 3, rated, clockOptions,
     });
     syncClock(session, -1); // démarre l'horloge du premier coup (#141)
+    syncCutDeadline(session); // arme l'échéance de la coupe (#201)
     await sessionStore.save(session);
     notify(a.userId, { t: 'matchFound', sessionId: session.id, opponent: b.name, rated });
     notify(b.userId, { t: 'matchFound', sessionId: session.id, opponent: a.name, rated });
@@ -259,6 +294,36 @@ async function attachWebSocketServer(httpServer, opts = {}) {
           await sessionStore.save(s);
           broadcastSession(s);
           await finishSession(s);
+        });
+      }
+      // Coupe (#201) : un siège qui ne pioche pas avant l'échéance perd par
+      // forfait. La phase `cut` précède toute donne ; l'horloge de coup n'y
+      // tourne pas encore, d'où ce balayage dédié.
+      for (const sid of await sessionStore.listActiveSessionIds()) {
+        await sessionStore.withLock(sid, async () => {
+          const s = await sessionStore.getSession(sid);
+          if (!s || s.finished || s.state.phase !== 'cut' || s.cutDeadline === null) return;
+          if (Date.now() < s.cutDeadline) return;
+          const res = s.cutTimeout();
+          if (!res.ok) return;
+          await sessionStore.save(s);
+          broadcastSession(s);
+          await finishSession(s);
+        });
+      }
+      // Révélation de la coupe (#201) : une fois l'échéance d'affichage atteinte,
+      // on distribue la 1ʳᵉ main (transition `cutReveal` → `draw`) et on diffuse
+      // le nouvel état. L'horloge de coup démarre alors via syncClock.
+      for (const sid of await sessionStore.listActiveSessionIds()) {
+        await sessionStore.withLock(sid, async () => {
+          const s = await sessionStore.getSession(sid);
+          if (!s || s.finished || s.state.phase !== 'cutReveal' || s.revealDeadline === null) return;
+          if (Date.now() < s.revealDeadline) return;
+          if (!s.finishReveal().ok) return;
+          const dseat = await disconnectedSeat(s);
+          syncClock(s, dseat); // l'horloge de coup démarre à la 1ʳᵉ donne
+          await sessionStore.save(s);
+          broadcastSession(s);
         });
       }
       // Horloges : pause/reprise selon présence, puis expiration.
@@ -410,6 +475,8 @@ async function attachWebSocketServer(httpServer, opts = {}) {
       if (res.ok) {
         const dseat = await disconnectedSeat(session);
         syncClock(session, dseat);
+        syncCutDeadline(session); // rafraîchit/efface l'échéance de coupe (#201)
+        syncRevealDeadline(session); // arme l'échéance de révélation si on y entre (#201)
       }
       await sessionStore.save(session);
       result = { res, session };

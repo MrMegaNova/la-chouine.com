@@ -28,6 +28,7 @@ function makeGame(over: Partial<GameState> = {}): GameState {
     trick: [], leader: 0, turn: 0, phase: 'draw', handOver: false,
     lastTrickWinner: null, lastTrick: null, lastTrickBySeat: [null, null],
     lastAnnounce: null, sevenAnnounced: false,
+    cut: { deck: [], picks: [null, null] },
     ...over,
   };
 }
@@ -36,7 +37,7 @@ function makeController(game: GameState): GameController {
   return {
     game, pendingResult: null, toast: null,
     playCard: vi.fn(), declareCombo: vi.fn(), exchangeSeven: vi.fn(),
-    revealForPlayer: vi.fn(), quitGame: vi.fn(), clearPendingResult: vi.fn(),
+    drawCutCard: vi.fn(), revealForPlayer: vi.fn(), quitGame: vi.fn(), clearPendingResult: vi.fn(),
   };
 }
 

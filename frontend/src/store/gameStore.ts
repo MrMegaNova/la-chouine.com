@@ -1,9 +1,9 @@
 import { create } from 'zustand';
 import {
-  createGame, dealHand, applyPlayCard, applyResolveTrick,
+  createGame, dealHand, drawCut, finishCut, applyPlayCard, applyResolveTrick,
   applyDeclareCombo, applyExchangeSeven, computeHandResult,
   applyHandResult, getAvailableCombos, getLegalMoves, shouldAnnounceAuSept,
-  comboCards,
+  comboCards, smallestDrawSeat,
 } from '@/game/engine';
 import { aiChooseLead, aiChooseResponse, aiChooseCombos } from '@/game/ai';
 import { SUIT_SYMBOL, PTS, ORDER } from '@/game/constants';
@@ -17,6 +17,7 @@ interface GameStore {
 
   startGame: (opts: GameOpts) => void;
   newHand: () => void;
+  drawCutCard: (seat: number) => void;
   playCard: (seat: number, card: Card) => void;
   declareCombo: (seat: number, sig: string, card?: Card) => void;
   exchangeSeven: (seat: number) => void;
@@ -33,6 +34,11 @@ let aiTimer: ReturnType<typeof setTimeout> | null = null;
 // avant d'être ramassé, pour qu'on lise la dernière carte jouée.
 const TRICK_HOLD_MS = 2000;
 
+// Révélation de la coupe (#201) : une fois toutes les cartes tirées, elles
+// restent affichées ce temps-là (avec l'indication « qui commence ») avant que
+// la 1ʳᵉ main soit distribuée et que le plateau apparaisse.
+const CUT_REVEAL_MS = 2000;
+
 // Valeur « à protéger » d'une carte (pour choisir laquelle jouer dans une annonce).
 const PTS_ORDER = (c: Card) => PTS[c.r] * 10 + ORDER[c.r];
 
@@ -47,11 +53,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   startGame: (opts) => {
     clearAiTimer();
-    const base = createGame(opts);
-    const game = dealHand(base);
-    const toastMsg = buildDealToast(game);
-    set({ game, pendingResult: null, toast: toastMsg });
-    scheduleAiIfNeeded(game);
+    // La partie démarre par la coupe (#201) : la 1ʳᵉ main n'est PAS distribuée,
+    // chaque joueur pioche d'abord pour désigner le donneur.
+    const game = createGame(opts);
+    set({ game, pendingResult: null, toast: 'Tirez une carte pour désigner le donneur.' });
+    scheduleCutIfNeeded(game);
   },
 
   newHand: () => {
@@ -62,6 +68,34 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const toastMsg = buildDealToast(next);
     set({ game: next, pendingResult: null, toast: toastMsg });
     scheduleAiIfNeeded(next);
+  },
+
+  // Coupe interactive (#201) : le siège signale qu'il pioche ; le moteur
+  // détermine la carte. Quand tous les sièges ont tiré, on entre en phase de
+  // révélation : les cartes restent affichées CUT_REVEAL_MS avec l'indication
+  // « qui commence », puis la 1ʳᵉ main est distribuée et l'enchaînement IA reprend.
+  drawCutCard: (seat) => {
+    const { game } = get();
+    if (!game || game.phase !== 'cut') return;
+    if (game.cut.picks[seat] !== null) return;
+    const next = drawCut(game, seat);
+    if (next === game) return;
+    if (next.phase === 'cutReveal') {
+      // Dernier tirage : on révèle et on annonce qui commence (même canal toast
+      // qu'une annonce), puis on diffère la donne de 2 s.
+      clearAiTimer();
+      set({ game: next, toast: buildStartToast(next) });
+      aiTimer = setTimeout(() => {
+        const { game: g } = get();
+        if (!g || g.phase !== 'cutReveal') return;
+        const dealt = finishCut(g);
+        set({ game: dealt, toast: buildDealToast(dealt) });
+        scheduleAiIfNeeded(dealt);
+      }, CUT_REVEAL_MS);
+    } else {
+      set({ game: next });
+      scheduleCutIfNeeded(next);
+    }
   },
 
   playCard: (seat, card) => {
@@ -182,6 +216,22 @@ function isAuto(game: GameState, seat: number): boolean {
   return (game.mode === 'ai' || game.mode === 'friend') && seat > 0;
 }
 
+// Phase de coupe (#201) : programme la pioche automatique des sièges « auto »
+// (IA / amis locaux) avec un léger délai, sur le modèle de `scheduleAiIfNeeded`.
+// L'humain (siège 0 hors local) pioche en cliquant son slot.
+function scheduleCutIfNeeded(game: GameState) {
+  if (!game || game.phase !== 'cut') return;
+  // Premier siège auto pas encore servi → il pioche tout seul après un délai.
+  const seat = game.cut.picks.findIndex((pick, i) => pick === null && isAuto(game, i));
+  if (seat < 0) return;
+  clearAiTimer();
+  aiTimer = setTimeout(() => {
+    const { game: g } = useGameStore.getState();
+    if (!g || g.phase !== 'cut' || g.cut.picks[seat] !== null) return;
+    useGameStore.getState().drawCutCard(seat);
+  }, 780);
+}
+
 function scheduleAiIfNeeded(game: GameState) {
   if (!game || game.handOver || game.gatePending) return;
   if (game.trick.length === game.playerCount) return; // pending resolution
@@ -264,6 +314,15 @@ function checkAuSept(game: GameState) {
     useGameStore.setState({ game: g });
   }
   scheduleAiIfNeeded(g);
+}
+
+// Indication « qui commence » affichée pendant la révélation de la coupe (#201),
+// via le même canal toast qu'une annonce. Le donneur est la plus petite carte
+// tirée ; le joueur à sa gauche `(dealer + 1) % n` ouvre la partie.
+function buildStartToast(game: GameState): string {
+  const dealer = smallestDrawSeat(game.cut.picks as Card[]);
+  const leader = (dealer + 1) % game.playerCount;
+  return `${game.names[leader]} commence`;
 }
 
 function buildDealToast(game: GameState): string {
