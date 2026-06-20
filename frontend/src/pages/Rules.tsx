@@ -110,16 +110,18 @@ export default function Rules() {
           La <b>retourne</b> reste visible à côté du talon pendant toute la phase de
           pioche. Le joueur qui détient le <b>7 d'atout</b> peut, à son tour de jeu,
           l'<b>échanger contre la retourne</b> : un troc toujours gagnant,
-          la retourne étant souvent plus forte. Quand il ne reste plus qu' <b>une
-          carte au talon et la retourne</b>, le joueur qui s'apprête à entamer doit annoncer
-          « <b>au sept</b> » si l'échange n'a pas encore été fait : dernier appel
-          avant que la retourne ne soit ramassée.
+          la retourne étant plus forte.
+          <br /><br />
+          Quand il ne reste plus qu'<b>une carte au talon et la retourne</b>, le
+          joueur qui s'apprête à entamer doit annoncer « <b>au sept</b> » si
+          l'échange n'a pas encore été fait : dernier appel avant que la retourne
+          ne soit ramassée.
         </p>
         <Ex title="Exemple">
           <p>
             La retourne est la <b>D♠</b> (atout pique). Léa pioche le <b>7♠</b> : à son
-            prochain tour, elle pose le <b>7♠</b> à la place de la Dame qu'elle prend: 3 points de
-            plus dans sa main!
+            prochain tour, elle pose le <b>7♠</b> à la place de la <b>D♠</b> qu'elle
+            prend : trois points de plus dans sa main !
           </p>
         </Ex>
 
