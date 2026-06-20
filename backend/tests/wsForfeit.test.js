@@ -141,7 +141,7 @@ test('coupe (#201) : un joueur qui ne pioche pas perd par forfait à l’échéa
   const rt = await attachWebSocketServer(server, {
     tickMs: 15,
     sweepMs: 20,
-    cutMs: 80,        // échéance de coupe courte → test déterministe
+    cutMs: 120,       // échéance de coupe courte (marge > latence d'appariement)
     heartbeatMs: 0,
     getRating: () => Promise.resolve(1500),
     onMatchComplete: (outcome) => recorded.push(outcome),
@@ -161,18 +161,29 @@ test('coupe (#201) : un joueur qui ne pioche pas perd par forfait à l’échéa
   const c2 = await connect('u2', 'Bob');
   t.after(async () => { rt.stop(); try { c1.ws.close(); c2.ws.close(); } catch { /* ignore */ } server.close(); await closeRedis(); });
 
+  // Attend (polling) un état satisfaisant `pred`, sans courir contre une échéance
+  // murale : l'appariement et la coupe vivent dans des boucles asynchrones, un
+  // `delay` fixe est intrinsèquement instable sur CI chargé.
+  const waitState = async (pred, timeout = 2000) => {
+    const t0 = Date.now();
+    for (;;) {
+      const st = c1.msgs.filter(m => m.t === 'state').pop();
+      if (st && pred(st)) return st;
+      if (Date.now() - t0 > timeout) return st;
+      await delay(10);
+    }
+  };
+
   // Appariement → partie en phase de coupe.
   c1.ws.send(JSON.stringify({ t: 'queue', action: 'join', variant: 'classic' }));
   c2.ws.send(JSON.stringify({ t: 'queue', action: 'join', variant: 'classic' }));
-  await delay(80);
-  const cutState = c1.msgs.filter(m => m.t === 'state').pop();
+  const cutState = await waitState(m => m.state.phase === 'cut');
   assert.equal(cutState.state.phase, 'cut', 'la partie démarre par la coupe');
 
-  // Seule Alice pioche ; Bob reste inactif → forfait à l'échéance.
+  // Seule Alice pioche ; Bob reste inactif → forfait à l'échéance (l'échéance
+  // redémarre à la pioche d'Alice, on attend donc la clôture par polling).
   c1.ws.send(JSON.stringify({ t: 'action', action: { type: 'cut' } }));
-  await delay(160);
-
-  const finalState = c1.msgs.filter(m => m.t === 'state').pop();
+  const finalState = await waitState(m => m.state.finished === true);
   assert.equal(finalState.state.finished, true, 'la partie est close par forfait');
   assert.equal(finalState.state.matchResult.forfeit.by, 1, 'le siège inactif (Bob) est forfait');
   assert.equal(finalState.state.matchResult.forfeit.reason, 'timeout');
