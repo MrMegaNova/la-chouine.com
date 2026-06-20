@@ -42,26 +42,18 @@ export default function Home() {
         <div className="wrap hero" style={{ paddingTop: 46, paddingBottom: 30 }}>
           <div className="hero-grid">
             <div>
-              <span className="kicker">◑ Jeu du Val de Loir · depuis le XVIᵉ siècle</span>
+              <span className="kicker">◑ Jeu du Val de Loir · depuis le XVIIIᵉ siècle</span>
               <h1 style={{ fontFamily: 'var(--serif)', fontWeight: 900, fontSize: 'clamp(40px,7vw,76px)', lineHeight: .96, margin: '18px 0 14px', letterSpacing: -1 }}>
                 Le jeu de cartes de la <em style={{ fontStyle: 'italic', color: 'var(--gold-soft)', fontWeight: 500 }}>Vallée du Loir</em>.
               </h1>
               <p style={{ fontSize: 18, lineHeight: 1.6, maxWidth: 520, color: 'var(--cream-2)' }}>
-                La Chouine se joue à deux, avec 32 cartes, des brisques à capturer et des annonces à dénicher. Affrontez l'ordinateur en quelques secondes — ou créez un compte pour défier vos amis.
+                La Chouine se joue à deux, avec 32 cartes, des brisques à capturer et des annonces à dénicher. Affrontez l'ordinateur en quelques secondes ou créez un compte pour jouer en ligne et défier vos amis.
               </p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 26 }}>
                 <Link to="/jouer" className="btn btn--gold">Jouer maintenant</Link>
                 <Link to="/regles" className="btn btn--ghost">Apprendre les règles</Link>
               </div>
               <OnlineCta />
-              <div style={{ display: 'flex', gap: 26, marginTop: 30, flexWrap: 'wrap' }}>
-                {[['32','cartes'],['8','brisques'],['2–4','joueurs'],['50','la quinte']].map(([n, l]) => (
-                  <div key={l}>
-                    <b style={{ fontFamily: 'var(--serif)', fontSize: 30, color: 'var(--gold-soft)', fontWeight: 900, display: 'block', lineHeight: 1 }}>{n}</b>
-                    <span style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: 2, opacity: .7 }}>{l}</span>
-                  </div>
-                ))}
-              </div>
             </div>
             <HeroFan />
           </div>
@@ -76,7 +68,7 @@ export default function Home() {
             {[
               { icon: '🤖', tag: 'Sans inscription', title: 'Contre l\'ordinateur', desc: 'Trois niveaux de difficulté. Idéal pour apprendre les règles ou s\'entraîner.', link: '/jouer', cta: 'Affronter l\'ordinateur', primary: true },
               { icon: '👥', tag: 'Sur un même écran', title: 'À deux, en local', desc: 'Passez l\'appareil de main en main. Parfait pour une partie en famille.', link: '/jouer', cta: 'Partie locale', primary: false },
-              { icon: '🌐', tag: 'Compte requis', title: 'Entre amis', desc: 'Cherchez des joueurs, ajoutez-les en amis et lancez une partie en ligne.', link: '/amis', cta: 'Trouver des amis', primary: false },
+              { icon: '🌐', tag: 'Compte requis', title: 'En ligne ou entre amis', desc: 'Lancez une partie classée en ligne ou une partie amicale.', link: '/amis', cta: 'Trouver des amis', primary: false },
             ].map(m => (
               <Link key={m.title} to={m.link} style={{ textDecoration: 'none', color: 'inherit' }}>
                 <div style={{ position: 'relative', border: '1px solid var(--line)', borderRadius: 'var(--r)', padding: '26px 22px', background: 'linear-gradient(180deg,rgba(247,240,223,.04),rgba(247,240,223,.015))', cursor: 'pointer', transition: '.22s' }}
@@ -96,14 +88,14 @@ export default function Home() {
           <div className="steps-4" style={{ paddingBottom: 54 }}>
             {[
               ['1','La donne','5 cartes chacun. La retourne fixe l\'atout. Le reste forme le talon.'],
-              ['2','Les annonces','Mariage, tierce, quarteron, quinte… rapportent des points bonus en gagnant la main.'],
-              ['3','Les plis','Talon présent : jeu libre. Vide : fournir, monter, couper.'],
+              ['2','Les annonces','Mariage, tierce, quarteron, quinte… rapportent des points bonus.'],
+              ['3','Les plis','Talon présent : jeu libre.\nTalon vide : fournir, couper.'],
               ['4','Le décompte','Brisques + annonces + dix de der. Le plus haut total rafle le point.'],
             ].map(([n, h, p]) => (
               <div key={n} style={{ borderTop: '2px solid var(--line)', paddingTop: 16 }}>
                 <b style={{ fontFamily: 'var(--serif)', fontSize: 40, color: 'var(--gold-soft)', fontWeight: 900, display: 'block', lineHeight: 1 }}>{n}</b>
                 <h4 style={{ margin: '8px 0 6px', fontSize: 16 }}>{h}</h4>
-                <p style={{ fontSize: 13.5, color: 'var(--cream-2)', opacity: .8, lineHeight: 1.5 }}>{p}</p>
+                <p style={{ fontSize: 13.5, color: 'var(--cream-2)', opacity: .8, lineHeight: 1.5, whiteSpace: 'pre-line' }}>{p}</p>
               </div>
             ))}
           </div>

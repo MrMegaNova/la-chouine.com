@@ -2,6 +2,8 @@
 // Proust, éditée par l'association de sauvegarde du château de Lavardin
 // (regles_chouine.pdf à la racine du dépôt).
 
+import { Link } from 'react-router-dom';
+
 function Ex({ title, children }: { title?: string; children: React.ReactNode }) {
   return (
     <div className="rules-example">
@@ -16,22 +18,32 @@ export default function Rules() {
     <div className="wrap" style={{ paddingTop: 36, paddingBottom: 60 }}>
       <h2 className="section-title">Les règles de la Chouine</h2>
       <p className="section-sub">
-        Version classique, telle que pratiquée dans la Vallée du Loir — d'après la règle
+        Version classique, telle que pratiquée dans la Vallée du Loir, d'après la règle
         de Jacques Proust éditée par l'association de sauvegarde du château de Lavardin.
       </p>
 
-      {/* ── Les mots du jeu ─────────────────────────────────────────────── */}
       <div className="panel rules">
-        <h3 style={{ marginTop: 0 }}>Avant de jouer : les mots de la Chouine</h3>
+        <h3 style={{ marginTop: 0 }}>Le plus simple pour apprendre, c'est de jouer !</h3>
+        <p>
+          La Chouine se comprend bien mieux en jouant qu'en lisant.
+          Lancez une partie contre l'ordinateur : aucune inscription, et vous
+          pouvez revenir ici à tout moment.
+        </p>
+        <Link to="/jouer" className="btn btn--gold" style={{ marginTop: 4 }}>
+          Jouer contre l'ordinateur
+        </Link>
+      </div>
+      {/* ── Les mots du jeu ─────────────────────────────────────────────── */}
+      <div className="panel rules" style={{ marginTop: 24 }}>
+        <h3 style={{ marginTop: 0 }}>Avant de jouer : le vocabulaire de la Chouine</h3>
         <p>
           Quatre notions suffisent pour comprendre une table de Chouine : la <b>donne</b>,
-          le <b>talon</b>, la <b>retourne</b> et les <b>brisques</b>. Prenez une minute
-          pour les apprivoiser — tout le reste en découle.
+          le <b>talon</b>, la <b>retourne</b> et les <b>brisques</b>.
         </p>
 
         <h3>La donne</h3>
         <p>
-          La <b>donne</b>, c'est la distribution des cartes. Au début du match, chaque
+          La <b>donne</b> est la distribution des cartes. Au début du match, chaque
           joueur tire une carte : <b>la plus petite désigne le donneur</b>. Le donneur
           mélange, fait couper à son adversaire, puis distribue <b>cinq cartes</b> à
           chacun, une par une, en commençant par l'adversaire. Il retourne ensuite
@@ -41,12 +53,11 @@ export default function Rules() {
         </p>
         <p>
           C'est toujours <b>l'adversaire du donneur qui joue la première carte</b>.
-          À chaque nouveau coup, le donneur change (alternance) — sauf après un coup
-          nul, où le même joueur redonne.
+          À chaque nouveau coup <b>gagné</b>, le donneur change.
         </p>
         <Ex title="Exemple">
           <p>
-            Léa donne : 5 cartes à Marc, 5 à elle, puis elle retourne la 11ᵉ carte —
+            Léa distribue 5 cartes à Marc et 5 pour elle, puis elle retourne la 11<sup>ème</sup> carte (nommée <b>la retourne</b>) :
             le <b>9♥</b>. L'atout du coup sera donc <b>cœur</b>, et il reste 21 cartes
             au talon. Marc, adversaire de la donneuse, entame le premier pli.
           </p>
@@ -57,12 +68,11 @@ export default function Rules() {
           Le <b>talon</b> est le paquet des cartes non distribuées, posé face cachée à
           côté de la retourne. Après chaque pli, <b>le gagnant du pli pioche la première
           carte du talon, puis son adversaire pioche à son tour</b> : chacun retrouve
-          ainsi cinq cartes en main. Quand le talon s'épuise, la retourne elle-même est
-          ramassée comme dernière pioche.
+          ainsi cinq cartes en main. Lorsque le talon est épuisé, la retourne est
+          ramassée comme dernière carte piochée.
         </p>
         <p>
-          Le talon commande la règle la plus importante du jeu — celle qui déroute tous
-          les habitués de la belote. La partie a <b>deux phases</b> :
+          Le talon commande la règle la plus importante du jeu. La partie a <b>deux phases</b> :
         </p>
         <ul>
           <li>
@@ -79,18 +89,19 @@ export default function Rules() {
         </ul>
         <Ex title="Exemple — phase talon">
           <p>
-            Il reste des cartes au talon. Marc entame de l'<b>As♦</b>. Léa n'a aucune
+            Il reste des cartes au talon. Marc joue l'<b>As♦</b>. Léa n'a aucune
             obligation : elle se défausse de son <b>7♣</b> et garde ses beaux carreaux.
             Marc remporte le pli (11 points dans sa pile), pioche en premier, et rejoue.
           </p>
         </Ex>
-        <Ex title="Exemple — talon épuisé">
+        <Ex title="Exemples — talon épuisé">
           <p>
-            Le talon est vide, l'atout est cœur. Marc entame du <b>R♥</b> (atout). Léa a
-            le 7♥ et l'As♥ : demandée à l'atout, elle doit <b>monter</b> → elle est
-            obligée de jouer l'<b>As♥</b>, pas le 7. Si elle n'avait eu aucun cœur mais
-            un atout… elle n'en aurait pas eu besoin ici — mais sur une entame
-            au <b>R♦</b> sans carreau en main, elle aurait dû <b>couper</b> d'un cœur.
+            Le talon est vide, l'atout est cœur. Marc joue le <b>R♥</b> (atout). Léa a
+            le <b>7♥</b> et l'<b>As♥</b> : elle doit <b>monter</b> → elle est
+            obligée de jouer l'<b>As♥</b>.
+            <br /><br />
+            Le talon est vide, l'atout est cœur. Marc joue le <b>R♦</b>. Léa n'a pas de carreau,
+            mais elle a le <b>7♥</b> (atout). Elle coupe et remporte le pli.
           </p>
         </Ex>
 
@@ -98,17 +109,19 @@ export default function Rules() {
         <p>
           La <b>retourne</b> reste visible à côté du talon pendant toute la phase de
           pioche. Le joueur qui détient le <b>7 d'atout</b> peut, à son tour de jeu,
-          l'<b>échanger contre la retourne</b> — un troc presque toujours gagnant,
-          la retourne étant souvent plus forte. Quand il ne reste plus que <b>deux
-          cartes au talon</b>, le joueur qui s'apprête à entamer doit annoncer
-          « <b>au sept</b> » si l'échange n'a pas encore été fait : dernier appel
-          avant que la retourne ne soit ramassée.
+          l'<b>échanger contre la retourne</b> : un troc toujours gagnant,
+          la retourne étant plus forte.
+          <br /><br />
+          Quand il ne reste plus qu'<b>une carte au talon et la retourne</b>, le
+          joueur qui s'apprête à entamer doit annoncer « <b>au sept</b> » si
+          l'échange n'a pas encore été fait : dernier appel avant que la retourne
+          ne soit ramassée.
         </p>
         <Ex title="Exemple">
           <p>
             La retourne est la <b>D♠</b> (atout pique). Léa pioche le <b>7♠</b> : à son
-            prochain tour, elle pose le 7♠ sous le talon et prend la Dame — 3 points de
-            mieux dans sa main, et une future annonce de mariage peut-être…
+            prochain tour, elle pose le <b>7♠</b> à la place de la <b>D♠</b> qu'elle
+            prend : trois points de plus dans sa main !
           </p>
         </Ex>
 
@@ -117,9 +130,7 @@ export default function Rules() {
           Les <b>As et les Dix</b> s'appellent <b>brisques</b>. Il y en a donc{' '}
           <b>huit</b> dans le jeu (4 As + 4 Dix). Ce sont les cartes qui font les
           points : à elles seules, elles valent <b>84 des 120 points</b> de cartes du
-          jeu (4 × 11 + 4 × 10). Gagner des plis ne sert à rien si l'on n'y ramasse pas
-          de brisques — toute la stratégie de la Chouine tourne autour de leur capture
-          et de leur protection.
+          jeu (4 × 11 + 4 × 10).
         </p>
         <Ex title="Exemple">
           <p>
