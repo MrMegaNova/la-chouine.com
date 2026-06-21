@@ -33,6 +33,7 @@ test('coupe (#201) : la partie démarre en phase cut, sans 1ʳᵉ main distribu�
   const snap = sess.snapshotFor('u1');
   assert.deepEqual(snap.cut.picks, [null, null]);
   assert.equal(snap.cut.deck, undefined, 'le paquet caché ne fuit jamais');
+  assert.equal(snap.cut.deckCount, 32, 'le client connaît le NOMBRE de cartes à choisir (#216)');
 });
 
 test('coupe (#201) : chaque siège pioche, la plus petite carte désigne le donneur', () => {
@@ -67,6 +68,22 @@ test('coupe (#201) : chaque siège pioche, la plus petite carte désigne le donn
   assert.equal(sess.applyAction('u1', { type: 'cut' }).ok, false);
   // finishReveal hors phase cutReveal est refusé.
   assert.equal(sess.finishReveal().ok, false);
+});
+
+test('coupe (#216) : on choisit la carte par index ; un index hors bornes est refusé', () => {
+  const sess = new GameSession({
+    id: 't', variant: 'classic', target: 3,
+    players: [{ userId: 'u1', name: 'Alice' }, { userId: 'u2', name: 'Bob' }],
+  });
+  const deckBefore = [...sess.state.cut.deck];
+  const chosen = deckBefore[3];
+  // Index hors bornes → refusé, rien tiré.
+  assert.equal(sess.applyAction('u1', { type: 'cut', index: deckBefore.length }).ok, false);
+  assert.equal(sess.state.cut.picks[0], null);
+  // Index valide → la carte choisie (position 3) est révélée pour le siège 0.
+  assert.ok(sess.applyAction('u1', { type: 'cut', index: 3 }).ok);
+  assert.deepEqual(sess.state.cut.picks[0], chosen);
+  assert.equal(sess.state.cut.deck.length, deckBefore.length - 1, 'la carte a quitté le paquet');
 });
 
 test('coupe (#201) : cutTimeout fait perdre le siège qui n’a pas pioché', () => {

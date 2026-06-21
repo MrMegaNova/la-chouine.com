@@ -103,24 +103,26 @@ describe('<GameTable> — profil adverse (#85)', () => {
 });
 
 describe('<GameTable> — la coupe en PvP (#205)', () => {
-  it('le joueur local pioche son propre siège même quand ce n’est pas le siège 0', async () => {
+  it('le joueur local pioche pour son propre siège, même quand ce n’est pas le siège 0', async () => {
     const user = userEvent.setup();
-    // Client du 2ᵉ joueur : il occupe le siège 1 (viewPlayer = 1).
+    // Client du 2ᵉ joueur : il occupe le siège 1 (viewPlayer = 1). En online le
+    // paquet n'est pas transmis : seul `deckCount` indique combien de cartes
+    // étaler (#216).
     const ctrl = makeController(makeGame({
       mode: 'online', viewPlayer: 1, phase: 'cut',
       names: ['Adversaire', 'Moi'],
-      cut: { deck: [], picks: [null, null] },
+      cut: { deck: [], picks: [null, null], deckCount: 3 },
     }));
     render(<GameTable controller={ctrl} />);
 
     // « (vous) » est sur SON siège, pas sur l'adversaire.
     expect(screen.getByText('Moi (vous)')).toBeInTheDocument();
 
-    // Le seul bouton de pioche cible son propre siège (1), pas le 0.
-    const drawBtn = screen.getByRole('button', { name: 'Tirer ma carte (Moi)' });
-    await user.click(drawBtn);
-    expect(ctrl.drawCutCard).toHaveBeenCalledWith(1);
-    expect(screen.queryByRole('button', { name: 'Tirer ma carte (Adversaire)' })).toBeNull();
+    // Les 3 cartes (deckCount) sont étalées ; le clic pioche pour SON siège (1).
+    const cards = screen.getAllByRole('button', { name: /Choisir la carte/ });
+    expect(cards).toHaveLength(3);
+    await user.click(cards[0]);
+    expect(ctrl.drawCutCard).toHaveBeenCalledWith(1, 0);
   });
 });
 

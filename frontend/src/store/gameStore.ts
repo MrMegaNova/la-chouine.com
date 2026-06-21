@@ -17,7 +17,7 @@ interface GameStore {
 
   startGame: (opts: GameOpts) => void;
   newHand: () => void;
-  drawCutCard: (seat: number) => void;
+  drawCutCard: (seat: number, index?: number) => void;
   playCard: (seat: number, card: Card) => void;
   declareCombo: (seat: number, sig: string, card?: Card) => void;
   exchangeSeven: (seat: number) => void;
@@ -74,11 +74,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
   // détermine la carte. Quand tous les sièges ont tiré, on entre en phase de
   // révélation : les cartes restent affichées CUT_REVEAL_MS avec l'indication
   // « qui commence », puis la 1ʳᵉ main est distribuée et l'enchaînement IA reprend.
-  drawCutCard: (seat) => {
+  drawCutCard: (seat, index) => {
     const { game } = get();
     if (!game || game.phase !== 'cut') return;
     if (game.cut.picks[seat] !== null) return;
-    const next = drawCut(game, seat);
+    const next = drawCut(game, seat, index);
     if (next === game) return;
     if (next.phase === 'cutReveal') {
       // Dernier tirage : on révèle et on annonce qui commence (même canal toast
@@ -228,7 +228,9 @@ function scheduleCutIfNeeded(game: GameState) {
   aiTimer = setTimeout(() => {
     const { game: g } = useGameStore.getState();
     if (!g || g.phase !== 'cut' || g.cut.picks[seat] !== null) return;
-    useGameStore.getState().drawCutCard(seat);
+    // L'IA / l'ami local choisit une carte au hasard parmi les face cachée (#216).
+    const idx = Math.floor(Math.random() * g.cut.deck.length);
+    useGameStore.getState().drawCutCard(seat, idx);
   }, 780);
 }
 

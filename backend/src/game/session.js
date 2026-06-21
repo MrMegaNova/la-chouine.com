@@ -102,7 +102,7 @@ class GameSession {
     if (!action || typeof action.type !== 'string') return { ok: false, error: 'Action invalide.' };
 
     switch (action.type) {
-      case 'cut':          return this._cut(seat);
+      case 'cut':          return this._cut(seat, action.index);
       case 'play':         return this._play(seat, action.card);
       case 'declare':      return this._declare(seat, action.sig, action.card);
       case 'exchangeSeven':return this._exchangeSeven(seat);
@@ -135,11 +135,13 @@ class GameSession {
   // sièges ont pioché, on entre en phase de révélation (`cut` → `cutReveal`) :
   // les cartes restent affichées le temps d'annoncer qui commence ; la donne est
   // ensuite déclenchée par `finishReveal` (échéance armée par le driver wsServer).
-  _cut(seat) {
+  _cut(seat, index) {
     const s = this.state;
     if (s.phase !== 'cut') return { ok: false, error: 'La coupe est terminée.' };
     if (s.cut.picks[seat] !== null) return { ok: false, error: 'Vous avez déjà coupé.' };
-    const next = drawCut(s, seat);
+    // `index` = carte choisie parmi les 32 face cachée (#216). Validé par le
+    // moteur (bornes) ; le client ne connaît jamais le paquet, seulement un index.
+    const next = drawCut(s, seat, index);
     if (next === s) return { ok: false, error: 'Pioche impossible.' };
     this.state = next;
     return { ok: true };
@@ -377,7 +379,7 @@ class GameSession {
       // cartes sont visibles et on expose l'échéance de révélation + le donneur
       // (pour afficher « qui commence »).
       cut: s.phase === 'cut'
-        ? { picks: s.cut.picks, deadline: this.cutDeadline }
+        ? { picks: s.cut.picks, deadline: this.cutDeadline, deckCount: s.cut.deck.length }
         : s.phase === 'cutReveal'
           ? { picks: s.cut.picks, reveal: true, deadline: this.revealDeadline, dealer: smallestDrawSeat(s.cut.picks) }
           : null,

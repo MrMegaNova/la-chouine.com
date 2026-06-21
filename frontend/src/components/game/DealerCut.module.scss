@@ -88,3 +88,28 @@
   font-size: 14px;
   font-weight: 600;
 }
+
+// Étalage des cartes face cachée à choisir (#216) : les 32 cartes (puis 31…)
+// présentées au joueur, qui clique celle qu'il veut.
+.pool {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  justify-content: center;
+  max-width: 480px;
+  margin: 0 auto 18px;
+}
+
+.poolCard {
+  background: none;
+  border: none;
+  padding: 0;
+  line-height: 0;
+  border-radius: 6px;
+  transition: transform 0.1s ease, filter 0.1s ease;
+}
+button.poolCard {
+  cursor: pointer;
+  &:hover { transform: translateY(-5px); filter: drop-shadow(0 5px 8px rgba(0, 0, 0, 0.4)); }
+  &:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+}

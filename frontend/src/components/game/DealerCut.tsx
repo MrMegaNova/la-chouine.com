@@ -17,7 +17,7 @@ export function DealerCut({
 }: {
   game: GameState;
   me: number;
-  onDraw: (seat: number) => void;
+  onDraw: (seat: number, index: number) => void;
   deadline?: number | null;
 }) {
   const n = game.playerCount;
@@ -30,6 +30,11 @@ export function DealerCut({
   const starter = isReveal
     ? game.names[(smallestDrawSeat(picks as Card[]) + 1) % n]
     : null;
+  // Cartes restant à choisir (#216) : `deck.length` en local/IA, `deckCount` en
+  // online (le paquet n'est jamais transmis, seul le compte l'est).
+  const poolSize = game.cut.deck.length || game.cut.deckCount || 0;
+  // On ne peut piocher que si on n'a pas encore choisi et qu'il reste des cartes.
+  const canPick = !isReveal && myPick === null && poolSize > 0;
 
   return (
     <div className={styles.cut} role="dialog" aria-label="Tirage du donneur">
@@ -39,7 +44,7 @@ export function DealerCut({
           {isReveal
             ? `${starter} commence`
             : myPick === null
-              ? 'Tirez une carte : la plus petite désigne le donneur.'
+              ? 'Choisissez une carte : la plus petite désigne le donneur.'
               : allPicked
                 ? 'Toutes les cartes sont tirées…'
                 : 'En attente des autres joueurs…'}
@@ -48,35 +53,45 @@ export function DealerCut({
         {/* Pas de compte à rebours de forfait pendant la révélation. */}
         {!isReveal && deadline != null && myPick === null && <Countdown deadline={deadline} />}
 
+        {/* Étalage des cartes face cachée à choisir (#216). */}
+        {!isReveal && poolSize > 0 && (
+          <div className={styles.pool} role="group" aria-label="Cartes à piocher">
+            {Array.from({ length: poolSize }, (_, idx) =>
+              canPick ? (
+                <button
+                  key={idx}
+                  type="button"
+                  className={styles.poolCard}
+                  onClick={() => onDraw(me, idx)}
+                  aria-label={`Choisir la carte ${idx + 1}`}
+                >
+                  <PlayingCard back size={44} />
+                </button>
+              ) : (
+                <div key={idx} className={styles.poolCard}>
+                  <PlayingCard back size={44} />
+                </div>
+              ),
+            )}
+          </div>
+        )}
+
+        {/* Cartes tirées par siège. */}
         <div className={styles.seats}>
           {Array.from({ length: n }, (_, j) => {
             // Ordre d'affichage : soi d'abord, puis les autres dans l'ordre des sièges.
             const seat = (me + j) % n;
             const pick = picks[seat];
             const isMe = seat === me;
-            const canDraw = isMe && pick === null;
             return (
               <div key={seat} className={styles.seat}>
                 <span className={`${styles.seatName} ${isMe ? styles.seatMe : ''}`}>
                   {game.names[seat]}{isMe ? ' (vous)' : ''}
                 </span>
                 <div className={styles.slot}>
-                  {pick ? (
-                    // Carte révélée.
-                    <PlayingCard card={pick} trump={false} />
-                  ) : canDraw ? (
-                    <button
-                      type="button"
-                      className={styles.drawBtn}
-                      onClick={() => onDraw(seat)}
-                      aria-label={`Tirer ma carte (${game.names[seat]})`}
-                    >
-                      <PlayingCard back />
-                    </button>
-                  ) : (
-                    // En attente de ce siège.
-                    <PlayingCard back />
-                  )}
+                  {pick
+                    ? <PlayingCard card={pick} trump={false} />
+                    : <PlayingCard back />}
                 </div>
                 {pick && (
                   <span className={styles.pickLabel}>{pick.r}{SUIT_SYMBOL[pick.s]}</span>

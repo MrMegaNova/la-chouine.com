@@ -78,6 +78,9 @@ function runCase(engine, fx) {
     case 'drawCutInvariants':
       return drawCutInvariants(engine, fx);
 
+    case 'drawCutChoiceInvariants':
+      return drawCutChoiceInvariants(engine, fx);
+
     default:
       throw new Error(`Fixture de parité : fonction inconnue « ${fx.fn} »`);
   }
@@ -250,6 +253,60 @@ function drawCutInvariants(engine, fx) {
     dealtAfterFinish,
     finishCutIsGuarded,
   };
+}
+
+// Coupe par CHOIX d'une carte (#216) : `drawCut(game, seat, index)` retire la
+// carte à la position `index` du paquet caché (et non plus le dessus). On vérifie
+// que les deux moteurs : retirent bien la carte choisie, gardent des tirages
+// uniques, désignent le donneur par la plus petite carte choisie, et refusent
+// un index hors bornes (état inchangé).
+function drawCutChoiceInvariants(engine, fx) {
+  const { variant, playerCount, iterations = 100 } = fx;
+  const less = (a, b) =>
+    DRAW_ORDER[a.r] < DRAW_ORDER[b.r] ||
+    (DRAW_ORDER[a.r] === DRAW_ORDER[b.r] && DRAW_SUIT[a.s] < DRAW_SUIT[b.s]);
+
+  let chosenCardRemoved = true;
+  let picksUnique = true;
+  let dealerIsSmallest = true;
+  let rejectsBadIndex = true;
+
+  for (let it = 0; it < iterations; it++) {
+    let g = engine.createGame({
+      mode: 'online',
+      variant,
+      playerCount,
+      target: 3,
+      names: Array.from({ length: playerCount }, (_, i) => `P${i}`),
+    });
+
+    // Index hors bornes → état inchangé (même référence renvoyée).
+    if (engine.drawCut(g, 0, g.cut.deck.length) !== g) rejectsBadIndex = false;
+    if (engine.drawCut(g, 0, -1) !== g) rejectsBadIndex = false;
+
+    const picks = [];
+    for (let seat = 0; seat < playerCount; seat++) {
+      const len = g.cut.deck.length;
+      const idx = (seat * 5 + it * 3 + 1) % len; // varie les positions choisies
+      const expected = g.cut.deck[idx];
+      g = engine.drawCut(g, seat, idx);
+      const got = g.cut.picks[seat];
+      if (!got || got.s !== expected.s || got.r !== expected.r) chosenCardRemoved = false;
+      picks[seat] = expected;
+    }
+
+    const keys = new Set(picks.map((c) => `${c.s}|${c.r}`));
+    if (keys.size !== playerCount) picksUnique = false;
+
+    g = engine.finishCut(g);
+    let smallest = 0;
+    for (let i = 1; i < picks.length; i++) {
+      if (less(picks[i], picks[smallest])) smallest = i;
+    }
+    if (g.dealer !== smallest) dealerIsSmallest = false;
+  }
+
+  return { chosenCardRemoved, picksUnique, dealerIsSmallest, rejectsBadIndex };
 }
 
 module.exports = { runCase };

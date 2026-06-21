@@ -19,7 +19,7 @@ export interface GameController {
   playCard: (seat: number, card: Card) => void;
   declareCombo: (seat: number, sig: string, card?: Card) => void;
   exchangeSeven: (seat: number) => void;
-  drawCutCard: (seat: number) => void;
+  drawCutCard: (seat: number, index: number) => void;
   revealForPlayer: (seat: number) => void;
   quitGame: () => void;
   clearPendingResult: () => void;
@@ -99,7 +99,7 @@ export function GameTable({ controller }: { controller?: GameController } = {}) 
       <DealerCut
         game={game}
         me={cutSeat}
-        onDraw={(seat) => drawCutCard(seat)}
+        onDraw={(seat, index) => drawCutCard(seat, index)}
         deadline={ctrl.cutDeadline ?? null}
       />
     );
