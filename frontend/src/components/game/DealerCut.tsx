@@ -39,7 +39,7 @@ export function DealerCut({
   return (
     <div className={styles.cut} role="dialog" aria-label="Tirage du donneur">
       <div className={styles.panel}>
-        <h2 className={styles.title}>La coupe</h2>
+        <h2 className={styles.title}>Piocher une carte</h2>
         <p className={`note ${styles.sub}`}>
           {isReveal
             ? `${starter} commence`
