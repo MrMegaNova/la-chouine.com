@@ -39,10 +39,14 @@ describe('<Login>', () => {
     const { container } = renderLogin();
     await user.click(screen.getByRole('button', { name: 'Inscription' }));
 
-    const honeypot = container.querySelector('input[name="website"]');
+    // Nom neutre (pas `website`) pour ne pas être ciblé par l'autofill (#203).
+    const honeypot = container.querySelector('input[name="contact_extra"]');
     expect(honeypot).not.toBeNull();
     expect(honeypot).toHaveAttribute('aria-hidden', 'true');
     expect(honeypot).toHaveAttribute('tabindex', '-1');
+    // Hints explicites aux gestionnaires de mots de passe (#203).
+    expect(honeypot).toHaveAttribute('data-lpignore', 'true');
+    expect(honeypot).toHaveAttribute('data-1p-ignore', 'true');
     // Aucun champ texte accessible ne porte le nom du piège (il est masqué aux
     // lecteurs d'écran) : un humain ne peut pas le remplir par erreur.
     const accessibleTextboxes = screen.queryAllByRole('textbox');

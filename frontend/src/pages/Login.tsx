@@ -101,16 +101,24 @@ export default function Login() {
         )}
 
         {/* Champ-piège anti-bot (#86) — hors écran, ignoré par les lecteurs
-            d'écran et le clavier ; un humain ne le remplit jamais. */}
+            d'écran et le clavier ; un humain ne le remplit jamais.
+            Nom volontairement neutre (`contact_extra`) plutôt que `website` :
+            ce dernier est une cible classique de l'autofill navigateur et des
+            gestionnaires de mots de passe, qui le remplissaient et déclenchaient
+            à tort le piège (#203). `data-lpignore`/`data-1p-ignore` demandent
+            explicitement à LastPass / 1Password de l'ignorer. */}
         {tab === 'register' && (
           <input
             type="text"
-            name="website"
+            name="contact_extra"
             value={website}
             onChange={e => setWebsite(e.target.value)}
             autoComplete="off"
             tabIndex={-1}
             aria-hidden="true"
+            data-lpignore="true"
+            data-1p-ignore="true"
+            data-form-type="other"
             style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, opacity: 0 }}
           />
         )}
