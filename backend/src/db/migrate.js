@@ -9,13 +9,14 @@ const { pool } = require('./index');
 // silencieux en NODE_ENV=test, or les migrations CI tournent justement en test
 // et leur sortie doit rester visible). Format lisible (jamais JSON) ; couleurs
 // seulement en TTY.
-const logger = require('pino')({
-  level: 'info',
-  transport: {
-    target: 'pino-pretty',
-    options: { colorize: !!process.stdout.isTTY, ignore: 'pid,hostname,time' },
-  },
-});
+// pino-pretty branché en flux SYNCHRONE, et non via `transport` : ce dernier
+// lance un worker thread (thread-stream) qui reste vivant après pool.end() et
+// empêche le process de se terminer. En CI, le step « Run database migrations »
+// restait alors bloqué de longues minutes après la fin réelle des migrations.
+const logger = require('pino')(
+  { level: 'info' },
+  require('pino-pretty')({ colorize: !!process.stdout.isTTY, ignore: 'pid,hostname,time' }),
+);
 
 async function migrate() {
   const client = await pool.connect();
