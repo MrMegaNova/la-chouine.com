@@ -55,6 +55,9 @@ router.post('/register', async (req, res) => {
   // Champ-piège anti-bot (#86) : invisible pour un humain (masqué en CSS),
   // les bots le remplissent. Faux succès pour ne pas les renseigner.
   if (typeof req.body.website === 'string' && req.body.website.trim() !== '') {
+    // Log (sans PII) : sans trace, une inscription légitime avalée par un
+    // autofill remplissant le piège était invisible en prod (#203).
+    req.log.warn({ ip: req.ip }, 'inscription : champ-piège anti-bot déclenché');
     return res.status(201).json({
       message: 'Compte créé. Un email de confirmation a été envoyé à votre adresse.',
     });
