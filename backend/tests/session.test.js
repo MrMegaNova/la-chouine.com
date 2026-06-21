@@ -93,6 +93,9 @@ test('snapshotFor : main du joueur visible, main adverse masquée (décompte seu
   assert.equal(snap.players[1].hand, undefined);
   assert.equal(snap.players[1].handCount, 1);
   assert.ok(Array.isArray(snap.players[0].legalMoves)); // à lui de jouer
+  // Id public par siège (#85) : permet d'ouvrir le profil de l'adversaire.
+  assert.equal(snap.players[0].id, 'u1');
+  assert.equal(snap.players[1].id, 'u2');
 });
 
 test('applyAction : refuse un coup hors-tour', () => {
