@@ -3,6 +3,7 @@
 const express = require('express');
 const { withTransaction } = require('../db');
 const { requireAuth } = require('../middleware/auth');
+const { evaluateAchievements } = require('../services/achievements');
 
 const router = express.Router();
 
@@ -64,6 +65,10 @@ router.post('/', requireAuth, async (req, res) => {
           [gid, s.userId, s.guestName, s.seat, s.score, s.won]
         );
       }
+
+      // Badges (#217) : seul l'appelant est un vrai utilisateur ici ; on évalue
+      // ses badges dans la même transaction (stats à jour), côté serveur.
+      await evaluateAchievements(client, req.user.id);
 
       return { gid };
     });

@@ -52,6 +52,10 @@ export interface LoginResponse {
   id: string;
   username: string;
 }
+export interface Achievement {
+  code: string;
+  unlockedAt: string;
+}
 export interface MeResponse {
   id: string;
   username: string;
@@ -60,6 +64,7 @@ export interface MeResponse {
   avatar: string | null;
   stats: { wins: number; losses: number; plays: number };
   ratings: { classic: number; mondoubleau: number };
+  achievements: Achievement[]; // badges débloqués (#217)
 }
 
 export const authApi = {

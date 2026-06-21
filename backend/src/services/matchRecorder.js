@@ -7,6 +7,7 @@
 
 const { withTransaction } = require('../db');
 const { computePairUpdate } = require('./elo');
+const { evaluateAchievements } = require('./achievements');
 
 function ratingColumn(variant) {
   return variant === 'mondoubleau' ? 'rating_mondoubleau' : 'rating_classic';
@@ -63,6 +64,12 @@ async function recordMatch(outcome) {
         await client.query(`UPDATE users SET ${col} = $1 WHERE id = $2`, [ra, pl.userId]);
         ratings.push({ userId: pl.userId, before: rb, after: ra });
       }
+    }
+
+    // Badges (#217) : évalués après l'enregistrement + l'Elo, dans la même
+    // transaction (stats à jour). Côté serveur uniquement, idempotent.
+    for (const pl of rated) {
+      await evaluateAchievements(client, pl.userId);
     }
 
     return { gameId, ratings: updated ? ratings : null };
