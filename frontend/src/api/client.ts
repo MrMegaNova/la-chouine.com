@@ -114,6 +114,7 @@ export interface PublicProfile {
   avatar: string | null;
   stats: { wins: number; losses: number; plays: number };
   ratings: { classic: number; mondoubleau: number };
+  achievements: Achievement[]; // badges débloqués (#217)
 }
 
 export const usersApi = {
