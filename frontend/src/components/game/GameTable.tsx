@@ -149,12 +149,32 @@ export function GameTable({ controller }: { controller?: GameController } = {}) 
       <div className={styles.topBar}>
         <button className="btn btn--ghost btn--sm" onClick={() => quitGame()}>← Quitter</button>
         <div className={styles.scoreRow}>
-          {game.names.map((name, i) => (
-            <div key={i} className={`score-pill ${i === me ? styles.scoreMe : ''}`}>
-              <span>{name}</span>
-              <b>{game.scores[i]}</b>
-            </div>
-          ))}
+          {game.names.map((name, i) => {
+            // L'encart (nom + score) ouvre le profil dans un NOUVEL onglet (#85) :
+            // la table est un overlay hors <Routes>, un lien même-onglet ne ferait
+            // que changer l'URL sans quitter la partie. Soi → /profil ; l'adversaire
+            // en PvP à 2 (oppId connu) → /joueur/:id ; sinon non cliquable.
+            const href = i === me
+              ? (user ? '/profil' : null)
+              : (n === 2 && game.oppId ? `/joueur/${game.oppId}` : null);
+            const cls = `score-pill ${i === me ? styles.scoreMe : ''}`;
+            const inner = <><span>{name}</span><b>{game.scores[i]}</b></>;
+            return href ? (
+              <a
+                key={i}
+                className={cls}
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={`Voir le profil de ${name}`}
+                style={{ textDecoration: 'none', color: 'inherit', cursor: 'pointer' }}
+              >
+                {inner}
+              </a>
+            ) : (
+              <div key={i} className={cls}>{inner}</div>
+            );
+          })}
         </div>
         <TrumpBadge trump={game.trump} variant={game.variant} target={game.target} />
       </div>

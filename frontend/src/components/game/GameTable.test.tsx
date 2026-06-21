@@ -90,6 +90,16 @@ describe('<GameTable> — profil adverse (#85)', () => {
     render(<GameTable controller={ctrl} />);
     expect(screen.queryByRole('link', { name: 'Bot' })).toBeNull();
   });
+
+  it('en PvP, l’encart (nom + score) de l’adversaire ouvre son profil dans un nouvel onglet', () => {
+    const ctrl = makeController(makeGame({ mode: 'online', oppId: 'opp-uuid-123', names: ['Moi', 'Bob'] }));
+    render(<GameTable controller={ctrl} />);
+    // Encart = nom + score → nom accessible « Bob0 » (distinct du lien de nom seul).
+    const pill = screen.getByRole('link', { name: 'Bob0' });
+    expect(pill).toHaveAttribute('href', '/joueur/opp-uuid-123');
+    expect(pill).toHaveAttribute('target', '_blank');
+    expect(pill).toHaveAttribute('rel', 'noopener noreferrer');
+  });
 });
 
 describe('<GameTable> — la coupe en PvP (#205)', () => {
