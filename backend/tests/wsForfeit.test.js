@@ -187,6 +187,12 @@ test('coupe (#201) : un joueur qui ne pioche pas perd par forfait à l’échéa
   assert.equal(finalState.state.finished, true, 'la partie est close par forfait');
   assert.equal(finalState.state.matchResult.forfeit.by, 1, 'le siège inactif (Bob) est forfait');
   assert.equal(finalState.state.matchResult.forfeit.reason, 'timeout');
+  // L'enregistrement du match (onMatchComplete) vit dans une étape asynchrone
+  // distincte du broadcast de l'état final : asserter `recorded` dès la
+  // réception du `finished` était instable (course → 0 !== 1 sur CI). On attend
+  // donc l'enregistrement par polling, comme l'état.
+  const recDeadline = Date.now() + 2000;
+  while (recorded.length === 0 && Date.now() < recDeadline) await delay(10);
   assert.equal(recorded.length, 1, 'le match est enregistré');
   assert.equal(recorded[0].players.find(p => p.userId === 'u1').won, true);
 });
