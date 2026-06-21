@@ -17,6 +17,7 @@ import Login from '@/pages/Login';
 import ResetPassword from '@/pages/ResetPassword';
 import Friends from '@/pages/Friends';
 import Profile from '@/pages/Profile';
+import PlayerProfile from '@/pages/PlayerProfile';
 import Rules from '@/pages/Rules';
 import '@/styles/main.scss';
 
@@ -76,6 +77,7 @@ export default function App() {
           <Route path="/connexion" element={token ? <Navigate to="/" replace /> : <Login />} />
           <Route path="/amis" element={<Friends />} />
           <Route path="/profil" element={<Profile />} />
+          <Route path="/joueur/:id" element={<PlayerProfile />} />
           <Route path="/regles" element={<Rules />} />
           <Route path="/a-propos" element={<About />} />
           <Route path="/reset-password" element={<ResetPassword />} />

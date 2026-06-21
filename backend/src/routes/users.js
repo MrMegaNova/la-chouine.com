@@ -135,6 +135,62 @@ router.get('/history', requireAuth, async (req, res) => {
   }
 });
 
+// ─── GET /api/users/:id ───────────────────────────────────────────────────────
+// Profil PUBLIC d'un joueur (#85) : Elo par variante, parties, ratio V/D.
+// Aucune donnée privée (ni email, ni date d'inscription détaillée nécessaire).
+// Auth requise comme le reste des routes sociales (recherche, amis) : pas de
+// scraping anonyme des classements. `:id` doit être un UUID — sinon 404 (et on
+// évite que Postgres lève sur un cast invalide).
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+router.get('/:id', requireAuth, async (req, res) => {
+  const { id } = req.params;
+  if (!UUID_RE.test(id)) {
+    return res.status(404).json({ error: 'Joueur introuvable.' });
+  }
+  try {
+    const { rows } = await query(
+      `SELECT u.id, u.username, u.avatar,
+              u.rating_classic, u.rating_mondoubleau,
+              COALESCE(stats.wins, 0)   AS wins,
+              COALESCE(stats.losses, 0) AS losses,
+              COALESCE(stats.plays, 0)  AS plays
+       FROM users u
+       LEFT JOIN (
+         SELECT gp.user_id,
+                COUNT(*) FILTER (WHERE gp.won = TRUE)  AS wins,
+                COUNT(*) FILTER (WHERE gp.won = FALSE) AS losses,
+                COUNT(*)                                AS plays
+         FROM game_players gp
+         WHERE gp.user_id = $1
+         GROUP BY gp.user_id
+       ) stats ON stats.user_id = u.id
+       WHERE u.id = $1 AND u.email_verified = TRUE`,
+      [id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Joueur introuvable.' });
+    const u = rows[0];
+    res.json({
+      id: u.id,
+      username: u.username,
+      avatar: u.avatar || null,
+      stats: {
+        wins: Number(u.wins),
+        losses: Number(u.losses),
+        plays: Number(u.plays),
+      },
+      ratings: {
+        classic: Number(u.rating_classic),
+        mondoubleau: Number(u.rating_mondoubleau),
+      },
+    });
+  } catch (err) {
+    req.log.error({ err }, 'GET /users/:id');
+    res.status(500).json({ error: 'Erreur interne.' });
+  }
+});
+
 // ─── POST /api/users/me/password ──────────────────────────────────────────────
 // Changement de mot de passe par un utilisateur connecté (#108) : exige le mot
 // de passe actuel, applique la politique, et refuse un nouveau identique.

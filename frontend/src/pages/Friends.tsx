@@ -1,5 +1,5 @@
 import { useCallback, useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { friendsApi, usersApi, type Friend, type FriendRequest, type SearchUser } from '@/api/client';
 import { useNotificationStore } from '@/store/notificationStore';
@@ -108,9 +108,9 @@ export default function Friends() {
                 ? <div className="list-empty">Aucun joueur trouvé.</div>
                 : results.map(u => (
                   <div key={u.id} className="list-row">
-                    <div className="list-row__avatar"><AvatarContent src={u.avatar} name={u.username} /></div>
+                    <Link to={`/joueur/${u.id}`} className="list-row__avatar" aria-label={`Profil de ${u.username}`}><AvatarContent src={u.avatar} name={u.username} /></Link>
                     <div className="list-row__meta">
-                      <b className="list-row__name">{u.username}</b>
+                      <b className="list-row__name"><PlayerLink id={u.id} name={u.username} /></b>
                       <span className="list-row__sub">{u.wins} victoires · {u.plays} parties</span>
                     </div>
                     <div className="list-row__actions">
@@ -139,9 +139,9 @@ export default function Friends() {
                 ? <div className="list-empty">Pas encore d'amis.</div>
                 : friends.map(f => (
                   <div key={f.id} className="list-row">
-                    <div className="list-row__avatar"><AvatarContent src={f.avatar} name={f.username} /></div>
+                    <Link to={`/joueur/${f.id}`} className="list-row__avatar" aria-label={`Profil de ${f.username}`}><AvatarContent src={f.avatar} name={f.username} /></Link>
                     <div className="list-row__meta">
-                      <b className="list-row__name"><PresenceDot online={f.online} inGame={f.inGame} />{f.username}</b>
+                      <b className="list-row__name"><PresenceDot online={f.online} inGame={f.inGame} /><PlayerLink id={f.id} name={f.username} /></b>
                       <span className="list-row__sub">
                         {f.inGame ? 'en partie · ' : f.online ? 'en ligne · ' : ''}{f.wins} victoires
                       </span>
@@ -167,7 +167,7 @@ export default function Friends() {
                   <div key={r.id} className="list-row">
                     <div className="list-row__avatar">{initials(r.username)}</div>
                     <div className="list-row__meta">
-                      <b className="list-row__name">{r.username}</b>
+                      <b className="list-row__name"><PlayerLink id={r.id} name={r.username} /></b>
                       <span className="list-row__sub">souhaite vous ajouter</span>
                     </div>
                     <div className="list-row__actions">
@@ -193,5 +193,20 @@ export default function Friends() {
         />
       )}
     </div>
+  );
+}
+
+// Pseudo cliquable → page profil publique (#85). Hérite la couleur du libellé,
+// se souligne au survol pour signaler le lien.
+function PlayerLink({ id, name }: { id: string; name: string }) {
+  return (
+    <Link
+      to={`/joueur/${id}`}
+      style={{ color: 'inherit', textDecoration: 'none' }}
+      onMouseEnter={e => (e.currentTarget.style.textDecoration = 'underline')}
+      onMouseLeave={e => (e.currentTarget.style.textDecoration = 'none')}
+    >
+      {name}
+    </Link>
   );
 }
