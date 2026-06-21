@@ -68,7 +68,9 @@ export interface GameState {
   // coup du match. `deck` est le paquet mélangé caché (le moteur détermine la
   // carte tirée, jamais le client) ; `picks[seat]` = carte révélée par ce
   // siège, `null` tant qu'il n'a pas pioché. Vidé une fois en phase `draw`.
-  cut: { deck: Card[]; picks: (Card | null)[] };
+  // `deckCount` (#216) : nombre de cartes restant à choisir. Renseigné en online
+  // où `deck` est vide (paquet jamais transmis) ; sinon dérivé de `deck.length`.
+  cut: { deck: Card[]; picks: (Card | null)[]; deckCount?: number };
 }
 
 export interface GameOpts {

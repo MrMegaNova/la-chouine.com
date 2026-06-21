@@ -44,6 +44,7 @@ interface ServerSnapshot {
   cut: {
     picks: (Card | null)[];
     deadline: number | null;
+    deckCount?: number; // cartes restant à choisir (#216) — paquet jamais transmis
     reveal?: boolean;
     dealer?: number;
   } | null;
@@ -132,7 +133,7 @@ interface OnlineState {
   declineChallenge: () => void;
   findOpponent: (variant: Variant, token: string) => void;
   cancelSearch: () => void;
-  drawCutCard: (seat: number) => void;
+  drawCutCard: (seat: number, index: number) => void;
   playCard: (seat: number, card: Card) => void;
   declareCombo: (seat: number, sig: string, card?: Card) => void;
   exchangeSeven: (seat: number) => void;
@@ -223,6 +224,7 @@ function mapSnapshot(s: ServerSnapshot): GameState {
     cut: {
       deck: [],
       picks: s.cut ? s.cut.picks : Array.from({ length: n }, () => null),
+      deckCount: s.cut?.deckCount ?? 0,
     },
   };
 }
@@ -565,7 +567,9 @@ export const useOnlineStore = create<OnlineState>((set, get) => {
     },
 
     // Coupe (#201) : on signale qu'on pioche, le serveur détermine la carte (#116).
-    drawCutCard: (_seat) => send({ t: 'action', action: { type: 'cut' } }),
+    // L'index = carte choisie parmi les 32 face cachée (#216) ; le serveur
+    // résout la carte (le client ne connaît jamais le paquet).
+    drawCutCard: (_seat, index) => send({ t: 'action', action: { type: 'cut', index } }),
     playCard: (_seat, card) => send({ t: 'action', action: { type: 'play', card: { s: card.s, r: card.r } } }),
     // L'annonce accompagne une carte de la combinaison (#77) — action atomique.
     declareCombo: (_seat, sig, card) => send({

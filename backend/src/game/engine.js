@@ -135,14 +135,19 @@ function drawForDealer(playerCount) {
  * proprement dite est ensuite déclenchée par `finishCut` (#201). Sinon, renvoie
  * l'état inchangé (pioche refusée).
  */
-function drawCut(game, seat) {
+function drawCut(game, seat, index) {
   if (game.phase !== 'cut') return game;
   if (seat < 0 || seat >= game.playerCount) return game;
   if (game.cut.picks[seat] !== null) return game; // siège déjà servi
-  if (game.cut.deck.length === 0) return game;
-
   const deck = [...game.cut.deck];
-  const card = deck.pop();
+  if (deck.length === 0) return game;
+
+  // Carte choisie par le joueur parmi les 32 face cachée (#216) : `index` est la
+  // position dans le paquet caché. Défaut = dessus du paquet (rétro-compat avec
+  // l'appel sans index). Hors bornes / non entier → pioche refusée.
+  const i = index == null ? deck.length - 1 : index;
+  if (!Number.isInteger(i) || i < 0 || i >= deck.length) return game;
+  const [card] = deck.splice(i, 1);
   const picks = [...game.cut.picks];
   picks[seat] = card;
 

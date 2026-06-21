@@ -71,5 +71,12 @@
     { "name": "coupe interactive à 4 joueurs (classic) : cut → cutReveal → draw, donneur = plus petite carte", "fn": "drawCutInvariants", "variant": "classic", "playerCount": 4, "iterations": 150, "expect": { "startsInCut": true, "staysCutUntilLast": true, "picksUnique": true, "dealerIsSmallest": true, "revealsAtEnd": true, "dealtAfterFinish": true, "finishCutIsGuarded": true } },
     { "name": "coupe interactive à 3 joueurs (mondoubleau) : cut → cutReveal → draw, donneur = plus petite carte", "fn": "drawCutInvariants", "variant": "mondoubleau", "playerCount": 3, "iterations": 150, "expect": { "startsInCut": true, "staysCutUntilLast": true, "picksUnique": true, "dealerIsSmallest": true, "revealsAtEnd": true, "dealtAfterFinish": true, "finishCutIsGuarded": true } },
     { "name": "coupe interactive à 4 joueurs (mondoubleau) : cut → cutReveal → draw, donneur = plus petite carte", "fn": "drawCutInvariants", "variant": "mondoubleau", "playerCount": 4, "iterations": 150, "expect": { "startsInCut": true, "staysCutUntilLast": true, "picksUnique": true, "dealerIsSmallest": true, "revealsAtEnd": true, "dealtAfterFinish": true, "finishCutIsGuarded": true } }
+  ],
+
+  "drawCutChoiceInvariants": [
+    { "name": "coupe par choix (classic, 2j) : la carte choisie est retirée, donneur = plus petite choisie, index hors bornes refusé", "fn": "drawCutChoiceInvariants", "variant": "classic", "playerCount": 2, "iterations": 150, "expect": { "chosenCardRemoved": true, "picksUnique": true, "dealerIsSmallest": true, "rejectsBadIndex": true } },
+    { "name": "coupe par choix (mondoubleau, 2j)", "fn": "drawCutChoiceInvariants", "variant": "mondoubleau", "playerCount": 2, "iterations": 150, "expect": { "chosenCardRemoved": true, "picksUnique": true, "dealerIsSmallest": true, "rejectsBadIndex": true } },
+    { "name": "coupe par choix (classic, 3j)", "fn": "drawCutChoiceInvariants", "variant": "classic", "playerCount": 3, "iterations": 150, "expect": { "chosenCardRemoved": true, "picksUnique": true, "dealerIsSmallest": true, "rejectsBadIndex": true } },
+    { "name": "coupe par choix (classic, 4j)", "fn": "drawCutChoiceInvariants", "variant": "classic", "playerCount": 4, "iterations": 150, "expect": { "chosenCardRemoved": true, "picksUnique": true, "dealerIsSmallest": true, "rejectsBadIndex": true } }
   ]
 }

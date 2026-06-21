@@ -5,13 +5,16 @@ import userEvent from '@testing-library/user-event';
 import { DealerCut } from './DealerCut';
 import type { Card, GameState } from '@/game/types';
 
-// Tests de composant (#129/#201) sur la phase de la coupe : le slot du joueur
-// est cliquable tant qu'il n'a pas pioché, déclenche `onDraw`, et la carte
-// révélée s'affiche une fois tirée.
+// Tests de composant (#129/#201/#216) sur la phase de la coupe : les cartes face
+// cachée sont étalées et cliquables tant que le joueur n'a pas pioché ; le clic
+// déclenche `onDraw(seat, index)` ; la carte révélée s'affiche une fois tirée.
 
 const c = (s: Card['s'], r: Card['r']): Card => ({ s, r });
 
-function makeGame(picks: (Card | null)[]): GameState {
+// Paquet caché par défaut (3 cartes suffisent pour tester l'étalage).
+const DECK: Card[] = [c('pique', '8'), c('coeur', '9'), c('trefle', 'V')];
+
+function makeGame(picks: (Card | null)[], deck: Card[] = DECK): GameState {
   const opts = { mode: 'ai' as const, variant: 'classic' as const, playerCount: 2 as const, target: 3 as const, names: ['Moi', 'Bot'] };
   return {
     mode: 'ai', variant: 'classic', playerCount: 2, diff: 'normal', target: 3,
@@ -26,40 +29,41 @@ function makeGame(picks: (Card | null)[]): GameState {
     trick: [], leader: 0, turn: 0, phase: 'cut', handOver: false,
     lastTrickWinner: null, lastTrick: null, lastTrickBySeat: [null, null],
     lastAnnounce: null, sevenAnnounced: false,
-    cut: { deck: [], picks },
+    cut: { deck, picks },
   };
 }
 
-describe('<DealerCut> — tirage du donneur (#201)', () => {
-  it('le slot du joueur est cliquable et déclenche onDraw', async () => {
+describe('<DealerCut> — tirage du donneur (#201/#216)', () => {
+  it('les cartes étalées sont cliquables et le clic déclenche onDraw(seat, index)', async () => {
     const user = userEvent.setup();
     const onDraw = vi.fn();
     render(<DealerCut game={makeGame([null, null])} me={0} onDraw={onDraw} />);
 
-    expect(screen.getByText(/la plus petite désigne le donneur/)).toBeInTheDocument();
-    const btn = screen.getByRole('button', { name: /Tirer ma carte/ });
-    await user.click(btn);
-    expect(onDraw).toHaveBeenCalledWith(0);
+    expect(screen.getByText(/Choisissez une carte/)).toBeInTheDocument();
+    // Une carte cliquable par position du paquet (3 cartes).
+    const cards = screen.getAllByRole('button', { name: /Choisir la carte/ });
+    expect(cards).toHaveLength(3);
+    await user.click(screen.getByRole('button', { name: 'Choisir la carte 2' }));
+    expect(onDraw).toHaveBeenCalledWith(0, 1); // index 0-based
   });
 
-  it('affiche la carte une fois piochée et n’est plus cliquable', () => {
+  it('une fois la carte piochée, l’étalage n’est plus cliquable et la carte est révélée', () => {
     render(<DealerCut game={makeGame([c('pique', '7'), null])} me={0} onDraw={vi.fn()} />);
 
-    // Plus de bouton de tirage pour soi : la carte est révélée (étiquette 7♠).
-    expect(screen.queryByRole('button', { name: /Tirer ma carte/ })).not.toBeInTheDocument();
+    // Plus de cartes cliquables pour soi ; la carte tirée est révélée (7♠).
+    expect(screen.queryByRole('button', { name: /Choisir la carte/ })).not.toBeInTheDocument();
     expect(screen.getByText('7♠')).toBeInTheDocument();
     expect(screen.getByText(/En attente des autres joueurs/)).toBeInTheDocument();
   });
 
-  it('en phase cutReveal : toutes les cartes révélées, indication « qui commence », pas de compte à rebours', () => {
+  it('en phase cutReveal : cartes révélées, « qui commence », pas d’étalage ni compte à rebours', () => {
     // Moi (siège 0) tire 7♠, Bot (siège 1) tire un Roi : la plus petite (7♠) est
     // le donneur → le joueur à sa gauche (Bot) commence.
     const game = { ...makeGame([c('pique', '7'), c('coeur', 'R')]), phase: 'cutReveal' as const };
     render(<DealerCut game={game} me={0} onDraw={vi.fn()} deadline={Date.now() + 2000} />);
 
     expect(screen.getByText('Bot commence')).toBeInTheDocument();
-    // Aucun bouton de tirage et aucun compte à rebours de forfait.
-    expect(screen.queryByRole('button', { name: /Tirer ma carte/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Choisir la carte/ })).not.toBeInTheDocument();
     expect(screen.queryByText(/perdez par forfait/)).not.toBeInTheDocument();
   });
 });

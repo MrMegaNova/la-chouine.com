@@ -88,3 +88,39 @@
   font-size: 14px;
   font-weight: 600;
 }
+
+// Étalage des cartes face cachée à choisir (#216) : les 32 cartes (puis 31…)
+// présentées LÉGÈREMENT SUPERPOSÉES, comme un paquet étendu sur la table. Le
+// chevauchement vient d'une marge négative ; chaque carte se relève au survol
+// et passe au-dessus de ses voisines (z-index).
+.pool {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  // Compense le décalage négatif de la 1ʳᵉ carte de chaque ligne (cf. poolCard).
+  padding-left: 14px;
+  max-width: 480px;
+  margin: 0 auto 22px;
+}
+
+.poolCard {
+  position: relative;
+  background: none;
+  border: none;
+  padding: 0;
+  line-height: 0;
+  border-radius: 6px;
+  // Recouvre la carte précédente (paquet étalé). Légère marge verticale pour
+  // que les lignes qui s'enroulent ne se collent pas.
+  margin: 4px 0 4px -14px;
+  transition: transform 0.1s ease, filter 0.1s ease;
+}
+button.poolCard {
+  cursor: pointer;
+  &:hover {
+    transform: translateY(-8px);
+    z-index: 2; // passe au-dessus des voisines superposées
+    filter: drop-shadow(0 6px 9px rgba(0, 0, 0, 0.45));
+  }
+  &:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; z-index: 2; }
+}
