@@ -93,10 +93,13 @@ test('jours de jeu : week-end, jour férié, 3 jours consécutifs', async () => 
   await addGame(false, 'classic', '2025-07-12T15:00:00+02:00');
   await addGame(false, 'classic', '2025-07-13T15:00:00+02:00');
   await addGame(false, 'classic', '2025-07-14T15:00:00+02:00');
-  const got = await evaluateAchievements(pool, userId);
-  assert.ok(got.includes('joueur-weekend'), 'samedi');
-  assert.ok(got.includes('jour-ferie'), '14 juillet');
-  assert.ok(got.includes('assidu'), '3 jours consécutifs');
+  await evaluateAchievements(pool, userId);
+  // On vérifie l'état persisté (la valeur de retour ne liste que les NOUVEAUX
+  // codes : selon le jour d'exécution en CI, certains peuvent déjà être acquis).
+  const codes = (await listAchievements((q, p) => pool.query(q, p), userId)).map(a => a.code);
+  assert.ok(codes.includes('joueur-weekend'), 'samedi');
+  assert.ok(codes.includes('jour-ferie'), '14 juillet');
+  assert.ok(codes.includes('assidu'), '3 jours consécutifs');
 });
 
 test('faits de jeu (awardFact) : partie blanche + chouine, idempotents, code inconnu ignoré', async () => {
