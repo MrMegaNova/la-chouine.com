@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Routes, Route, Navigate, useSearchParams } from 'react-router-dom';
+import { Routes, Route, Navigate, useSearchParams, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { useGameStore } from '@/store/gameStore';
 import { useOnlineStore } from '@/store/onlineStore';
@@ -62,8 +62,15 @@ export default function App() {
     return () => window.removeEventListener('focus', onFocus);
   }, [token]);
 
+  // Pages « pleine page » qui ne doivent JAMAIS être recouvertes par l'overlay de
+  // partie. Le profil public ouvert dans un nouvel onglet pendant une partie en
+  // est le cas type (#211) : sans ça, la table (locale persistée, ou PvP repris
+  // via la présence) se réhydrate dans le nouvel onglet et masque la page.
+  const location = useLocation();
+  const standalonePage = location.pathname.startsWith('/joueur/');
+
   // Le header est masqué dès qu'une table (locale ou en ligne) occupe l'écran.
-  const tableActive = !!game || onlineStatus !== 'idle';
+  const tableActive = !standalonePage && (!!game || onlineStatus !== 'idle');
 
   return (
     <>
@@ -87,8 +94,10 @@ export default function App() {
       </main>
       {/* Footer global (#88) — masqué pendant une partie (overlay plein écran). */}
       {!tableActive && <Footer />}
-      {game && <GameTable />}
-      <OnlinePvP />
+      {/* Overlays de partie supprimés sur une page pleine page (#211) : sinon le
+          profil ouvert en nouvel onglet pendant une partie serait recouvert. */}
+      {!standalonePage && game && <GameTable />}
+      {!standalonePage && <OnlinePvP />}
       <ChallengeOverlay />
       <NotificationToast />
     </>
