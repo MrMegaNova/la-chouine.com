@@ -72,6 +72,26 @@ describe('<GameTable> — annonces', () => {
   });
 });
 
+describe('<GameTable> — profil adverse (#85)', () => {
+  it('en PvP, le nom de l’adversaire ouvre son profil dans un nouvel onglet', () => {
+    const ctrl = makeController(makeGame({
+      mode: 'online', oppId: 'opp-uuid-123', names: ['Moi', 'Bob'],
+    }));
+    render(<GameTable controller={ctrl} />);
+
+    const link = screen.getByRole('link', { name: 'Bob' });
+    expect(link).toHaveAttribute('href', '/joueur/opp-uuid-123');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  });
+
+  it('en IA (pas d’oppId), le nom de l’adversaire n’est pas un lien', () => {
+    const ctrl = makeController(makeGame({ mode: 'ai', oppId: null, names: ['Moi', 'Bot'] }));
+    render(<GameTable controller={ctrl} />);
+    expect(screen.queryByRole('link', { name: 'Bot' })).toBeNull();
+  });
+});
+
 describe('<GameTable> — la coupe en PvP (#205)', () => {
   it('le joueur local pioche son propre siège même quand ce n’est pas le siège 0', async () => {
     const user = userEvent.setup();

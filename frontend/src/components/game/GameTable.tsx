@@ -176,7 +176,22 @@ export function GameTable({ controller }: { controller?: GameController } = {}) 
             return (
               <div key={opp} className={`${styles.oppSlot} ${isActive ? styles.oppActive : ''}`}>
                 <span className={styles.oppName}>
-                  {game.names[opp]}{isActive ? ' ▶' : ''}
+                  {/* En PvP à 2, on connaît l'id du joueur distant (oppId) :
+                      son nom ouvre sa page profil dans un nouvel onglet (#85).
+                      En IA/local ou à 3-4 joueurs (id par siège inconnu), nom
+                      en texte simple. */}
+                  {n === 2 && game.oppId ? (
+                    <a
+                      href={`/joueur/${game.oppId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={`Voir le profil de ${game.names[opp]}`}
+                      style={{ color: 'inherit', textDecoration: 'underline dotted' }}
+                    >
+                      {game.names[opp]}
+                    </a>
+                  ) : game.names[opp]}
+                  {isActive ? ' ▶' : ''}
                 </span>
                 <div className={styles.oppCards}>
                   {game.players[opp].hand.map((_, i) => (
