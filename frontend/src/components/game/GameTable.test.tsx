@@ -72,6 +72,28 @@ describe('<GameTable> — annonces', () => {
   });
 });
 
+describe('<GameTable> — la coupe en PvP (#205)', () => {
+  it('le joueur local pioche son propre siège même quand ce n’est pas le siège 0', async () => {
+    const user = userEvent.setup();
+    // Client du 2ᵉ joueur : il occupe le siège 1 (viewPlayer = 1).
+    const ctrl = makeController(makeGame({
+      mode: 'online', viewPlayer: 1, phase: 'cut',
+      names: ['Adversaire', 'Moi'],
+      cut: { deck: [], picks: [null, null] },
+    }));
+    render(<GameTable controller={ctrl} />);
+
+    // « (vous) » est sur SON siège, pas sur l'adversaire.
+    expect(screen.getByText('Moi (vous)')).toBeInTheDocument();
+
+    // Le seul bouton de pioche cible son propre siège (1), pas le 0.
+    const drawBtn = screen.getByRole('button', { name: 'Tirer ma carte (Moi)' });
+    await user.click(drawBtn);
+    expect(ctrl.drawCutCard).toHaveBeenCalledWith(1);
+    expect(screen.queryByRole('button', { name: 'Tirer ma carte (Adversaire)' })).toBeNull();
+  });
+});
+
 describe('<GameTable> — consultation des plis (#74/#95)', () => {
   it('« Mes plis » est désactivé sans pli, actif sinon et ouvre le panneau', async () => {
     const user = userEvent.setup();
