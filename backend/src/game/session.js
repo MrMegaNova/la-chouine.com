@@ -395,6 +395,10 @@ class GameSession {
       matchResult: this.matchResult,
       players: s.players.map((p, i) => ({
         seat: i,
+        // Id public du joueur du siège (#85) : permet d'ouvrir son profil
+        // depuis la table. Les sièges sont toujours occupés par des comptes en
+        // PvP ; null par sécurité si jamais absent.
+        id: (this.players[i] && this.players[i].userId) || null,
         handCount: p.hand.length,
         annonce: p.annonce,
         wonCount: p.won.length,

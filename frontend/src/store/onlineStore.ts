@@ -13,6 +13,7 @@ export type OnlineStatus = 'idle' | 'searching' | 'found' | 'playing' | 'over' |
 
 interface SnapshotPlayer {
   seat: number;
+  id?: string | null; // id public du joueur du siège (#85) — profil cliquable
   handCount: number;
   annonce: number;
   wonCount: number;
@@ -182,7 +183,9 @@ function mapSnapshot(s: ServerSnapshot): GameState {
     diff: 'normal',
     target: s.target,
     names: s.names,
-    oppId: null,
+    // En PvP à 2, l'id du joueur distant rend son nom cliquable (#85). À 3-4,
+    // null (la table n'expose qu'un seul « adversaire » conceptuel).
+    oppId: n === 2 ? (s.players[1 - s.you]?.id ?? null) : null,
     opts: { mode: 'online', variant: s.variant, playerCount: n, target: s.target, names: s.names },
     scores: s.scores,
     dealer: -1,

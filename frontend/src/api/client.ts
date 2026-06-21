@@ -102,8 +102,21 @@ export interface HistoryEntry {
   opponents: string | null;
 }
 
+// Profil public d'un autre joueur (#85) : pas d'email ni de donnée privée.
+export interface PublicProfile {
+  id: string;
+  username: string;
+  avatar: string | null;
+  stats: { wins: number; losses: number; plays: number };
+  ratings: { classic: number; mondoubleau: number };
+}
+
 export const usersApi = {
   me: (token: string) => apiCall<MeResponse>('GET', '/users/me', undefined, token),
+
+  publicProfile: (id: string, token: string) =>
+    apiCall<PublicProfile & { error?: string }>(
+      'GET', `/users/${encodeURIComponent(id)}`, undefined, token),
 
   search: (q: string, token: string) =>
     apiCall<SearchUser[]>('GET', `/users/search?q=${encodeURIComponent(q)}`, undefined, token),
