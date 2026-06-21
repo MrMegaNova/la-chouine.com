@@ -4,6 +4,7 @@ import { useAuthStore } from '@/store/authStore';
 import { usersApi, type HistoryEntry } from '@/api/client';
 import { EyeToggle, PasswordChecklist, passwordValid } from '@/components/auth/password';
 import { AvatarContent } from '@/components/Avatar';
+import { Achievements } from '@/components/Achievements';
 
 export default function Profile() {
   const { user, token, logout, refreshUser } = useAuthStore();
@@ -59,6 +60,8 @@ export default function Profile() {
           </div>
         ))}
       </div>
+
+      <Achievements unlocked={user.achievements ?? []} />
 
       <ChangePasswordSection />
 

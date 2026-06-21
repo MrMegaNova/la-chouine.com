@@ -64,6 +64,15 @@ test('round-trip : après un coup joué, l’état est préservé et reste jouab
   assert.ok(back.applyAction(u2, { type: 'play', card: snap2.players[seat2].legalMoves[0] }).ok);
 });
 
+test('round-trip : les faits de jeu (#217) sont préservés', () => {
+  const s = newSession();
+  s.facts[0].chouine = true;
+  const back = roundTrip(s);
+  assert.deepEqual(back.facts, s.facts);
+  assert.equal(back.facts[0].chouine, true);
+  assert.equal(back.facts[1].chouine, false);
+});
+
 test('round-trip : horloge de coup (#141) préservée', () => {
   const s = newSession();
   turnClock.startTurn(s.clock, s.state.turn, 1000);

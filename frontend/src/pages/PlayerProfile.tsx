@@ -3,6 +3,7 @@ import { useParams, Navigate, Link } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { usersApi, type PublicProfile } from '@/api/client';
 import { AvatarContent } from '@/components/Avatar';
+import { Achievements } from '@/components/Achievements';
 
 // Page profil PUBLIQUE d'un joueur (#85) : Elo, parties, ratio V/D. Réutilise la
 // mise en page de Profile.tsx, sans les éléments privés (historique détaillé,
@@ -71,10 +72,12 @@ export default function PlayerProfile() {
         {statBlock(`${wr}%`, 'Réussite')}
       </div>
 
-      <div style={{ display: 'flex', gap: 26, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 26, flexWrap: 'wrap', marginBottom: 30 }}>
         {statBlock(profile.ratings.classic, 'Elo Classique')}
         {statBlock(profile.ratings.mondoubleau, 'Elo Mondoubleau')}
       </div>
+
+      <Achievements unlocked={profile.achievements ?? []} />
     </div>
   );
 }

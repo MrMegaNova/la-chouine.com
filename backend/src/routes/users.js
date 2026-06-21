@@ -5,9 +5,13 @@ const bcrypt = require('bcryptjs');
 const { query } = require('../db');
 const { requireAuth, signToken } = require('../middleware/auth');
 const { validatePassword } = require('../services/passwordPolicy');
+const { listAchievements } = require('../services/achievements');
 const config = require('../config');
 
 const router = express.Router();
+
+// `:id` doit être un UUID — sinon 404 (et on évite un cast Postgres invalide).
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // ─── GET /api/users/me ────────────────────────────────────────────────────────
 
@@ -49,6 +53,7 @@ router.get('/me', requireAuth, async (req, res) => {
         classic: Number(u.rating_classic),
         mondoubleau: Number(u.rating_mondoubleau),
       },
+      achievements: await listAchievements(query, u.id), // badges débloqués (#217)
     });
   } catch (err) {
     req.log.error({ err }, 'GET /users/me');
@@ -135,14 +140,29 @@ router.get('/history', requireAuth, async (req, res) => {
   }
 });
 
-// ─── GET /api/users/:id ───────────────────────────────────────────────────────
-// Profil PUBLIC d'un joueur (#85) : Elo par variante, parties, ratio V/D.
-// Aucune donnée privée (ni email, ni date d'inscription détaillée nécessaire).
-// Auth requise comme le reste des routes sociales (recherche, amis) : pas de
-// scraping anonyme des classements. `:id` doit être un UUID — sinon 404 (et on
-// évite que Postgres lève sur un cast invalide).
+// ─── GET /api/users/:id/achievements ─────────────────────────────────────────
+// Badges PUBLICS débloqués par un joueur (#217). Auth requise (comme la
+// recherche) ; pas de donnée privée. Compte non vérifié → 404. Route à deux
+// segments, distincte de `/:id` ci-dessous.
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+router.get('/:id/achievements', requireAuth, async (req, res) => {
+  const { id } = req.params;
+  if (!UUID_RE.test(id)) return res.status(404).json({ error: 'Joueur introuvable.' });
+  try {
+    const { rows } = await query(
+      `SELECT 1 FROM users WHERE id = $1 AND email_verified = TRUE`, [id]);
+    if (!rows.length) return res.status(404).json({ error: 'Joueur introuvable.' });
+    res.json({ achievements: await listAchievements(query, id) });
+  } catch (err) {
+    req.log.error({ err }, 'GET /users/:id/achievements');
+    res.status(500).json({ error: 'Erreur interne.' });
+  }
+});
+
+// ─── GET /api/users/:id ───────────────────────────────────────────────────────
+// Profil PUBLIC d'un joueur (#85) : Elo par variante, parties, ratio V/D, badges
+// (#217). Aucune donnée privée. Auth requise comme le reste des routes sociales :
+// pas de scraping anonyme. `:id` doit être un UUID — sinon 404.
 
 router.get('/:id', requireAuth, async (req, res) => {
   const { id } = req.params;
@@ -184,6 +204,7 @@ router.get('/:id', requireAuth, async (req, res) => {
         classic: Number(u.rating_classic),
         mondoubleau: Number(u.rating_mondoubleau),
       },
+      achievements: await listAchievements(query, u.id), // badges publics (#85 + #217)
     });
   } catch (err) {
     req.log.error({ err }, 'GET /users/:id');

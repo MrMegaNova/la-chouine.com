@@ -100,6 +100,22 @@ test('coupe (#201) : cutTimeout fait perdre le siège qui n’a pas pioché', ()
   assert.equal(sess.matchResult.forfeit.reason, 'timeout');
 });
 
+test('faits de jeu (#217) : réaliser une chouine est mémorisé dans facts (badge)', () => {
+  const sess = mkSession({
+    phase: 'draw', trump: 'coeur', turn: 0, trick: [],
+    players: [
+      // A, 10, R, D, V de pique = chouine (2 joueurs).
+      p([c('pique', 'A'), c('pique', '10'), c('pique', 'R'), c('pique', 'D'), c('pique', 'V')]),
+      p([c('coeur', '8')]),
+    ],
+  });
+  assert.equal(sess.facts[0].chouine, false);
+  const res = sess.applyAction('u1', { type: 'declare', sig: 'chouine|pique' });
+  assert.ok(res.ok, res.error);
+  assert.equal(sess.facts[0].chouine, true, 'la chouine est mémorisée pour le badge');
+  assert.equal(sess.facts[1].chouine, false);
+});
+
 test('snapshotFor : main du joueur visible, main adverse masquée (décompte seulement)', () => {
   const sess = mkSession({
     players: [p([c('pique', 'A'), c('coeur', '7')]), p([c('pique', 'R')])],

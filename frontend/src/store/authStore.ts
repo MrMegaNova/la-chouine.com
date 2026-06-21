@@ -24,7 +24,7 @@ export const useAuthStore = create<AuthState>()(
       login: async (username, password) => {
         const { ok, data } = await authApi.login(username, password);
         if (!ok) return (data as { error?: string }).error ?? 'Erreur.';
-        set({ token: data.token, user: { id: data.id, username: data.username, email: '', joined: '', avatar: null, stats: { wins: 0, losses: 0, plays: 0 }, ratings: { classic: 1500, mondoubleau: 1500 } } });
+        set({ token: data.token, user: { id: data.id, username: data.username, email: '', joined: '', avatar: null, stats: { wins: 0, losses: 0, plays: 0 }, ratings: { classic: 1500, mondoubleau: 1500 }, achievements: [] } });
         await get().refreshUser();
         return null;
       },

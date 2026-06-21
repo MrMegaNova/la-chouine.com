@@ -61,6 +61,10 @@ class GameSession {
     this.lastExchange = null;       // { seat, handNo } — dernier échange du 7 d'atout (#76)
     this.lastHandResult = null;     // HandResult de la dernière main terminée
     this.nextHandAcks = new Set();  // sièges ayant validé « main suivante »
+    // Faits de jeu du match par siège (#217) — pour les badges événementiels
+    // (ex. avoir réalisé une chouine). Accumulés tout au long du match, lus à la
+    // fin (getMatchOutcome). Sérialisés (la session vit dans Redis, #31).
+    this.facts = [{ chouine: false }, { chouine: false }];
     // Échéance de la coupe (#201) : pendant la phase `cut`, un siège qui ne
     // pioche pas dans le délai imparti perd par forfait. Posée/rafraîchie par le
     // driver temps réel (wsServer) ; balayée par le sweep. null hors phase cut.
@@ -200,6 +204,7 @@ class GameSession {
       const result = computeHandResult(revealed, seat);
       this.state = this._endHand(applyHandResult(revealed, result), result);
       this.lastHandResult = result;
+      this.facts[seat].chouine = true; // fait de jeu pour le badge (#217)
       return { ok: true };
     }
 
@@ -345,6 +350,8 @@ class GameSession {
         seat,
         score: scores[seat],
         won: seat === winnerSeat,
+        // Faits de jeu du match (#217) — pour les badges événementiels.
+        facts: this.facts[seat],
       })),
     };
   }
@@ -436,6 +443,7 @@ class GameSession {
       lastExchange: this.lastExchange,
       lastHandResult: this.lastHandResult,
       nextHandAcks: [...this.nextHandAcks],
+      facts: this.facts,
       clock: this.clock,
       cutDeadline: this.cutDeadline,
       revealDeadline: this.revealDeadline,
@@ -457,6 +465,8 @@ class GameSession {
     s.lastExchange = data.lastExchange;
     s.lastHandResult = data.lastHandResult;
     s.nextHandAcks = new Set(data.nextHandAcks);
+    // Rétro-compat : sessions sérialisées avant l'ajout des faits (#217).
+    s.facts = data.facts ?? [{ chouine: false }, { chouine: false }];
     s.clock = data.clock;
     s.cutDeadline = data.cutDeadline ?? null;
     s.revealDeadline = data.revealDeadline ?? null;

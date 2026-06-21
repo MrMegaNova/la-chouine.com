@@ -7,6 +7,7 @@
 
 const { withTransaction } = require('../db');
 const { computePairUpdate } = require('./elo');
+const { evaluateAchievements, awardFact } = require('./achievements');
 
 function ratingColumn(variant) {
   return variant === 'mondoubleau' ? 'rating_mondoubleau' : 'rating_classic';
@@ -62,6 +63,25 @@ async function recordMatch(outcome) {
       if (updated) {
         await client.query(`UPDATE users SET ${col} = $1 WHERE id = $2`, [ra, pl.userId]);
         ratings.push({ userId: pl.userId, before: rb, after: ra });
+      }
+    }
+
+    // Badges (#217) : évalués après l'enregistrement + l'Elo, dans la même
+    // transaction (stats à jour). Côté serveur uniquement, idempotent.
+    const isRanked = outcome.rated !== false;
+    for (const pl of rated) {
+      await evaluateAchievements(client, pl.userId);
+
+      // Faits de jeu (événementiels) — uniquement en partie classée.
+      if (!isRanked) continue;
+      const opponent = rated.find(o => o.userId !== pl.userId);
+      // Partie blanche : on gagne sans laisser l'adversaire remporter une manche.
+      if (pl.won === true && opponent && Number(opponent.score) === 0) {
+        await awardFact(client, pl.userId, 'partie-blanche');
+      }
+      // Chouine réalisée pendant le match.
+      if (pl.facts && pl.facts.chouine) {
+        await awardFact(client, pl.userId, 'chouine-faite');
       }
     }
 
