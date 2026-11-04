@@ -16,7 +16,7 @@ export default function About() {
         <p style={{ lineHeight: 1.65, color: 'var(--cream-2)' }}>
           La Chouine est un jeu de cartes du Centre-Ouest de la France, et plus
           particulièrement de la Vallée du Loir, dont les origines remontent au
-          XVIᵉ siècle. Ce site en propose une version jouable contre l'ordinateur,
+          XVIIIᵉ siècle. Ce site en propose une version jouable contre l'ordinateur,
           en local, ou en ligne contre d'autres joueurs.
         </p>
         <p style={{ lineHeight: 1.65, color: 'var(--cream-2)', marginTop: 10 }}>
