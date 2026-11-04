@@ -6,12 +6,10 @@ const { query } = require('../db');
 const { requireAuth, signToken } = require('../middleware/auth');
 const { validatePassword } = require('../services/passwordPolicy');
 const { listAchievements } = require('../services/achievements');
+const { isUuid } = require('../services/uuid');
 const config = require('../config');
 
 const router = express.Router();
-
-// `:id` doit être un UUID — sinon 404 (et on évite un cast Postgres invalide).
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // ─── GET /api/users/me ────────────────────────────────────────────────────────
 
@@ -124,7 +122,8 @@ router.get('/history', requireAuth, async (req, res) => {
                 )
                 FROM game_players gp2
                 LEFT JOIN users u2 ON u2.id = gp2.user_id
-                WHERE gp2.game_id = g.id AND gp2.user_id <> $1
+                -- Null-safe : un siège invité a user_id NULL (#226).
+                WHERE gp2.game_id = g.id AND gp2.user_id IS DISTINCT FROM $1
               ) AS opponents
        FROM games g
        JOIN game_players gp_me ON gp_me.game_id = g.id AND gp_me.user_id = $1
@@ -147,7 +146,7 @@ router.get('/history', requireAuth, async (req, res) => {
 
 router.get('/:id/achievements', requireAuth, async (req, res) => {
   const { id } = req.params;
-  if (!UUID_RE.test(id)) return res.status(404).json({ error: 'Joueur introuvable.' });
+  if (!isUuid(id)) return res.status(404).json({ error: 'Joueur introuvable.' });
   try {
     const { rows } = await query(
       `SELECT 1 FROM users WHERE id = $1 AND email_verified = TRUE`, [id]);
@@ -166,7 +165,7 @@ router.get('/:id/achievements', requireAuth, async (req, res) => {
 
 router.get('/:id', requireAuth, async (req, res) => {
   const { id } = req.params;
-  if (!UUID_RE.test(id)) {
+  if (!isUuid(id)) {
     return res.status(404).json({ error: 'Joueur introuvable.' });
   }
   try {
