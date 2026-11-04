@@ -64,6 +64,10 @@ app.use('/api/online',  apiLimiter,  onlineRoutes);
 app.use((_req, res) => res.status(404).json({ error: 'Endpoint introuvable.' }));
 
 app.use((err, req, res, _next) => {
+  // Corps refusé par express.json (JSON illisible ou primitif, trop volumineux) :
+  // erreur client, pas une panne serveur (#225).
+  if (err.status >= 400 && err.status < 500)
+    return res.status(err.status).json({ error: 'Requête invalide.' });
   (req.log || logger).error({ err }, 'Erreur non gérée');
   res.status(500).json({ error: 'Erreur interne du serveur.' });
 });

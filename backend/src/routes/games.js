@@ -13,6 +13,29 @@ const router = express.Router();
 // l'historique d'autrui (les UUID des joueurs sont publics via la recherche).
 const VALID_MODES = ['ai', 'local', 'friend'];
 const VALID_VARIANTS = ['classic', 'mondoubleau'];
+const VALID_DIFFICULTIES = ['easy', 'normal', 'hard'];
+const GUEST_NAME_MAX = 30; // game_players.guest_name VARCHAR(30)
+
+// Valide un siège avant tout accès à la base (#225) : renvoie le message
+// d'erreur, ou null si le siège est valide. Le score d'une partie locale n'est
+// qu'un affichage d'historique : il n'alimente jamais l'Elo (#116).
+function seatError(player, seat, target) {
+  const label = `Joueur ${seat + 1}`;
+  if (player === null || typeof player !== 'object' || Array.isArray(player))
+    return `${label} : siège invalide.`;
+
+  const { guestName, score } = player;
+  if (guestName != null) {
+    if (typeof guestName !== 'string' || guestName.includes('\u0000'))
+      return `${label} : nom invalide.`;
+    // Compté en points de code, comme VARCHAR(n) (et non en unités UTF-16).
+    if ([...guestName].length > GUEST_NAME_MAX)
+      return `${label} : nom trop long (${GUEST_NAME_MAX} caractères maximum).`;
+  }
+  if (score != null && (!Number.isInteger(score) || score < 0 || score > target))
+    return `${label} : score invalide (entier de 0 à ${target}).`;
+  return null;
+}
 
 // ─── POST /api/games ──────────────────────────────────────────────────────────
 // Enregistre le résultat d'une partie LOCALE terminée (ai/local/friend). Seul
@@ -20,7 +43,8 @@ const VALID_VARIANTS = ['classic', 'mondoubleau'];
 // sont des invités. Aucune mise à jour d'Elo ici (réservée au serveur PvP).
 
 router.post('/', requireAuth, async (req, res) => {
-  const { mode, variant, playerCount, targetScore, difficulty, players } = req.body;
+  // Sans corps JSON (Content-Type absent), Express 5 laisse req.body indéfini.
+  const { mode, variant, playerCount, targetScore, difficulty, players } = req.body ?? {};
   const variantSafe = variant || 'classic';
 
   if (!VALID_MODES.includes(mode))
@@ -34,13 +58,22 @@ router.post('/', requireAuth, async (req, res) => {
   if (!Array.isArray(players) || players.length < 2)
     return res.status(422).json({ error: 'La liste des joueurs est requise.' });
 
+  // Ces entrées faisaient échouer les INSERT (500) ou enregistraient une partie
+  // incohérente : on les refuse avant d'ouvrir la transaction (#225).
+  const invalid = players.length !== Number(playerCount)
+    ? 'Le nombre de joueurs ne correspond pas à la liste des joueurs.'
+    : difficulty != null && !VALID_DIFFICULTIES.includes(difficulty)
+      ? 'Difficulté invalide (easy, normal ou hard).'
+      : players.map((p, seat) => seatError(p, seat, Number(targetScore))).find(Boolean);
+  if (invalid) return res.status(422).json({ error: invalid });
+
   try {
     const result = await withTransaction(async (client) => {
       const { rows } = await client.query(
         `INSERT INTO games (mode, variant, player_count, target_score, difficulty, ended_at)
          VALUES ($1, $2, $3, $4, $5, NOW())
          RETURNING id`,
-        [mode, variantSafe, Number(playerCount), Number(targetScore), difficulty || null]
+        [mode, variantSafe, Number(playerCount), Number(targetScore), difficulty ?? null]
       );
       const gid = rows[0].id;
 
@@ -53,7 +86,7 @@ router.post('/', requireAuth, async (req, res) => {
           seat,
           userId,
           guestName: userId ? null : (p.guestName || `Joueur ${seat + 1}`),
-          score: p.score != null ? Number(p.score) : null,
+          score: p.score ?? null,
           won: typeof p.won === 'boolean' ? p.won : null,
         };
       });
