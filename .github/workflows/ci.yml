@@ -140,6 +140,10 @@ jobs:
         working-directory: backend
         run: npm ci
 
-      - name: npm audit (sévérité haute et critique)
+      - name: npm audit backend (sévérité haute et critique)
         working-directory: backend
+        run: npm audit --audit-level=high
+
+      - name: npm audit frontend (sévérité haute et critique)
+        working-directory: frontend
         run: npm audit --audit-level=high
