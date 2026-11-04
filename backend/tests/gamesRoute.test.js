@@ -150,11 +150,11 @@ const refused = () => [
   ['siège tableau', { players: [aliceSeat(), []] }, 'siège invalide'],
 ];
 
-test('POST /api/games — entrées invalides : 400 explicite, rien n’est enregistré (#225)', async () => {
+test('POST /api/games — entrées invalides : 422 explicite, rien n’est enregistré (#225)', async () => {
   const before = await countAliceGames();
   for (const [label, over, message] of refused()) {
     const res = await post(basePayload({ players: [aliceSeat(), seat()], ...over }));
-    assert.equal(res.status, 400, label);
+    assert.equal(res.status, 422, label);
     assert.ok(res.body.error.includes(message), `${label} : ${res.body.error}`);
   }
   assert.equal(await countAliceGames(), before);

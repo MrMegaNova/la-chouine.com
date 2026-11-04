@@ -65,7 +65,7 @@ router.post('/', requireAuth, async (req, res) => {
     : difficulty != null && !VALID_DIFFICULTIES.includes(difficulty)
       ? 'Difficulté invalide (easy, normal ou hard).'
       : players.map((p, seat) => seatError(p, seat, Number(targetScore))).find(Boolean);
-  if (invalid) return res.status(400).json({ error: invalid });
+  if (invalid) return res.status(422).json({ error: invalid });
 
   try {
     const result = await withTransaction(async (client) => {
