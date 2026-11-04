@@ -9,11 +9,15 @@
 // répercutée dans les deux fichiers ; la suite de tests `backend/tests/engine.test.js`
 // verrouille le comportement. Une consolidation en package partagé est à envisager.
 //
-// Seule adaptation par rapport au frontend : `applyPlayCard` retire la carte de
-// la main **par valeur** (couleur + rang) et non par référence d'objet, car les
-// coups arrivent du réseau sous forme d'objets simples. Les cartes étant uniques
-// dans un jeu de 32, c'est strictement équivalent.
+// Adaptations par rapport au frontend (aucune ne change les règles) :
+// - `applyPlayCard` retire la carte de la main **par valeur** (couleur + rang) et
+//   non par référence d'objet, car les coups arrivent du réseau sous forme
+//   d'objets simples. Les cartes étant uniques dans un jeu de 32, c'est
+//   strictement équivalent.
+// - `shuffle` tire son aléa d'un CSPRNG (#231) : même Fisher-Yates, même
+//   distribution uniforme, mais donnes imprévisibles en PvP classé.
 
+const crypto = require('crypto');
 const { SUITS, RANKS, ORDER, PTS, SUIT_RANK, SUIT_SYMBOL } = require('./constants');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -28,10 +32,14 @@ function buildDeck() {
   return deck;
 }
 
+// Fisher-Yates sur CSPRNG (#231) : `Math.random` (xorshift128+) est partagé par
+// tout le process et son état se reconstruit à partir de quelques sorties, ce qui
+// rendrait les donnes suivantes prévisibles. `randomInt` exclut la borne haute et
+// élimine le biais de modulo : `j` est uniforme sur [0, i].
 function shuffle(arr) {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = crypto.randomInt(i + 1);
     [a[i], a[j]] = [a[j], a[i]];
   }
   return a;
