@@ -19,6 +19,7 @@ import Friends from '@/pages/Friends';
 import Profile from '@/pages/Profile';
 import PlayerProfile from '@/pages/PlayerProfile';
 import Rules from '@/pages/Rules';
+import { usePageMeta } from '@/seo/usePageMeta';
 import '@/styles/main.scss';
 
 function VerifyEmail() {
@@ -67,6 +68,7 @@ export default function App() {
   // est le cas type (#211) : sans ça, la table (locale persistée, ou PvP repris
   // via la présence) se réhydrate dans le nouvel onglet et masque la page.
   const location = useLocation();
+  usePageMeta(location.pathname);
   const standalonePage = location.pathname.startsWith('/joueur/');
 
   // Le header est masqué dès qu'une table (locale ou en ligne) occupe l'écran.
