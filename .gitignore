@@ -8,6 +8,7 @@ node_modules/
 
 # ─── Build frontend ───────────────────────────────────────────────────────────
 frontend/dist/
+frontend/dist-ssr/
 public/
 # …mais le dossier source public/ de Vite (assets statiques, favicon) doit être versionné
 !frontend/public/

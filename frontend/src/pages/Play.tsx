@@ -81,7 +81,7 @@ export default function Play() {
 
   return (
     <div className="wrap" style={{ paddingTop: 36, paddingBottom: 60 }}>
-      <h2 className="section-title">Lancer une partie</h2>
+      <h1 className="section-title">Lancer une partie</h1>
       <p className="section-sub">Choisissez votre mode, votre format et c'est parti.</p>
 
       {/* Recherche d'adversaire en ligne (#91) — mise en avant en tête de page. */}

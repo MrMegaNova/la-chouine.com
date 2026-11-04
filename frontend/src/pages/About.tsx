@@ -6,7 +6,7 @@ import { GITHUB_URL, CONTACT_EMAIL } from '@/components/layout/Footer';
 export default function About() {
   return (
     <div className="wrap" style={{ maxWidth: 760, paddingTop: 40, paddingBottom: 60 }}>
-      <h2 className="section-title">À propos de La Chouine</h2>
+      <h1 className="section-title">À propos de La Chouine</h1>
       <p className="section-sub">
         Une adaptation en ligne du jeu de cartes traditionnel de la Vallée du Loir.
       </p>
