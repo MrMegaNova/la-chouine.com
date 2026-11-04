@@ -3,6 +3,8 @@
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const supertest = require('supertest');
+const bcrypt = require('bcryptjs');
+const config = require('../src/config');
 const { pool } = require('../src/db');
 const app = require('../src/app');
 
@@ -101,6 +103,64 @@ test('POST /api/auth/login — identifiants incorrects', async () => {
     password: 'nimportequoi',
   });
   assert.equal(res.status, 401);
+});
+
+// Appelle le vrai `bcrypt.compare` en relevant le hash reçu et l'avancement du
+// calcul : bcryptjs renvoie `false` sans rien calculer si le hash est mal formé,
+// seule une progression jusqu'à 1 prouve que tous les rounds ont été exécutés.
+function spyOnBcryptCompare(t) {
+  const realCompare = bcrypt.compare;
+  const calls = [];
+  t.mock.method(bcrypt, 'compare', (password, hash) => {
+    const call = { hash, progress: 0 };
+    calls.push(call);
+    return realCompare(password, hash, undefined, (p) => { call.progress = p; });
+  });
+  return calls;
+}
+
+test('POST /api/auth/login — pseudo inconnu : bcrypt fait le calcul complet (#223)', async (t) => {
+  const calls = spyOnBcryptCompare(t);
+
+  const res = await request.post('/api/auth/login').send({
+    username: 'InexistantOracle',
+    password: 'Motdepasse123!',
+  });
+
+  assert.equal(res.status, 401);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].hash.length, 60);
+  assert.equal(bcrypt.getRounds(calls[0].hash), config.auth.bcryptRounds);
+  assert.equal(calls[0].progress, 1);
+});
+
+test('POST /api/auth/login — pseudo inconnu et mauvais mot de passe sont indiscernables (#223)', async (t) => {
+  await pool.query(
+    `INSERT INTO users (username, email, password_hash, email_verified)
+     VALUES ($1, $2, $3, TRUE)`,
+    [
+      'OracleExistant',
+      'oracle@test.la-chouine.invalid',
+      await bcrypt.hash('Motdepasse123!', config.auth.bcryptRounds),
+    ]
+  );
+  const calls = spyOnBcryptCompare(t);
+
+  const unknown = await request.post('/api/auth/login').send({
+    username: 'InexistantOracle',
+    password: 'MauvaisPass123!',
+  });
+  const wrongPassword = await request.post('/api/auth/login').send({
+    username: 'OracleExistant',
+    password: 'MauvaisPass123!',
+  });
+
+  assert.equal(unknown.status, 401);
+  assert.equal(wrongPassword.status, unknown.status);
+  assert.deepEqual(wrongPassword.body, unknown.body);
+  // Même travail côté serveur : deux calculs complets, au même coût.
+  assert.deepEqual(calls.map(c => c.progress), [1, 1]);
+  assert.equal(bcrypt.getRounds(calls[0].hash), bcrypt.getRounds(calls[1].hash));
 });
 
 test('GET /api/auth/verify-email — token invalide', async () => {

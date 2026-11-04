@@ -17,6 +17,19 @@ const guardsOff = config.isTest;
 
 const router = express.Router();
 
+// Hash comparé quand le pseudo est inconnu, pour que le login coûte le même
+// calcul bcrypt que le compte existe ou non (#223). Il doit être valide (60
+// caractères) : bcryptjs répond `false` sans rien calculer sur un hash mal formé.
+// Généré au chargement pour suivre le coût configuré, à partir d'un secret jeté.
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync(
+  crypto.randomBytes(32).toString('hex'),
+  config.auth.bcryptRounds
+);
+
+// Violation d'unicité Postgres : la contrainte DB est la vraie garde (#224).
+const PG_UNIQUE_VIOLATION = '23505';
+const ACCOUNT_TAKEN_ERROR = 'Ce pseudo ou cette adresse email est déjà utilisé.';
+
 // ─── Validation ───────────────────────────────────────────────────────────────
 
 const USERNAME_RE = /^[A-Za-z0-9_-]{2,30}$/;
@@ -84,9 +97,7 @@ router.post('/register', async (req, res) => {
       [username, email]
     );
     if (exists.rows.length) {
-      return res.status(409).json({
-        errors: ['Ce pseudo ou cette adresse email est déjà utilisé.'],
-      });
+      return res.status(409).json({ errors: [ACCOUNT_TAKEN_ERROR] });
     }
 
     const passwordHash = await bcrypt.hash(password, config.auth.bcryptRounds);
@@ -113,6 +124,11 @@ router.post('/register', async (req, res) => {
         'Compte créé. Un email de confirmation a été envoyé à votre adresse.',
     });
   } catch (err) {
+    // Course entre le SELECT ci-dessus et l'INSERT : une requête concurrente a
+    // créé le compte entre-temps (#224). Cas attendu, pas une erreur serveur.
+    if (err.code === PG_UNIQUE_VIOLATION) {
+      return res.status(409).json({ errors: [ACCOUNT_TAKEN_ERROR] });
+    }
     req.log.error({ err }, 'register');
     res.status(500).json({ errors: ['Erreur interne. Réessayez.'] });
   }
@@ -171,7 +187,7 @@ router.post('/login', async (req, res) => {
     const user = rows[0];
 
     // Toujours appeler bcrypt pour éviter le timing oracle
-    const validHash = user ? user.password_hash : '$2a$12$invalide.hash.pour.eviter.timing';
+    const validHash = user ? user.password_hash : DUMMY_PASSWORD_HASH;
     const match = await bcrypt.compare(password, validHash);
 
     if (!user || !match) {
