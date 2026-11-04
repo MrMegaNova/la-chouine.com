@@ -2,6 +2,7 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
 
 const E = require('../src/game/engine');
 
@@ -18,6 +19,59 @@ function g(overrides) {
     scores: [0, 0], target: 3, sevenAnnounced: false, names: ['A', 'B'],
   }, overrides);
 }
+
+// ─── Mélange (#231) ───────────────────────────────────────────────────────────
+
+test('shuffle : Fisher-Yates sur crypto.randomInt, sans Math.random', (t) => {
+  const randomInt = t.mock.method(crypto, 'randomInt');
+  const mathRandom = t.mock.method(Math, 'random');
+
+  const deck = E.buildDeck();
+  const before = [...deck];
+  const mixed = E.shuffle(deck);
+
+  // Une borne (exclusive) par position, de 32 à 2 : ni biais par borne fixe, ni
+  // carte condamnée à bouger (borne i au lieu de i + 1).
+  const bounds = randomInt.mock.calls.map((call) => call.arguments[0]);
+  assert.deepEqual(bounds, Array.from({ length: 31 }, (_, k) => 32 - k));
+  assert.equal(mathRandom.mock.callCount(), 0);
+
+  // Conservation des cartes, tableau d'origine intact.
+  assert.deepEqual(deck, before);
+  const key = (card) => `${card.s}|${card.r}`;
+  assert.equal(new Set(mixed.map(key)).size, 32);
+  assert.deepEqual(new Set(mixed.map(key)), new Set(deck.map(key)));
+});
+
+test('createGame, dealHand et drawForDealer ne consomment pas Math.random', (t) => {
+  const mathRandom = t.mock.method(Math, 'random');
+
+  for (const variant of ['classic', 'mondoubleau']) {
+    E.dealHand(E.createGame({ mode: 'online', variant, playerCount: 2, target: 3, names: ['A', 'B'] }));
+  }
+  E.drawForDealer(2);
+
+  assert.equal(mathRandom.mock.callCount(), 0);
+});
+
+test('shuffle : les permutations sont équiprobables (khi-deux)', () => {
+  // 4 éléments → 24 permutations, donc 23 degrés de liberté. Le CSPRNG n'étant pas
+  // reproductible, le seuil est très large : p(khi2 > 70) < 1e-5, le test ne devrait
+  // pas devenir intermittent, et un Fisher-Yates faussé le dépasse de très loin.
+  const draws = 48000;
+  const counts = new Map();
+  for (let n = 0; n < draws; n++) {
+    const perm = E.shuffle([0, 1, 2, 3]).join('');
+    counts.set(perm, (counts.get(perm) ?? 0) + 1);
+  }
+
+  const expected = draws / 24;
+  let khi2 = 0;
+  for (const observed of counts.values()) khi2 += (observed - expected) ** 2 / expected;
+  // Permutation jamais tirée : elle compte pour `expected` dans la somme.
+  khi2 += (24 - counts.size) * expected;
+  assert.ok(khi2 < 70, `khi2 = ${khi2.toFixed(1)} : distribution biaisée`);
+});
 
 // ─── Deck & distribution ──────────────────────────────────────────────────────
 
