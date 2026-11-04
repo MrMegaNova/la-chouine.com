@@ -209,6 +209,22 @@
 }
 .animate-fade { animation: fade-in 0.5s ease both; }
 
+// Indicateur de chargement (page de vérification d'email, #239).
+@keyframes spinner-turn {
+  to { transform: rotate(360deg); }
+}
+.spinner {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border: 2px solid var(--cream-2);
+  border-top-color: var(--gold-soft);
+  border-radius: 50%;
+  animation: spinner-turn 0.9s linear infinite;
+  @media (prefers-reduced-motion: reduce) { animation: none; }
+}
+
 // ─── Rules page ───────────────────────────────────────────────────────────────
 .rules-cols {
   columns: 2;

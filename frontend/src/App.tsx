@@ -1,10 +1,9 @@
 import { useEffect } from 'react';
-import { Routes, Route, Navigate, useSearchParams, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { useGameStore } from '@/store/gameStore';
 import { useOnlineStore } from '@/store/onlineStore';
 import { useNotificationStore } from '@/store/notificationStore';
-import { authApi } from '@/api/client';
 import { Header } from '@/components/layout/Header';
 import { GameTable } from '@/components/game/GameTable';
 import { OnlinePvP } from '@/components/game/OnlinePvP';
@@ -15,26 +14,13 @@ import About from '@/pages/About';
 import Play from '@/pages/Play';
 import Login from '@/pages/Login';
 import ResetPassword from '@/pages/ResetPassword';
+import VerifyEmail from '@/pages/VerifyEmail';
 import Friends from '@/pages/Friends';
 import Profile from '@/pages/Profile';
 import PlayerProfile from '@/pages/PlayerProfile';
 import Rules from '@/pages/Rules';
 import { usePageMeta } from '@/seo/usePageMeta';
 import '@/styles/main.scss';
-
-function VerifyEmail() {
-  const [params] = useSearchParams();
-  const token = params.get('token') ?? '';
-
-  useEffect(() => {
-    if (!token) return;
-    authApi.verifyEmail(token).then(({ ok, data }) => {
-      alert(ok ? (data as { message: string }).message : (data as { error?: string }).error ?? 'Erreur de vérification.');
-    });
-  }, [token]);
-
-  return <Navigate to="/connexion" replace />;
-}
 
 export default function App() {
   const { restoreSession, token } = useAuthStore();
