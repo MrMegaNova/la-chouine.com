@@ -2,6 +2,7 @@
 // Écrit le HTML de chaque page publique, la coquille des pages privées
 // (spa.html) et le sitemap. Échoue si une page sort sans contenu : mieux vaut un
 // build rouge qu'un site redevenu invisible pour les moteurs de recherche.
+import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -29,4 +30,18 @@ for (const { path } of PUBLIC_PAGES) {
 }
 
 writeFileSync(join(dist, 'sitemap.xml'), buildSitemap());
+
+// Identifiant de build du service worker (#212). Le gabarit référence les assets
+// par leur hash : l'identifiant change dès que le code, les styles ou la page
+// d'erreur changent, et reste stable si le build est identique.
+const swPath = join(dist, 'sw.js');
+const buildId = createHash('sha256')
+  .update(template)
+  .update(readFileSync(join(dist, 'offline.html')))
+  .digest('hex')
+  .slice(0, 12);
+const sw = readFileSync(swPath, 'utf8');
+if (!sw.includes('__BUILD_ID__')) throw new Error('sw.js : identifiant de build introuvable.');
+writeFileSync(swPath, sw.replace('__BUILD_ID__', buildId));
+
 rmSync(ssrDir, { recursive: true, force: true });

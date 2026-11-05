@@ -1,0 +1,20 @@
+{
+  "id": "/",
+  "name": "La Chouine",
+  "short_name": "La Chouine",
+  "description": "Le jeu de cartes historique de la Vallée du Loir, contre l'ordinateur ou entre amis.",
+  "lang": "fr",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#123026",
+  "theme_color": "#123026",
+  "categories": ["games"],
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
