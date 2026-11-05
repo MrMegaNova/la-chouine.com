@@ -39,7 +39,7 @@ export default function Login() {
     setLoading(false);
     if (err) {
       if (err.includes('EMAIL_NOT_VERIFIED') || err.includes('non activé')) {
-        setError('Compte non activé — vérifiez vos emails.');
+        setError('Compte non activé — vérifiez vos emails, y compris vos spams.');
         setNotActivated(true); // lien d'activation peut-être expiré → renvoi possible
       } else {
         setError(err);
@@ -56,7 +56,7 @@ export default function Login() {
     const err = await store.register(username.trim(), email.trim(), password, website);
     setLoading(false);
     if (err) { setError(err); return; }
-    setSuccess('Compte créé ! Vérifiez vos emails pour activer votre compte.');
+    setSuccess('Compte créé ! Vérifiez vos emails, y compris vos spams, pour activer votre compte.');
     setTab('login');
   };
 
@@ -65,7 +65,7 @@ export default function Login() {
     setLoading(true);
     const { data } = await authApi.forgotPassword(email.trim());
     setLoading(false);
-    setSuccess(data.message ?? 'Email envoyé si le compte existe.');
+    setSuccess(`${data.message ?? 'Email envoyé si le compte existe.'} Pensez à vérifier vos spams.`);
   };
 
   return (

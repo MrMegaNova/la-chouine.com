@@ -75,8 +75,22 @@ describe('<Login>', () => {
     await user.type(screen.getByPlaceholderText('••••••••'), 'whatever');
     await user.click(screen.getByRole('button', { name: 'Se connecter' }));
 
-    expect(await screen.findByText('Compte non activé — vérifiez vos emails.')).toBeInTheDocument();
+    expect(await screen.findByText('Compte non activé — vérifiez vos emails, y compris vos spams.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Recevez-en un nouveau/ })).toBeInTheDocument();
+  });
+
+  it('inscription réussie : rappelle de vérifier les spams', async () => {
+    const user = userEvent.setup();
+    mocked(authApi.register).mockResolvedValue({ ok: true, status: 201, data: { message: 'Compte créé.' } });
+    renderLogin();
+
+    await user.click(screen.getByRole('button', { name: 'Inscription' }));
+    await user.type(screen.getByPlaceholderText('Votre pseudo'), 'alice');
+    await user.type(screen.getByPlaceholderText('votre@email.com'), 'alice@example.com');
+    await user.type(screen.getByPlaceholderText('••••••••'), 'Motdepasse123!');
+    await user.click(screen.getByRole('button', { name: 'Créer mon compte' }));
+
+    expect(await screen.findByText('Compte créé ! Vérifiez vos emails, y compris vos spams, pour activer votre compte.')).toBeInTheDocument();
   });
 
   it('connexion réussie : redirige vers le profil', async () => {
@@ -102,7 +116,7 @@ describe('<Login>', () => {
     await user.click(screen.getByRole('button', { name: 'Envoyer le lien' }));
 
     await waitFor(() =>
-      expect(screen.getByText('Email envoyé si le compte existe.')).toBeInTheDocument());
+      expect(screen.getByText('Email envoyé si le compte existe. Pensez à vérifier vos spams.')).toBeInTheDocument());
     expect(authApi.forgotPassword).toHaveBeenCalledWith('alice@example.com');
   });
 });
