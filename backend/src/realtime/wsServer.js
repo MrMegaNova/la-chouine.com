@@ -264,10 +264,13 @@ async function attachWebSocketServer(httpServer, opts = {}) {
   // ── Clôture de match (victoire ou forfait) ──
   async function finishSession(session) {
     for (const p of session.players) await presenceStore.clearGrace(p.userId);
-    const outcome = { sessionId: session.id, ...session.getMatchOutcome() };
     let recording = null;
-    try { recording = onMatchComplete(outcome); }
-    catch (err) { logger.error({ err, sessionId: session.id }, 'ws: onMatchComplete a échoué'); }
+    // Match annulé (#228) : rien à enregistrer, ni partie ni Elo.
+    if (!session.cancelled) {
+      const outcome = { sessionId: session.id, ...session.getMatchOutcome() };
+      try { recording = onMatchComplete(outcome); }
+      catch (err) { logger.error({ err, sessionId: session.id }, 'ws: onMatchComplete a échoué'); }
+    }
     await sessionStore.endSession(session.id);
     schedulePresence();
     return { recording };
@@ -375,8 +378,9 @@ async function attachWebSocketServer(httpServer, opts = {}) {
         });
       }
       // Coupe (#201) : un siège qui ne pioche pas avant l'échéance perd par
-      // forfait. La phase `cut` précède toute donne ; l'horloge de coup n'y
-      // tourne pas encore, d'où ce balayage dédié.
+      // forfait ; si aucun des deux n'a pioché, le match est annulé (#228). La
+      // phase `cut` précède toute donne ; l'horloge de coup n'y tourne pas
+      // encore, d'où ce balayage dédié.
       for (const sid of await sessionStore.listActiveSessionIds()) {
         await sessionStore.withLock(sid, async () => {
           const s = await sessionStore.getSession(sid);

@@ -100,6 +100,28 @@ test('coupe (#201) : cutTimeout fait perdre le siège qui n’a pas pioché', ()
   assert.equal(sess.matchResult.forfeit.reason, 'timeout');
 });
 
+test('coupe (#228) : si personne n’a pioché, le match est annulé sans vainqueur', () => {
+  const sess = new GameSession({
+    id: 't', variant: 'classic', target: 3, rated: true,
+    players: [{ userId: 'u1', name: 'Alice' }, { userId: 'u2', name: 'Bob' }],
+  });
+  const res = sess.cutTimeout();
+  assert.deepEqual(res, { ok: true, seat: null, cancelled: true });
+  assert.equal(sess.finished, true);
+  assert.equal(sess.cancelled, true);
+  assert.equal(sess.matchResult.winnerSeat, null);
+  assert.equal(sess.matchResult.forfeit, undefined);
+  assert.deepEqual(sess.matchResult.cancelled, { reason: 'cut-timeout' });
+  assert.equal(sess.getMatchOutcome(), null, 'rien à enregistrer, donc aucun Elo');
+  assert.equal(sess.snapshotFor('u1').matchResult.cancelled.reason, 'cut-timeout');
+
+  // L'annulation survit au passage par Redis et reste définitive.
+  const restored = GameSession.fromJSON(JSON.parse(JSON.stringify(sess.toJSON())));
+  assert.equal(restored.cancelled, true);
+  assert.equal(restored.forfeit(0, 'abandon').ok, false);
+  assert.equal(restored.cutTimeout().ok, false);
+});
+
 test('faits de jeu (#217) : réaliser une chouine est mémorisé dans facts (badge)', () => {
   const sess = mkSession({
     phase: 'draw', trump: 'coeur', turn: 0, trick: [],
