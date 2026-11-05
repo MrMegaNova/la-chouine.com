@@ -20,6 +20,7 @@ import Profile from '@/pages/Profile';
 import PlayerProfile from '@/pages/PlayerProfile';
 import Rules from '@/pages/Rules';
 import { usePageMeta } from '@/seo/usePageMeta';
+import { applyPendingUpdate } from '@/pwa/serviceWorker';
 import '@/styles/main.scss';
 
 export default function App() {
@@ -59,6 +60,12 @@ export default function App() {
 
   // Le header est masqué dès qu'une table (locale ou en ligne) occupe l'écran.
   const tableActive = !standalonePage && (!!game || onlineStatus !== 'idle');
+
+  // Nouvelle version déployée (#212) : rechargement au changement de page ou en
+  // quittant la table, pour ne jamais couper une partie ni une saisie en cours.
+  useEffect(() => {
+    if (!tableActive) applyPendingUpdate();
+  }, [location.pathname, tableActive]);
 
   return (
     <>

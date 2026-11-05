@@ -18,7 +18,10 @@ const GUEST_NAME_MAX = 30; // game_players.guest_name VARCHAR(30)
 
 // Valide un siège avant tout accès à la base (#225) : renvoie le message
 // d'erreur, ou null si le siège est valide. Le score d'une partie locale n'est
-// qu'un affichage d'historique : il n'alimente jamais l'Elo (#116).
+// qu'un affichage d'historique : il n'alimente jamais l'Elo (#116). `score` et
+// `won` restent déclarés par le navigateur, qui joue seul la partie : le serveur
+// les borne sans pouvoir les vérifier, et les range à part des résultats en ligne
+// (#279, services/playerStats.js).
 function seatError(player, seat, target) {
   const label = `Joueur ${seat + 1}`;
   if (player === null || typeof player !== 'object' || Array.isArray(player))
@@ -64,7 +67,10 @@ router.post('/', requireAuth, async (req, res) => {
     ? 'Le nombre de joueurs ne correspond pas à la liste des joueurs.'
     : difficulty != null && !VALID_DIFFICULTIES.includes(difficulty)
       ? 'Difficulté invalide (easy, normal ou hard).'
-      : players.map((p, seat) => seatError(p, seat, Number(targetScore))).find(Boolean);
+      : players.map((p, seat) => seatError(p, seat, Number(targetScore))).find(Boolean)
+        ?? (players.filter(p => p.userId === req.user.id).length > 1
+          ? 'Un même joueur ne peut pas occuper plusieurs sièges.'
+          : null);
   if (invalid) return res.status(422).json({ error: invalid });
 
   try {
@@ -100,7 +106,8 @@ router.post('/', requireAuth, async (req, res) => {
       }
 
       // Badges (#217) : seul l'appelant est un vrai utilisateur ici ; on évalue
-      // ses badges dans la même transaction (stats à jour), côté serveur.
+      // ses badges dans la même transaction (stats à jour), côté serveur. Une
+      // partie locale ne débloque que des badges d'assiduité non vérifiés (#279).
       await evaluateAchievements(client, req.user.id);
 
       return { gid };

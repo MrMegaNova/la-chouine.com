@@ -123,3 +123,90 @@ test('GET /api/users/:id/achievements — sans token : 401 ; UUID mal formé : 4
   assert.equal((await request.get(`/api/users/${userId}/achievements`)).status, 401);
   assert.equal((await request.get('/api/users/pas-un-uuid/achievements').set('Authorization', `Bearer ${token}`)).status, 404);
 });
+
+// ─── Provenance (#279) ────────────────────────────────────────────────────────
+
+async function addUser(name) {
+  const { rows } = await pool.query(
+    `INSERT INTO users (username, email, password_hash, email_verified) VALUES ($1, $2, 'x', TRUE) RETURNING id`,
+    [name, `${name.toLowerCase()}@${DOMAIN}`]);
+  return rows[0].id;
+}
+
+async function addGameFor(id, mode, won, variant = 'classic', endedAt = null) {
+  const g = await pool.query(
+    `INSERT INTO games (mode, variant, ended_at) VALUES ($1, $2, COALESCE($3::timestamptz, NOW())) RETURNING id`,
+    [mode, variant, endedAt]);
+  await pool.query(
+    `INSERT INTO game_players (game_id, user_id, seat, score, won) VALUES ($1, $2, 0, 1, $3)`,
+    [g.rows[0].id, id, won]);
+}
+
+const badges = async (id, options) => new Map(
+  (await listAchievements((q, p) => pool.query(q, p), id, options)).map(a => [a.code, a.verified]));
+
+test('parties locales gagnées : aucun badge de victoire (#279)', async () => {
+  const id = await addUser('AchLocalWins');
+  for (let i = 0; i < 12; i++) await addGameFor(id, 'ai', true, i % 2 ? 'classic' : 'mondoubleau');
+  await evaluateAchievements(pool, id);
+
+  const got = await badges(id);
+  for (const code of ['premiere-victoire', 'gagnant', 'champion', 'ambidextre']) {
+    assert.equal(got.has(code), false, code);
+  }
+});
+
+test('parties locales : badges d’assiduité obtenus, non vérifiés, absents de la vue publique (#279)', async () => {
+  const id = await addUser('AchLocalPlays');
+  for (let i = 0; i < 10; i++) await addGameFor(id, 'local', false);
+  await addGameFor(id, 'ai', false, 'classic', '2025-07-12T15:00:00+02:00'); // samedi
+  await addGameFor(id, 'ai', false, 'classic', '2025-07-13T15:00:00+02:00');
+  await addGameFor(id, 'ai', false, 'classic', '2025-07-14T15:00:00+02:00'); // férié
+  await evaluateAchievements(pool, id);
+
+  const got = await badges(id);
+  for (const code of ['premiere-partie', 'habitue', 'joueur-weekend', 'jour-ferie', 'assidu']) {
+    assert.equal(got.get(code), false, code);
+  }
+  assert.equal((await badges(id, { verifiedOnly: true })).size, 0);
+});
+
+test('les parties en ligne vérifient un badge déjà obtenu, sans changer sa date (#279)', async () => {
+  const id = await addUser('AchUpgrade');
+  await addGameFor(id, 'ai', false);
+  assert.ok((await evaluateAchievements(pool, id)).includes('premiere-partie'));
+  assert.equal((await badges(id)).get('premiere-partie'), false);
+  const date = async () => (await pool.query(
+    `SELECT unlocked_at FROM user_achievements WHERE user_id = $1 AND code = 'premiere-partie'`, [id]
+  )).rows[0].unlocked_at.getTime();
+  const unlockedAt = await date();
+
+  await addGameFor(id, 'online', false);
+  const fresh = await evaluateAchievements(pool, id);
+  assert.equal(fresh.includes('premiere-partie'), false, 'pas un nouveau déblocage');
+  assert.equal((await badges(id)).get('premiere-partie'), true);
+  assert.equal(await date(), unlockedAt);
+});
+
+test('une partie en ligne de plus ne retire jamais un ancien badge non justifié (#279)', async () => {
+  const id = await addUser('AchLegacy');
+  await pool.query(
+    `INSERT INTO user_achievements (user_id, code, verified) VALUES ($1, 'champion', FALSE)`, [id]);
+  await addGameFor(id, 'online', true);
+  await evaluateAchievements(pool, id);
+
+  const got = await badges(id);
+  assert.equal(got.get('champion'), false, 'conservé et toujours non vérifié');
+  assert.equal(got.get('premiere-victoire'), true);
+});
+
+test('badges d’assiduité : les parties locales ne s’ajoutent pas aux parties en ligne pour vérifier (#279)', async () => {
+  const id = await addUser('AchMixed');
+  for (let i = 0; i < 9; i++) await addGameFor(id, 'ai', false);
+  await addGameFor(id, 'online', false);
+  await evaluateAchievements(pool, id);
+
+  const got = await badges(id);
+  assert.equal(got.get('habitue'), false, '10 parties, dont une seule en ligne');
+  assert.equal(got.get('premiere-partie'), true);
+});
