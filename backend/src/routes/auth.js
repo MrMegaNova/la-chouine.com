@@ -3,12 +3,13 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
-const { query } = require('../db');
+const { query, withTransaction } = require('../db');
 const { signToken } = require('../middleware/auth');
 const { sendVerificationEmail, sendPasswordResetEmail, logMailError } = require('../services/email');
 const { isUsernameAllowed } = require('../services/usernameFilter');
 const { authGuard } = require('../services/authGuard');
 const { validatePassword } = require('../services/passwordPolicy');
+const invitations = require('../services/invitations');
 const config = require('../config');
 
 // Garde-fous anti-abus (#86) — débrayés en test, comme les rate limiters
@@ -28,6 +29,7 @@ const DUMMY_PASSWORD_HASH = bcrypt.hashSync(
 
 // Violation d'unicité Postgres : la contrainte DB est la vraie garde (#224).
 const PG_UNIQUE_VIOLATION = '23505';
+const PG_FOREIGN_KEY_VIOLATION = '23503';
 const ACCOUNT_TAKEN_ERROR = 'Ce pseudo ou cette adresse email est déjà utilisé.';
 
 // ─── Validation ───────────────────────────────────────────────────────────────
@@ -62,6 +64,17 @@ function hashToken(raw) {
   return crypto.createHash('sha256').update(raw).digest('hex');
 }
 
+function insertUser(username, email, passwordHash, verifyHash, verifyExpires, inviteCode) {
+  // Un code inconnu donne NULL : l'inscription réussit à l'identique (#295).
+  return query(
+    `INSERT INTO users (username, email, password_hash, verify_token, verify_expires, invited_by)
+     VALUES ($1, $2, $3, $4, $5,
+             (SELECT id FROM users WHERE invite_code = $6 AND email_verified = TRUE))
+     RETURNING id, username, email`,
+    [username, email, passwordHash, verifyHash, verifyExpires, inviteCode]
+  );
+}
+
 // ─── POST /api/auth/register ──────────────────────────────────────────────────
 
 router.post('/register', async (req, res) => {
@@ -86,7 +99,8 @@ router.post('/register', async (req, res) => {
   const errors = validateRegister(req.body);
   if (errors.length) return res.status(422).json({ errors });
 
-  const { username, email, password } = req.body;
+  const { username, email, password, invitationCode } = req.body;
+  const inviteCode = invitations.isInviteCode(invitationCode) ? invitationCode : null;
 
   try {
     // Vérifier unicité insensible à la casse
@@ -104,12 +118,13 @@ router.post('/register', async (req, res) => {
     const verifyToken = generateToken();
     const verifyExpires = new Date(Date.now() + config.auth.verifyTokenTtlMs);
 
-    const { rows } = await query(
-      `INSERT INTO users (username, email, password_hash, verify_token, verify_expires)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING id, username, email`,
-      [username, email, passwordHash, hashToken(verifyToken), verifyExpires]
-    );
+    const verifyHash = hashToken(verifyToken);
+    const { rows } = await insertUser(username, email, passwordHash, verifyHash, verifyExpires, inviteCode)
+      .catch(err => {
+        // Le compte qui invite vient d'être supprimé : l'inscription continue sans lui.
+        if (err.code !== PG_FOREIGN_KEY_VIOLATION) throw err;
+        return insertUser(username, email, passwordHash, verifyHash, verifyExpires, null);
+      });
     const user = rows[0];
 
     if (!guardsOff) authGuard.registerRecorded(req.ip); // compte créé → décompte IP (#86)
@@ -143,17 +158,23 @@ router.get('/verify-email', async (req, res) => {
   }
 
   try {
-    const { rows } = await query(
-      `UPDATE users
-       SET email_verified = TRUE, verify_token = NULL, verify_expires = NULL, updated_at = NOW()
-       WHERE verify_token = $1
-         AND verify_expires > NOW()
-         AND email_verified = FALSE
-       RETURNING id, username`,
-      [hashToken(token)]
-    );
+    // Le token ne sert qu'une fois : un second clic ne réapplique rien (#295).
+    const verified = await withTransaction(async client => {
+      const { rows } = await client.query(
+        `UPDATE users
+         SET email_verified = TRUE, verify_token = NULL, verify_expires = NULL, updated_at = NOW()
+         WHERE verify_token = $1
+           AND verify_expires > NOW()
+           AND email_verified = FALSE
+         RETURNING id, invited_by`,
+        [hashToken(token)]
+      );
+      if (!rows.length) return false;
+      await invitations.applyInvitation(client, rows[0], req.log);
+      return true;
+    });
 
-    if (!rows.length) {
+    if (!verified) {
       return res.status(400).json({ error: 'Lien invalide ou expiré.' });
     }
 

@@ -33,4 +33,6 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   // Faits de jeu (PvP)
   { code: 'partie-blanche',    label: 'Partie blanche',     description: 'Gagner une partie classée sans que l’adversaire ne remporte une manche.', icon: '⬜' },
   { code: 'chouine-faite',     label: 'Chouine !',          description: 'Réaliser une chouine en partie classée.', icon: '🦉' },
+  // Invitations
+  { code: 'ambassadeur',       label: 'Ambassadeur',        description: 'Un ami invité a rejoint La Chouine.',     icon: '🤝' },
 ];

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { authApi } from '@/api/client';
 import { EyeToggle, PasswordChecklist } from '@/components/auth/password';
@@ -7,7 +7,11 @@ import { EyeToggle, PasswordChecklist } from '@/components/auth/password';
 type Tab = 'login' | 'register' | 'forgot';
 
 export default function Login() {
-  const [tab, setTab] = useState<Tab>('login');
+  // Parcours d'invitation (#295) : le code reste dans l'URL jusqu'à l'inscription.
+  const [params, setParams] = useSearchParams();
+  const rawInvitation = params.get('invitation');
+  const invitation = rawInvitation && /^[0-9a-f]{32}$/.test(rawInvitation) ? rawInvitation : undefined;
+  const [tab, setTab] = useState<Tab>(params.get('onglet') === 'inscription' ? 'register' : 'login');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -45,7 +49,7 @@ export default function Login() {
         setError(err);
       }
     } else {
-      navigate('/profil');
+      navigate(invitation ? `/invitation/${invitation}` : '/profil');
     }
   };
 
@@ -53,9 +57,11 @@ export default function Login() {
     reset();
     setLoading(true);
     const { login: _l, ...store } = useAuthStore.getState();
-    const err = await store.register(username.trim(), email.trim(), password, website);
+    const err = await store.register(username.trim(), email.trim(), password, website, invitation);
     setLoading(false);
     if (err) { setError(err); return; }
+    // L'invitation est enregistrée : la connexion suivante n'a plus à y revenir.
+    if (invitation) setParams({}, { replace: true });
     setSuccess('Compte créé ! Vérifiez vos emails, y compris vos spams, pour activer votre compte.');
     setTab('login');
   };
@@ -77,6 +83,12 @@ export default function Login() {
         <p className="note" style={{ marginBottom: 20 }}>
           {tab === 'login' ? 'Connectez-vous pour retrouver vos amis.' : tab === 'register' ? 'Créez un compte gratuit pour jouer en ligne.' : 'Recevez par email un lien pour réinitialiser votre mot de passe — ou, si votre compte n\'est pas encore activé, un nouveau lien d\'activation.'}
         </p>
+
+        {invitation && tab === 'register' && (
+          <p style={{ fontSize: 14, marginBottom: 16 }}>
+            Une fois votre email vérifié, vous deviendrez amis avec la personne qui vous invite.
+          </p>
+        )}
 
         {tab !== 'forgot' && (
           <div className="tabs">

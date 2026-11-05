@@ -38,4 +38,15 @@ const deleteAccountLimiter = rateLimit(passwordAttemptOptions);
 // Changement de mot de passe (#293).
 const changePasswordLimiter = rateLimit(passwordAttemptOptions);
 
-module.exports = { authLimiter, apiLimiter, deleteAccountLimiter, changePasswordLimiter };
+// Résolution publique d'un lien d'invitation (#295) : freine l'énumération des
+// codes, avec une limite par IP large pour un usage normal.
+const invitationLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Trop de requêtes. Ralentissez.' },
+  skip: () => process.env.NODE_ENV === 'test',
+});
+
+module.exports = { authLimiter, apiLimiter, deleteAccountLimiter, changePasswordLimiter, invitationLimiter };

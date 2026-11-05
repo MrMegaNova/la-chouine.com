@@ -93,6 +93,92 @@ describe('<Login>', () => {
     expect(await screen.findByText('Compte créé ! Vérifiez vos emails, y compris vos spams, pour activer votre compte.')).toBeInTheDocument();
   });
 
+  describe('parcours d’invitation (#295)', () => {
+    const CODE = 'a'.repeat(32);
+
+    function renderAt(url: string) {
+      return render(
+        <MemoryRouter initialEntries={[url]}>
+          <Routes>
+            <Route path="/connexion" element={<Login />} />
+            <Route path="/profil" element={<div>Page profil</div>} />
+            <Route path="/invitation/:code" element={<div>Page invitation</div>} />
+          </Routes>
+        </MemoryRouter>,
+      );
+    }
+
+    async function fillAndRegister(user: ReturnType<typeof userEvent.setup>) {
+      await user.type(screen.getByPlaceholderText('Votre pseudo'), 'alice');
+      await user.type(screen.getByPlaceholderText('votre@email.com'), 'alice@example.com');
+      await user.type(screen.getByPlaceholderText('••••••••'), 'Motdepasse123!');
+      await user.click(screen.getByRole('button', { name: 'Créer mon compte' }));
+    }
+
+    it('transmet le code à l’inscription, même après un changement d’onglet', async () => {
+      const user = userEvent.setup();
+      mocked(authApi.register).mockResolvedValue({ ok: true, status: 201, data: { message: 'Compte créé.' } });
+      renderAt(`/connexion?onglet=inscription&invitation=${CODE}`);
+
+      expect(screen.getByText(/vous deviendrez amis avec la personne qui vous invite/)).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Connexion' }));
+      await user.click(screen.getByRole('button', { name: 'Inscription' }));
+      await fillAndRegister(user);
+
+      expect(mocked(authApi.register).mock.calls[0][0]).toMatchObject({ username: 'alice', invitationCode: CODE });
+      expect(await screen.findByText(/Compte créé !/)).toBeInTheDocument();
+    });
+
+    it('sans code, n’envoie rien et n’annonce aucune amitié', async () => {
+      const user = userEvent.setup();
+      mocked(authApi.register).mockResolvedValue({ ok: true, status: 201, data: { message: 'Compte créé.' } });
+      renderAt('/connexion?onglet=inscription');
+
+      expect(screen.queryByText(/vous deviendrez amis/)).not.toBeInTheDocument();
+      await fillAndRegister(user);
+
+      expect(mocked(authApi.register).mock.calls[0][0].invitationCode).toBeUndefined();
+    });
+
+    it('ignore un code mal formé dans l’URL', async () => {
+      const user = userEvent.setup();
+      mocked(authApi.register).mockResolvedValue({ ok: true, status: 201, data: { message: 'Compte créé.' } });
+      renderAt('/connexion?onglet=inscription&invitation=pas-un-code');
+
+      expect(screen.queryByText(/vous deviendrez amis/)).not.toBeInTheDocument();
+      await fillAndRegister(user);
+
+      expect(mocked(authApi.register).mock.calls[0][0].invitationCode).toBeUndefined();
+    });
+
+    it('la connexion d’un compte existant revient à l’invitation', async () => {
+      const user = userEvent.setup();
+      mocked(authApi.login).mockResolvedValue({ ok: true, status: 200, data: { token: 'tok', id: 'u1', username: 'alice' } });
+      mocked(usersApi.me).mockResolvedValue({ ok: false, status: 0, data: {} });
+      renderAt(`/connexion?invitation=${CODE}`);
+
+      await user.type(screen.getByPlaceholderText('Votre pseudo'), 'alice');
+      await user.type(screen.getByPlaceholderText('••••••••'), 'whatever');
+      await user.click(screen.getByRole('button', { name: 'Se connecter' }));
+
+      expect(await screen.findByText('Page invitation')).toBeInTheDocument();
+    });
+
+    it('après l’inscription, la connexion ne revient plus à l’invitation', async () => {
+      const user = userEvent.setup();
+      mocked(authApi.register).mockResolvedValue({ ok: true, status: 201, data: { message: 'Compte créé.' } });
+      mocked(authApi.login).mockResolvedValue({ ok: true, status: 200, data: { token: 'tok', id: 'u1', username: 'alice' } });
+      mocked(usersApi.me).mockResolvedValue({ ok: false, status: 0, data: {} });
+      renderAt(`/connexion?onglet=inscription&invitation=${CODE}`);
+
+      await fillAndRegister(user);
+      await screen.findByText(/Compte créé !/);
+      await user.click(screen.getByRole('button', { name: 'Se connecter' }));
+
+      expect(await screen.findByText('Page profil')).toBeInTheDocument();
+    });
+  });
+
   it('connexion réussie : redirige vers le profil', async () => {
     const user = userEvent.setup();
     mocked(authApi.login).mockResolvedValue({ ok: true, status: 200, data: { token: 'tok', id: 'u1', username: 'alice' } });

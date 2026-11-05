@@ -23,7 +23,7 @@ describe('metaForPath', () => {
   });
 
   it('exclut de l\'index les pages privées', () => {
-    for (const path of ['/profil', '/amis', '/connexion', '/joueur/abc', '/reset-password']) {
+    for (const path of ['/profil', '/amis', '/connexion', '/joueur/abc', '/reset-password', '/invitation/abc']) {
       const meta = metaForPath(path);
       expect(meta.noindex).toBe(true);
       expect(meta.canonical).toBeNull();
@@ -86,6 +86,11 @@ describe('nginx.conf', () => {
     const served = match?.[1].split('|').sort();
     const expected = PUBLIC_PAGES.filter(p => p.path !== '/').map(p => p.path.slice(1)).sort();
     expect(served).toEqual(expected);
+  });
+
+  it('sert la page d\'invitation hors de l\'index', () => {
+    const match = nginxConf.match(/location ~ \^\/\(([^)]+)\)\/\?\$ \{[^}]*X-Robots-Tag "noindex"[^}]*try_files \/spa\.html/);
+    expect(match?.[1].split('|')).toContain('invitation/[^/]+');
   });
 });
 

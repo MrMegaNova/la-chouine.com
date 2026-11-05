@@ -48,6 +48,9 @@ const CATALOG = [
   // ── Faits de jeu (événementiels, PvP arbitré par le serveur) ──
   { code: 'partie-blanche',    label: 'Partie blanche',    description: 'Gagner une partie classée sans que l’adversaire ne remporte une manche.', icon: '⬜', event: true },
   { code: 'chouine-faite',     label: 'Chouine !',         description: 'Réaliser une chouine en partie classée.',    icon: '🦉', event: true },
+
+  // ── Invitations (événementiel, à la vérification de l'email de l'invité, #295) ──
+  { code: 'ambassadeur',       label: 'Ambassadeur',       description: 'Un ami invité a rejoint La Chouine.',        icon: '🤝', event: true },
 ];
 
 const CODES = new Set(CATALOG.map(a => a.code));
