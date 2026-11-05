@@ -11,4 +11,10 @@ function isUuid(value) {
   return typeof value === 'string' && UUID_RE.test(value);
 }
 
-module.exports = { isUuid };
+// Postgres renvoie les UUID en minuscules : à appliquer à un identifiant déjà
+// validé par isUuid avant de le comparer à une valeur issue de la base (#278).
+function normalizeUuid(value) {
+  return value.toLowerCase();
+}
+
+module.exports = { isUuid, normalizeUuid };

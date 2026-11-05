@@ -116,3 +116,54 @@ test('POST /api/friends/decline — UUID valide : demande refusée', async () =>
   );
   assert.equal(rows[0].status, 'declined');
 });
+
+// ─── Casse des UUID (#278) ────────────────────────────────────────────────────
+
+async function clearFriendships() {
+  await pool.query(
+    `DELETE FROM friendships WHERE requester_id = ANY($1::uuid[]) OR addressee_id = ANY($1::uuid[])`,
+    [[alice.id, bob.id]]
+  );
+}
+
+test('POST /api/friends/request — son propre UUID : même refus quelle que soit la casse', async () => {
+  for (const targetId of [alice.id, alice.id.toUpperCase()]) {
+    const res = await asAlice(request.post('/api/friends/request')).send({ targetId });
+    assert.equal(res.status, 422, `targetId = ${targetId}`);
+    assert.equal(res.body.error, 'Impossible de s\'ajouter soi-même.');
+  }
+});
+
+test('POST /api/friends/request — UUID en majuscules : acceptation automatique de la demande inverse', async () => {
+  await clearFriendships();
+  const sent = await asBob(request.post('/api/friends/request')).send({ targetId: alice.id });
+  assert.equal(sent.status, 201);
+
+  const res = await asAlice(request.post('/api/friends/request')).send({ targetId: bob.id.toUpperCase() });
+  assert.equal(res.status, 200);
+  assert.equal(res.body.message, 'Demande acceptée automatiquement.');
+});
+
+test('Routes amis — UUID en majuscules : acceptation, retrait et refus', async () => {
+  await clearFriendships();
+  await asAlice(request.post('/api/friends/request')).send({ targetId: bob.id });
+  const accepted = await asBob(request.post('/api/friends/accept')).send({ requesterId: alice.id.toUpperCase() });
+  assert.equal(accepted.status, 200);
+
+  const removed = await asAlice(request.delete(`/api/friends/${bob.id.toUpperCase()}`));
+  assert.equal(removed.status, 200);
+  const { rows: left } = await pool.query(
+    `SELECT 1 FROM friendships WHERE requester_id = $1 AND addressee_id = $2`,
+    [alice.id, bob.id]
+  );
+  assert.equal(left.length, 0);
+
+  await asAlice(request.post('/api/friends/request')).send({ targetId: bob.id });
+  const declined = await asBob(request.post('/api/friends/decline')).send({ requesterId: alice.id.toUpperCase() });
+  assert.equal(declined.status, 200);
+  const { rows: [row] } = await pool.query(
+    `SELECT status FROM friendships WHERE requester_id = $1 AND addressee_id = $2`,
+    [alice.id, bob.id]
+  );
+  assert.equal(row.status, 'declined');
+});
