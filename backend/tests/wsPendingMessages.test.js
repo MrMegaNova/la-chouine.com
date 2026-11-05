@@ -358,3 +358,111 @@ test('échec de la mise en ligne : fermeture 1011, messages jetés, serveur viva
   assert.equal(ctx.ratingCalls, 0);
   assert.equal(await matchmakingStore.has('u1'), false);
 });
+
+// ─── Taille maximale d'un message (#305) ──────────────────────────────────────
+
+// Message valide de `size` octets exactement (ASCII).
+function syncOfSize(size) {
+  const base = JSON.stringify({ t: 'sync', pad: '' });
+  return JSON.stringify({ t: 'sync', pad: 'x'.repeat(size - base.length) });
+}
+
+test('maxPayload (#305) : un message à la limite est traité', async (t) => {
+  const ctx = await startServer(t);
+  const client = connect(t, ctx, { id: 'u2' });
+  await waitFor(() => client.msgs.some(m => m.t === 'hello'), 'hello');
+
+  client.ws.send(syncOfSize(16 * 1024));
+  await waitFor(() => replies(client).length === 1, 'réponse au message');
+  assert.equal(replies(client)[0].error, 'Aucune partie en cours.');
+  assert.equal(client.closeCode, null);
+});
+
+test('maxPayload (#305) : un message trop gros ferme le socket, le serveur survit', async (t) => {
+  const ctx = await startServer(t);
+  const client = connect(t, ctx, { id: 'u2' });
+  await waitFor(() => client.msgs.some(m => m.t === 'hello'), 'hello');
+
+  client.ws.send(syncOfSize(16 * 1024 + 1));
+  await waitFor(() => client.closeCode === 1009, 'fermeture 1009');
+  assert.equal(replies(client).length, 0);
+  await waitFor(() => !ctx.handle.sockets.has('u2'), 'socket retiré');
+
+  const probe = connect(t, ctx, { id: 'sonde' });
+  await waitFor(() => probe.msgs.some(m => m.t === 'hello'), 'nouvelle connexion acceptée');
+});
+
+// ─── Révocation des jetons (#232) ─────────────────────────────────────────────
+
+// Serveur dont la base est simulée par `ctx.versions` (id → token_version). Le
+// battement est court ; `ctx.checks` compte les vérifications effectuées.
+async function startRevocationServer(t) {
+  const versions = new Map();
+  let checks = 0;
+  const ctx = await startServer(t, {
+    heartbeatMs: 10,
+    currentTokenVersions: async (ids) => {
+      checks += 1;
+      return new Map(ids.filter(id => versions.has(id)).map(id => [id, versions.get(id)]));
+    },
+  });
+  ctx.versions = versions;
+  ctx.checks = () => checks;
+  return ctx;
+}
+
+function connectWithVersion(t, ctx, id, version) {
+  return connect(t, ctx, { id, query: `token=${signToken({ id, username: id, token_version: version })}` });
+}
+
+test('révocation (#232) : un jeton à jour garde son socket', async (t) => {
+  const ctx = await startRevocationServer(t);
+  ctx.versions.set('u2', 0);
+  const client = connectWithVersion(t, ctx, 'u2', 0);
+  await waitFor(() => ctx.handle.sockets.has('u2'), 'socket enregistré');
+
+  const seen = ctx.checks();
+  await waitFor(() => ctx.checks() >= seen + 3, 'trois vérifications');
+  assert.equal(client.closeCode, null);
+});
+
+test('révocation (#232) : le socket d’un jeton révoqué est fermé, un jeton frais se reconnecte', async (t) => {
+  const ctx = await startRevocationServer(t);
+  ctx.versions.set('u2', 0);
+  const old = connectWithVersion(t, ctx, 'u2', 0);
+  await waitFor(() => ctx.handle.sockets.has('u2'), 'socket enregistré');
+
+  ctx.versions.set('u2', 1); // changement de mot de passe
+  await waitFor(() => old.closeCode === 4004, 'fermeture 4004');
+
+  const fresh = connectWithVersion(t, ctx, 'u2', 1);
+  await waitFor(() => fresh.msgs.some(m => m.t === 'hello'), 'hello du nouveau socket');
+  const seen = ctx.checks();
+  await waitFor(() => ctx.checks() >= seen + 3, 'trois vérifications');
+  assert.equal(fresh.closeCode, null);
+});
+
+test('révocation (#232) : seuls les sockets de l’ancien jeton sont fermés', async (t) => {
+  const ctx = await startRevocationServer(t);
+  ctx.versions.set('u2', 0);
+  const old = connectWithVersion(t, ctx, 'u2', 0);
+  await waitFor(() => old.msgs.some(m => m.t === 'hello'), 'hello de l’ancien socket');
+  ctx.versions.set('u2', 1);
+  const fresh = connectWithVersion(t, ctx, 'u2', 1);
+
+  await waitFor(() => old.closeCode === 4004, 'fermeture de l’ancien socket');
+  await waitFor(() => fresh.msgs.some(m => m.t === 'hello'), 'hello du nouveau socket');
+  const seen = ctx.checks();
+  await waitFor(() => ctx.checks() >= seen + 3, 'trois vérifications');
+  assert.equal(fresh.closeCode, null);
+});
+
+test('révocation (#232) : le socket d’un compte disparu est fermé', async (t) => {
+  const ctx = await startRevocationServer(t);
+  ctx.versions.set('u2', 0);
+  const client = connectWithVersion(t, ctx, 'u2', 0);
+  await waitFor(() => ctx.handle.sockets.has('u2'), 'socket enregistré');
+
+  ctx.versions.delete('u2');
+  await waitFor(() => client.closeCode === 4004, 'fermeture 4004');
+});

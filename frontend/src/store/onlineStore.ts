@@ -12,6 +12,8 @@ import type { Card, GameState, HandResult, Variant, Suit, TrickEntry } from '@/g
 
 // Code de fermeture du serveur quand le compte est supprimé (#238).
 const WS_CLOSE_ACCOUNT_DELETED = 4003;
+// Jeton révoqué par un changement de mot de passe (#232).
+const WS_CLOSE_TOKEN_REVOKED = 4004;
 
 export type OnlineStatus = 'idle' | 'searching' | 'found' | 'playing' | 'over' | 'error';
 
@@ -471,6 +473,21 @@ export const useOnlineStore = create<OnlineState>((set, get) => {
         if (e.code === WS_CLOSE_ACCOUNT_DELETED) {
           get().forgetSession();
           useAuthStore.getState().logout();
+          return;
+        }
+        // Mot de passe changé (#232). Depuis cet appareil, le nouveau jeton est
+        // déjà enregistré : reconnexion immédiate, la partie reprend. Sinon, la
+        // session de cet appareil n'est plus valide.
+        if (e.code === WS_CLOSE_TOKEN_REVOKED) {
+          // `token` : jeton d'ouverture de CE socket. `lastToken` ne convient pas :
+          // App rappelle connectPresence dès que le jeton change.
+          const current = useAuthStore.getState().token;
+          if (current && current !== token) {
+            ensureSocket(current, () => {});
+          } else {
+            get().forgetSession();
+            useAuthStore.getState().logout();
+          }
           return;
         }
         const st = get().status;

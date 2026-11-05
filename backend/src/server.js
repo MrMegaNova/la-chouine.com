@@ -5,7 +5,7 @@ const app = require('./app');
 const config = require('./config');
 const { logger } = require('./logger');
 const { verifyTransport } = require('./services/email');
-const { checkTokenVersion } = require('./middleware/auth');
+const { checkTokenVersion, currentTokenVersions } = require('./middleware/auth');
 const { attachWebSocketServer } = require('./realtime/wsServer');
 const redis = require('./redis/client');
 
@@ -25,7 +25,8 @@ const server = http.createServer(app);
 
   // Transport temps-réel PvP (WebSocket sur /ws), greffé sur le même serveur HTTP.
   // validateUser : refuse les tokens révoqués (version de token, #117).
-  await attachWebSocketServer(server, { validateUser: checkTokenVersion });
+  // currentTokenVersions : ferme les sockets ouverts avant une révocation (#232).
+  await attachWebSocketServer(server, { validateUser: checkTokenVersion, currentTokenVersions });
 
   server.listen(config.port, () => {
     logger.info({ port: config.port, env: config.nodeEnv }, 'Serveur démarré');
