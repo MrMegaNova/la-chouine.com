@@ -6,6 +6,7 @@ import { usersApi, type HistoryEntry } from '@/api/client';
 import { EyeToggle, PasswordChecklist, passwordValid } from '@/components/auth/password';
 import { AvatarContent } from '@/components/Avatar';
 import { Achievements } from '@/components/Achievements';
+import { GameStats } from '@/components/GameStats';
 
 export default function Profile() {
   const { user, token, logout, refreshUser } = useAuthStore();
@@ -26,7 +27,6 @@ export default function Profile() {
   if (!user) return null;
 
   const joined = new Date(user.joined).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
-  const wr = user.stats.plays ? Math.round(user.stats.wins / user.stats.plays * 100) : 0;
 
   return (
     <div className="wrap" style={{ paddingTop: 36, paddingBottom: 60 }}>
@@ -39,19 +39,7 @@ export default function Profile() {
         <button className="btn btn--ghost btn--sm" style={{ marginLeft: 'auto' }} onClick={handleLogout}>Se déconnecter</button>
       </div>
 
-      <div style={{ display: 'flex', gap: 26, marginBottom: 26, flexWrap: 'wrap' }}>
-        {[
-          [user.stats.plays, 'Parties'],
-          [user.stats.wins, 'Victoires'],
-          [user.stats.losses, 'Défaites'],
-          [`${wr}%`, 'Réussite'],
-        ].map(([v, l]) => (
-          <div key={String(l)}>
-            <b style={{ fontFamily: 'var(--serif)', fontSize: 30, color: 'var(--gold-soft)', fontWeight: 900, display: 'block', lineHeight: 1 }}>{v}</b>
-            <span style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: 2, opacity: .7 }}>{l}</span>
-          </div>
-        ))}
-      </div>
+      <GameStats stats={user.stats} />
 
       <div style={{ display: 'flex', gap: 26, marginBottom: 30, flexWrap: 'wrap' }}>
         {[
@@ -78,12 +66,13 @@ export default function Profile() {
             const dt = new Date(g.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
             const mode = { ai: 'Ordinateur', local: 'Local', friend: 'Ami', online: 'En ligne' }[g.mode] || g.mode;
             const vLabel = g.variant === 'mondoubleau' ? ' · Mondoubleau' : '';
+            const declared = g.mode === 'online' ? '' : ' · Résultat déclaré'; // #279
             return (
               <div key={g.id} className="list-row">
                 <div className="list-row__avatar">{g.won ? '🏆' : '·'}</div>
                 <div className="list-row__meta">
                   <b className="list-row__name">vs {g.opponents ?? '?'}</b>
-                  <span className="list-row__sub">{mode} · {g.player_count}J{vLabel} · {dt}</span>
+                  <span className="list-row__sub">{mode} · {g.player_count}J{vLabel} · {dt}{declared}</span>
                 </div>
                 <div className="list-row__actions">
                   <span className={`badge ${g.won ? 'badge--win' : 'badge--loss'}`}>

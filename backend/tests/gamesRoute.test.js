@@ -266,3 +266,19 @@ test('POST /api/games — un score valide ne touche jamais à l’Elo, quelle qu
 
   assert.deepEqual(await ratings(), before);
 });
+
+// ─── Sièges (#279) ────────────────────────────────────────────────────────────
+
+test('POST /api/games — un même utilisateur ne peut pas occuper plusieurs sièges (#279)', async () => {
+  const before = await countAliceGames();
+  for (const players of [
+    [aliceSeat(), aliceSeat()],
+    [aliceSeat(), seat(), aliceSeat({ won: false, score: 0 })],
+    [aliceSeat(), aliceSeat(), aliceSeat(), aliceSeat()],
+  ]) {
+    const res = await post(basePayload({ playerCount: players.length, players }));
+    assert.equal(res.status, 422);
+    assert.match(res.body.error, /plusieurs sièges/);
+  }
+  assert.equal(await countAliceGames(), before);
+});
