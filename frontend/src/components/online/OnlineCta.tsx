@@ -29,7 +29,7 @@ export function OnlineBadge() {
   if (!p || p.online === 0) return null;
 
   return (
-    <span className="note" style={{ fontSize: 12.5 }}>
+    <span className="note">
       🟢 {p.online} joueur{p.online > 1 ? 's' : ''} en ligne
       {p.inGame > 0 && ` · ${p.inGame} en partie`}
     </span>
@@ -58,12 +58,12 @@ export function OnlineCta({ style }: { style?: React.CSSProperties }) {
         value={variant}
         onChange={e => setVariant(e.target.value as Variant)}
         aria-label="Variante"
-        style={{ padding: '9px 12px', borderRadius: 10, background: 'rgba(247,240,223,.06)', color: 'var(--cream)', border: '1px solid var(--line)' }}
+        style={{ minHeight: 44, padding: '9px 12px', borderRadius: 10, background: 'rgba(247,240,223,.06)', color: 'var(--cream)', border: '1px solid var(--line)' }}
       >
         <option value="classic">Classique</option>
         <option value="mondoubleau">Mondoubleau</option>
       </select>
-      <span className="note" style={{ fontSize: 12.5 }}>partie classée en ligne</span>
+      <span className="note">partie classée en ligne</span>
       <OnlineBadge />
     </div>
   );

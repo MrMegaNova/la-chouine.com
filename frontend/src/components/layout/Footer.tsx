@@ -17,14 +17,14 @@ export function Footer() {
         className="wrap"
         style={{
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          gap: 16, flexWrap: 'wrap', fontSize: 13.5, opacity: 0.85,
+          gap: 16, flexWrap: 'wrap', fontSize: 'var(--fs-small)', opacity: 0.9,
         }}
       >
         <span>◑ La Chouine — jeu historique de la Vallée du Loir · <b>la-chouine.com</b></span>
         <span style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-          <Link to="/a-propos" style={{ color: 'var(--gold-soft)' }}>À propos</Link>
-          <a href={GITHUB_URL} target="_blank" rel="noreferrer noopener" style={{ color: 'var(--gold-soft)' }}>GitHub</a>
-          <a href={`mailto:${CONTACT_EMAIL}`} style={{ color: 'var(--gold-soft)' }}>{CONTACT_EMAIL}</a>
+          <Link to="/a-propos" className="footer-link">À propos</Link>
+          <a href={GITHUB_URL} target="_blank" rel="noreferrer noopener" className="footer-link">GitHub</a>
+          <a href={`mailto:${CONTACT_EMAIL}`} className="footer-link">{CONTACT_EMAIL}</a>
           <span className="note" style={{ opacity: 0.8 }}>Projet en cours de développement</span>
         </span>
       </div>

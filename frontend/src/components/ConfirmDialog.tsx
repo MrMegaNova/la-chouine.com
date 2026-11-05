@@ -45,8 +45,8 @@ export function ConfirmDialog({
         }}
       >
         <h3 style={{ fontFamily: 'var(--serif)', fontSize: 22, margin: '0 0 8px' }}>{title}</h3>
-        <p className="note" style={{ marginBottom: 20 }}>{message}</p>
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+        <p className="dialog-text" style={{ marginBottom: 20 }}>{message}</p>
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
           <button ref={cancelRef} className="btn btn--ghost btn--sm" onClick={onCancel}>{cancelLabel}</button>
           <button className={`btn btn--sm ${danger ? 'btn--wine' : 'btn--gold'}`} onClick={onConfirm}>{confirmLabel}</button>
         </div>

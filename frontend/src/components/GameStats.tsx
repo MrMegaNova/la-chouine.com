@@ -3,7 +3,7 @@ import type { PlayerStats } from '@/api/client';
 const block = (v: string | number, l: string, size: number) => (
   <div key={l}>
     <b style={{ fontFamily: 'var(--serif)', fontSize: size, color: 'var(--gold-soft)', fontWeight: 900, display: 'block', lineHeight: 1 }}>{v}</b>
-    <span style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: 2, opacity: .7 }}>{l}</span>
+    <span style={{ fontSize: 'var(--fs-small)', textTransform: 'uppercase', letterSpacing: 1, opacity: .85 }}>{l}</span>
   </div>
 );
 

@@ -12,6 +12,10 @@ import styles from './DealerCut.module.scss';
 //
 // En PvP en ligne, `deadline` (ms epoch) déclenche un compte à rebours : qui ne
 // pioche pas à temps perd par forfait (#201). En local/IA, `deadline` est null.
+// Largeur des cartes de l'étalage : une fois superposées (voir `.poolCard`), il
+// en reste 44 px visibles, la zone tactile minimale (#252).
+const POOL_CARD_SIZE = 58;
+
 export function DealerCut({
   game, me, onDraw, deadline,
 }: {
@@ -65,11 +69,11 @@ export function DealerCut({
                   onClick={() => onDraw(me, idx)}
                   aria-label={`Choisir la carte ${idx + 1}`}
                 >
-                  <PlayingCard back size={44} />
+                  <PlayingCard back size={POOL_CARD_SIZE} />
                 </button>
               ) : (
                 <div key={idx} className={styles.poolCard}>
-                  <PlayingCard back size={44} />
+                  <PlayingCard back size={POOL_CARD_SIZE} />
                 </div>
               ),
             )}

@@ -13,14 +13,14 @@ export function Achievements({ unlocked, publicView = false }: { unlocked: Achie
   return (
     <section style={{ marginBottom: 30 }}>
       <h3 style={{ fontFamily: 'var(--serif)', fontSize: 24, marginBottom: 4 }}>
-        Badges <span style={{ fontSize: 15, opacity: 0.7 }}>({count}/{ACHIEVEMENTS.length})</span>
+        Badges <span style={{ fontSize: 'var(--fs-body)', opacity: 0.85 }}>({count}/{ACHIEVEMENTS.length})</span>
       </h3>
       <p className="section-sub" style={{ marginTop: 0, marginBottom: 14 }}>
         {publicView
           ? 'Seuls les badges établis par des parties en ligne apparaissent ici.'
           : 'Les badges de victoires se gagnent en ligne. Vos parties locales débloquent des badges d’assiduité non vérifiés, visibles seulement sur votre profil. Ils deviennent vérifiés quand vous remplissez la condition en ligne.'}
       </p>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
         {ACHIEVEMENTS.map(a => {
           const unlockedBadge = got.get(a.code);
           const earned = unlockedBadge !== undefined;
@@ -34,14 +34,14 @@ export function Achievements({ unlocked, publicView = false }: { unlocked: Achie
                 padding: '10px 12px', borderRadius: 12,
                 border: `1px ${unverified ? 'dashed' : 'solid'} ${earned ? 'var(--gold)' : 'rgba(255,255,255,.12)'}`,
                 background: earned && !unverified ? 'rgba(201,161,74,.10)' : 'transparent',
-                opacity: earned ? 1 : 0.5,
+                opacity: earned ? 1 : 0.7,
               }}
             >
               <span style={{ fontSize: 26, filter: earned ? 'none' : 'grayscale(1)' }} aria-hidden="true">{a.icon}</span>
               <span style={{ minWidth: 0 }}>
-                <b style={{ display: 'block', fontSize: 13.5, lineHeight: 1.2 }}>{a.label}</b>
-                <span style={{ fontSize: 11.5, opacity: 0.75 }}>{a.description}</span>
-                {unverified && <span style={{ display: 'block', fontSize: 11, color: 'var(--gold-soft)' }}>Non vérifié</span>}
+                <b style={{ display: 'block', lineHeight: 1.2 }}>{a.label}</b>
+                <span style={{ fontSize: 'var(--fs-small)', opacity: 0.85 }}>{a.description}</span>
+                {unverified && <span style={{ display: 'block', fontSize: 'var(--fs-small)', color: 'var(--gold-soft)' }}>Non vérifié</span>}
               </span>
             </div>
           );

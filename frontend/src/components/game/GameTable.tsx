@@ -370,7 +370,7 @@ export function GameTable({ controller }: { controller?: GameController } = {}) 
             <h2 style={{ fontFamily: 'var(--serif)', fontSize: 28, margin: '14px 0 8px' }}>
               Au tour de {game.names[game.turn]}
             </h2>
-            <p className="note" style={{ marginBottom: 18 }}>Passez l'appareil, puis révélez le jeu.</p>
+            <p className="dialog-text" style={{ marginBottom: 18 }}>Passez l'appareil, puis révélez le jeu.</p>
             <button className="btn btn--gold btn--full" onClick={() => revealForPlayer(game.turn)}>
               Voir mon jeu
             </button>
@@ -471,8 +471,8 @@ function TricksPanel({ game, me, view, onClose }: {
         {mine ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {myTricks.map((cards, k) => (
-              <div key={k} style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'center' }}>
-                <span className="note" style={{ fontSize: 11.5, minWidth: 38, textAlign: 'right' }}>Pli {k + 1}</span>
+              <div key={k} style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', justifyContent: 'center' }}>
+                <span className="note" style={{ minWidth: 38, textAlign: 'right' }}>Pli {k + 1}</span>
                 {cards.map((c, i) => (
                   <PlayingCard key={i} card={c} size={64} trump={game.trump !== null && c.s === game.trump} />
                 ))}
@@ -483,7 +483,7 @@ function TricksPanel({ game, me, view, onClose }: {
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
             {(oppLast?.cards ?? []).map((t, i) => (
               <div key={i} style={{ textAlign: 'center' }}>
-                <div className="note" style={{ fontSize: 11.5, marginBottom: 3 }}>{game.names[t.p]}</div>
+                <div className="note" style={{ marginBottom: 3 }}>{game.names[t.p]}</div>
                 <PlayingCard card={t.card} size={64} trump={game.trump !== null && t.card.s === game.trump} />
               </div>
             ))}
@@ -498,7 +498,7 @@ function TricksPanel({ game, me, view, onClose }: {
 function TrumpBadge({ trump, variant, target }: { trump: string | null; variant: string; target: number }) {
   if (!trump) {
     if (variant === 'mondoubleau') {
-      return <span className="score-pill" style={{ opacity: 0.6, fontSize: 12 }}>Sans atout</span>;
+      return <span className="score-pill" style={{ opacity: 0.85 }}>Sans atout</span>;
     }
     return null;
   }
