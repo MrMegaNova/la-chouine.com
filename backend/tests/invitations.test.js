@@ -16,6 +16,9 @@ const { useMockRedis, closeRedis } = require('./helpers/redis');
 const { pool } = require('../src/db');
 const app = require('../src/app');
 const config = require('../src/config');
+// Ce fichier crée une trentaine de comptes : au coût bcrypt de production, il
+// prendrait le processeur aux tests WebSocket sensibles au temps, lancés en parallèle.
+config.auth.bcryptRounds = 4;
 const invitations = require('../src/services/invitations');
 const { signToken } = require('../src/middleware/auth');
 
