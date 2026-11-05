@@ -48,6 +48,35 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe('onlineStore : jeton révoqué (#232)', () => {
+  it('fermeture 4004 après un changement de mot de passe ici : reconnexion avec le nouveau jeton', async () => {
+    const ws = await openSocket();
+    useOnlineStore.setState({ status: 'playing' });
+    // Profile enregistre le nouveau jeton, App rappelle connectPresence.
+    useAuthStore.setState({ token: 'tok2' });
+    useOnlineStore.getState().connectPresence('tok2');
+
+    ws.onclose?.({ code: 4004 });
+    await vi.waitFor(() => expect(FakeWebSocket.instances.length).toBe(2));
+    expect(mocked(onlineApi.wsTicket)).toHaveBeenLastCalledWith('tok2');
+    expect(useAuthStore.getState().token).toBe('tok2');
+    expect(useOnlineStore.getState().status).toBe('playing');
+  });
+
+  it('fermeture 4004 sans nouveau jeton : déconnexion, sans reconnexion', async () => {
+    const ws = await openSocket();
+    useOnlineStore.setState({ status: 'playing' });
+
+    ws.onclose?.({ code: 4004 });
+    expect(useAuthStore.getState().token).toBeNull();
+    expect(useOnlineStore.getState().status).toBe('idle');
+
+    const calls = mocked(onlineApi.wsTicket).mock.calls.length;
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(mocked(onlineApi.wsTicket).mock.calls.length).toBe(calls);
+  });
+});
+
 describe('onlineStore : compte supprimé (#238)', () => {
   it('fermeture 4003 : déconnexion, sans aucune reconnexion, même en pleine partie', async () => {
     const ws = await openSocket();

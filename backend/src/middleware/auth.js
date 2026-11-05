@@ -37,6 +37,19 @@ async function checkTokenVersion(user) {
 }
 
 /**
+ * Versions de jeton courantes de plusieurs comptes, en une requête (#232).
+ * @returns {Promise<Map<string, number>>} sans entrée pour un compte supprimé.
+ */
+async function currentTokenVersions(userIds) {
+  const { query } = require('../db');
+  const { rows } = await query(
+    `SELECT id, token_version FROM users WHERE id = ANY($1::uuid[])`,
+    [userIds]
+  );
+  return new Map(rows.map(r => [r.id, Number(r.token_version)]));
+}
+
+/**
  * Middleware qui vérifie le JWT en Authorization: Bearer <token> — signature
  * PUIS version de token (#117). Injecte req.user = { id, username }.
  */
@@ -73,4 +86,4 @@ function signToken(user) {
   );
 }
 
-module.exports = { requireAuth, signToken, verifyToken, checkTokenVersion };
+module.exports = { requireAuth, signToken, verifyToken, checkTokenVersion, currentTokenVersions };

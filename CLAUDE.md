@@ -68,10 +68,10 @@ Sur push `main` ET pull_request : jobs **Backend** (lint + Postgres + tests, `NO
 
 Invariants déjà en place — **à ne pas régresser** :
 
-- **Révocation JWT par `token_version`** : la colonne est incrémentée à chaque changement/réinitialisation de mot de passe, ce qui invalide tous les JWT émis avant (#117). Toute nouvelle route sensible doit vérifier `token_version`.
+- **Révocation JWT par `token_version`** : la colonne est incrémentée à chaque changement/réinitialisation de mot de passe, ce qui invalide tous les JWT émis avant (#117). Toute nouvelle route sensible doit vérifier `token_version`. Les WebSockets déjà ouverts sont revérifiés à chaque battement (30 s) et fermés en `4004` (#232).
 - **Tokens verify/reset stockés hashés**, jamais en clair (#122).
 - **`POST /api/games` ne fait pas confiance au client** pour l'Elo ni l'historique : le serveur recalcule (#116). Ne jamais réintroduire de score fourni par le client.
-- **Rate-limit des messages WebSocket** (anti-flood, #124) et **anti-brute-force login + honeypot inscription + cooldown forgot-password** (#86, #121).
+- **Rate-limit des messages WebSocket** (anti-flood, #124) et **taille maximale d'un message** (`maxPayload` 16 Kio, #305) et **anti-brute-force login + honeypot inscription + cooldown forgot-password** (#86, #121).
 - **Redaction des secrets dans les logs** (`backend/src/logger.js`, pino) : ne jamais logger token, mot de passe ou en-tête d'auth.
 
 Dette connue (tracée, **ne pas réintroduire / penser à traiter**) : pas d'en-têtes de sécurité/CSP sur le HTML nginx (#118), JWT en `localStorage` exposé au XSS (#119), JWT passé dans l'URL WebSocket → fuite dans les logs proxys (#120), sonde de présence via les défis (#123), captcha d'inscription/login optionnel (#104).

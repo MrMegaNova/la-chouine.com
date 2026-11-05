@@ -101,6 +101,8 @@ const isBeingDeleted = async (uid) => (await getClient().exists(DELETING(uid))) 
 // Fermeture WebSocket : le compte n'existe plus, le client ne doit pas se
 // reconnecter (4001 = non authentifié, 4002 = flood).
 const WS_CLOSE_ACCOUNT_DELETED = 4003;
+// Jeton révoqué par un changement ou une réinitialisation de mot de passe (#232).
+const WS_CLOSE_TOKEN_REVOKED = 4004;
 
 /**
  * @param {http.Server} httpServer
@@ -112,6 +114,9 @@ async function attachWebSocketServer(httpServer, opts = {}) {
   const getRating = opts.getRating || defaultGetRating;
   const areFriends = opts.areFriends || defaultAreFriends;
   const validateUser = opts.validateUser || (async () => true);
+  // Versions de jeton courantes (#232) : Map id → token_version, sans entrée pour
+  // un compte supprimé. Sans fonction fournie, aucune révocation n'est vérifiée.
+  const currentTokenVersions = opts.currentTokenVersions || null;
   const mmParams = { ...matchmakingStore.DEFAULT_PARAMS, ...(opts.matchmaking || {}) };
   const tickMs = opts.tickMs ?? 1000;
   const sweepMs = opts.sweepMs ?? tickMs;
@@ -133,6 +138,10 @@ async function attachWebSocketServer(httpServer, opts = {}) {
   const pendingMaxMessages = opts.pendingMaxMessages ?? 32;
   const pendingMaxBytes = opts.pendingMaxBytes ?? 64 * 1024;
   const clockOptions = opts.clockOptions;
+  // Taille maximale d'un message client (#305). Le plus gros message du protocole
+  // (défi, action de jeu) tient en quelques centaines d'octets ; la valeur par
+  // défaut de `ws` est de 100 Mio. Au-delà, `ws` ferme le socket (code 1009).
+  const maxPayload = opts.maxPayload ?? 16 * 1024;
 
   let stopped = false;
 
@@ -148,7 +157,7 @@ async function attachWebSocketServer(httpServer, opts = {}) {
     return false;
   }
 
-  const wss = new WebSocketServer({ server: httpServer, path: opts.path || '/ws' });
+  const wss = new WebSocketServer({ server: httpServer, path: opts.path || '/ws', maxPayload });
 
   // ── Sockets LOCAUX à cette instance ──
   const sockets = new Map(); // userId -> Set<ws>
@@ -648,6 +657,7 @@ async function attachWebSocketServer(httpServer, opts = {}) {
       return;
     }
     ws.userId = user.id;
+    ws.tokenVersion = Number(user.ver ?? 0);
     addSocket(user.id, ws);
 
     try {
@@ -711,6 +721,24 @@ async function attachWebSocketServer(httpServer, opts = {}) {
     schedulePresence();
   }
 
+  // Révocation (#232) : un socket ouvert avant un changement de mot de passe
+  // reste authentifié avec l'ancien jeton. À chaque battement, les versions des
+  // joueurs connectés ici sont relues en une requête ; les sockets dont la
+  // version ne correspond plus sont fermés. La fermeture passe par le chemin
+  // normal : délai de grâce si une partie est en cours.
+  async function closeRevokedSockets() {
+    if (!currentTokenVersions || sockets.size === 0) return;
+    const versions = await currentTokenVersions([...sockets.keys()]);
+    for (const [userId, set] of sockets) {
+      const current = versions.get(userId);
+      for (const ws of set) {
+        if (current === undefined || Number(current) !== ws.tokenVersion) {
+          ws.close(WS_CLOSE_TOKEN_REVOKED, 'token-revoked');
+        }
+      }
+    }
+  }
+
   // ── Heartbeat ──
   let heartbeat = null;
   if (heartbeatMs > 0) {
@@ -724,6 +752,7 @@ async function attachWebSocketServer(httpServer, opts = {}) {
       // ils expireraient (TTL), et les marqueurs d'une instance morte expirent
       // d'eux-mêmes — débloquant la détection de déconnexion.
       presenceStore.refreshOnline([...sockets.keys()]).catch(() => {});
+      closeRevokedSockets().catch(err => logger.error({ err }, 'ws: vérification des jetons échouée'));
     }, heartbeatMs);
     if (heartbeat.unref) heartbeat.unref();
   }

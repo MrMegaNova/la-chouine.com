@@ -24,7 +24,7 @@ const presenceStore = require('../src/realtime/presenceStore');
 const accountRemoval = require('../src/realtime/accountRemoval');
 const { recordMatch } = require('../src/services/matchRecorder');
 const { attachWebSocketServer } = require('../src/realtime/wsServer');
-const { signToken, checkTokenVersion } = require('../src/middleware/auth');
+const { signToken, checkTokenVersion, currentTokenVersions } = require('../src/middleware/auth');
 
 // Domaine propre au fichier : les tests tournent en parallèle sur la même base.
 const DOMAIN = '@usersdeleteaccount.invalid';
@@ -152,6 +152,14 @@ test('mauvais mot de passe : 403, ni suppression, ni forfait, ni déconnexion', 
   assert.equal((await sessionStore.getSession(session.id)).finished, false);
   await delay(50);
   assert.equal(c.ws.readyState, WebSocket.OPEN);
+});
+
+test('currentTokenVersions (#232) : versions courantes, compte supprimé absent', async () => {
+  const [kept, bumped, gone] = [await createUser(), await createUser(), await createUser()];
+  await pool.query(`UPDATE users SET token_version = 3 WHERE id = $1`, [bumped.id]);
+  await pool.query(`DELETE FROM users WHERE id = $1`, [gone.id]);
+  const versions = await currentTokenVersions([kept.id, bumped.id, gone.id]);
+  assert.deepEqual(versions, new Map([[kept.id, 0], [bumped.id, 3]]));
 });
 
 test('JWT révoqué par token_version : 401', async () => {
