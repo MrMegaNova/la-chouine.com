@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useGameStore } from '@/store/gameStore';
 import { useAuthStore } from '@/store/authStore';
+import { DEFAULT_AI_SETTINGS, useGameLauncher } from '@/hooks/useGameLauncher';
 import { friendsApi, type Friend } from '@/api/client';
 import { PresenceDot } from '@/components/PresenceDot';
 import { ChallengeButtons } from '@/components/game/ChallengeButtons';
 import { OnlineCta } from '@/components/online/OnlineCta';
-import type { GameOpts, Difficulty, Variant } from '@/game/types';
+import type { Difficulty, Variant } from '@/game/types';
 
 function BtnGroup<T extends string>({
   options, value, onChange,
@@ -23,15 +22,14 @@ function BtnGroup<T extends string>({
 }
 
 export default function Play() {
-  const { startGame } = useGameStore();
   const { user, token } = useAuthStore();
-  const navigate = useNavigate();
+  const { launch, startAI } = useGameLauncher();
 
   // AI config
-  const [aiCount, setAiCount]     = useState<2 | 3 | 4>(2);
-  const [aiVariant, setAiVariant] = useState<'classic' | 'mondoubleau'>('classic');
-  const [diff, setDiff]           = useState<Difficulty>('normal');
-  const [aiTarget, setAiTarget]   = useState<3 | 5>(3);
+  const [aiCount, setAiCount]     = useState<2 | 3 | 4>(DEFAULT_AI_SETTINGS.playerCount);
+  const [aiVariant, setAiVariant] = useState<Variant>(DEFAULT_AI_SETTINGS.variant);
+  const [diff, setDiff]           = useState<Difficulty>(DEFAULT_AI_SETTINGS.diff);
+  const [aiTarget, setAiTarget]   = useState<3 | 5>(DEFAULT_AI_SETTINGS.target);
 
   // Local config
   const [localCount, setLocalCount]     = useState<2 | 3 | 4>(2);
@@ -50,15 +48,6 @@ export default function Play() {
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
   }, [token]);
-
-  const launch = (opts: GameOpts) => { startGame(opts); navigate('/jeu'); };
-
-  const startAI = () => {
-    const names = [user?.username ?? 'Vous'];
-    for (let i = 1; i < aiCount; i++)
-      names.push(aiCount > 2 ? `Ordinateur ${i}` : 'Ordinateur');
-    launch({ mode: 'ai', variant: aiVariant, playerCount: aiCount, diff, target: aiTarget, names });
-  };
 
   const startLocal = () => {
     const names = Array.from({ length: localCount }, (_, i) =>
@@ -125,7 +114,8 @@ export default function Play() {
               value={String(aiTarget) as any} onChange={v => setAiTarget(Number(v) as 3|5)} />
           </div>
 
-          <button className="btn btn--gold btn--full" style={{ marginTop: 6 }} onClick={startAI}>
+          <button className="btn btn--gold btn--full" style={{ marginTop: 6 }}
+            onClick={() => startAI({ variant: aiVariant, playerCount: aiCount, diff, target: aiTarget })}>
             Commencer
           </button>
           <p className="note" style={{ marginTop: 12 }}>

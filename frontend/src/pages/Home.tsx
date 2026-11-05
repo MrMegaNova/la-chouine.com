@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { PlayingCard } from '@/components/game/PlayingCard';
 import { OnlineCta } from '@/components/online/OnlineCta';
+import { useGameLauncher } from '@/hooks/useGameLauncher';
 import type { Card } from '@/game/types';
 
 const FAN_CARDS: Card[] = [
@@ -36,6 +37,8 @@ function HeroFan() {
 }
 
 export default function Home() {
+  const { startAI } = useGameLauncher();
+
   return (
     <>
       <section>
@@ -50,9 +53,15 @@ export default function Home() {
                 La Chouine se joue à deux, avec 32 cartes, des brisques à capturer et des annonces à dénicher. Affrontez l'ordinateur en quelques secondes ou créez un compte pour jouer en ligne et défier vos amis.
               </p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 26 }}>
-                <Link to="/jouer" className="btn btn--gold">Jouer maintenant</Link>
-                <Link to="/regles" className="btn btn--ghost">Apprendre les règles</Link>
+                <button type="button" className="btn btn--gold btn--lg" aria-describedby="quick-play-hint" onClick={() => startAI()}>
+                  Jouer contre l'ordinateur
+                </button>
+                <Link to="/jouer" className="btn btn--ghost btn--tap">Choisir les options</Link>
+                <Link to="/regles" className="btn btn--ghost btn--tap">Apprendre les règles</Link>
               </div>
+              <p id="quick-play-hint" className="note" style={{ marginTop: 12 }}>
+                La partie démarre aussitôt, sans inscription : à deux, variante classique, niveau Confirmé, en 3 points.
+              </p>
               <OnlineCta />
             </div>
             <HeroFan />
