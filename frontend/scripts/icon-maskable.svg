@@ -1,0 +1,18 @@
+<!-- Source des icônes PWA à fond plein (#212) : maskable et apple-touch-icon.
+     Même chouette que public/favicon.svg, sans le cadre doré que le masque
+     couperait, et contenue dans la zone sûre (cercle de 40 % de la largeur).
+     Les PNG de public/icons/ sont rendus depuis ce fichier et favicon.svg. Une
+     icône modifiée doit changer de nom : elles sont servies en cache long. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" fill="#123026" />
+  <g transform="translate(32 32) scale(1.1) translate(-32 -32.7)">
+    <path d="M32 12c-8 0-13.5 4.5-14.4 11.7C14 25.5 12.4 29.1 12.4 33.6c0 10.8 8.1 19.8 19.6 19.8s19.6-9 19.6-19.8c0-4.5-1.6-8.1-5.2-9.9C45.5 16.5 40 12 32 12Z"
+      fill="#0c2018" stroke="#c9a14a" stroke-width="2" />
+    <circle cx="24" cy="31" r="7.2" fill="#f4ebd6" stroke="#c9a14a" stroke-width="2" />
+    <circle cx="40" cy="31" r="7.2" fill="#f4ebd6" stroke="#c9a14a" stroke-width="2" />
+    <circle cx="24" cy="31" r="3.1" fill="#16261d" />
+    <circle cx="40" cy="31" r="3.1" fill="#16261d" />
+    <path d="M32 35.5l-3.6 5.4h7.2L32 35.5Z" fill="#c9a14a" />
+    <path d="M21 45.5c3.6 3.6 7.3 3.6 11 3.6s7.4 0 11-3.6" stroke="#c9a14a" stroke-width="2" fill="none" stroke-linecap="round" />
+  </g>
+</svg>
