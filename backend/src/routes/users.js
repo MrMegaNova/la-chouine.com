@@ -4,6 +4,8 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const { query } = require('../db');
 const { requireAuth, signToken } = require('../middleware/auth');
+const { deleteAccountLimiter } = require('../middleware/rateLimiter');
+const accountRemoval = require('../realtime/accountRemoval');
 const { validatePassword } = require('../services/passwordPolicy');
 const { listAchievements } = require('../services/achievements');
 const { isUuid } = require('../services/uuid');
@@ -255,6 +257,38 @@ router.post('/me/password', requireAuth, async (req, res) => {
     res.json({ message: 'Mot de passe modifié.', token: fresh });
   } catch (err) {
     req.log.error({ err }, 'POST /users/me/password');
+    res.status(500).json({ error: 'Erreur interne.' });
+  }
+});
+
+// ─── DELETE /api/users/me ─────────────────────────────────────────────────────
+// Suppression du compte (RGPD art. 17, #238) : exige le mot de passe courant et
+// prend effet immédiatement. Le joueur sort d'abord du temps réel (file, défis,
+// forfait de la partie en cours). En base, le trigger de la migration 006
+// pseudonymise ses sièges ; amitiés et badges suivent par CASCADE. Le JWT devient
+// inutilisable : checkTokenVersion ne trouve plus le compte.
+
+router.delete('/me', deleteAccountLimiter, requireAuth, async (req, res) => {
+  const { currentPassword } = req.body || {};
+  if (typeof currentPassword !== 'string' || !currentPassword) {
+    return res.status(422).json({ error: 'Mot de passe actuel requis.' });
+  }
+
+  try {
+    const { rows } = await query(
+      `SELECT password_hash FROM users WHERE id = $1`,
+      [req.user.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Utilisateur introuvable.' });
+
+    const match = await bcrypt.compare(currentPassword, rows[0].password_hash);
+    if (!match) return res.status(403).json({ error: 'Mot de passe actuel incorrect.' });
+
+    await accountRemoval.removeAccount(req.user.id, () =>
+      query(`DELETE FROM users WHERE id = $1`, [req.user.id]));
+    res.json({ message: 'Compte supprimé.' });
+  } catch (err) {
+    req.log.error({ err }, 'DELETE /users/me');
     res.status(500).json({ error: 'Erreur interne.' });
   }
 });

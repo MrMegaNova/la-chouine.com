@@ -55,10 +55,14 @@ async function recordMatch(outcome) {
     for (const pl of rated) {
       const rb = before.has(pl.userId) ? before.get(pl.userId) : null;
       const ra = nextRating(pl.userId);
+      // Compte supprimé entre-temps (#238) : siège pseudonymisé comme le fait le
+      // trigger de la migration 006, sinon la clé étrangère annule tout le match.
+      const exists = before.has(pl.userId);
       await client.query(
-        `INSERT INTO game_players (game_id, user_id, seat, score, won, rating_before, rating_after)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [gameId, pl.userId, pl.seat, pl.score, pl.won, rb, ra]
+        `INSERT INTO game_players (game_id, user_id, guest_name, seat, score, won, rating_before, rating_after)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [gameId, exists ? pl.userId : null, exists ? null : String(pl.name || 'Joueur').slice(0, 30),
+          pl.seat, pl.score, pl.won, rb, ra]
       );
       if (updated) {
         await client.query(`UPDATE users SET ${col} = $1 WHERE id = $2`, [ra, pl.userId]);
@@ -70,6 +74,7 @@ async function recordMatch(outcome) {
     // transaction (stats à jour). Côté serveur uniquement, idempotent.
     const isRanked = outcome.rated !== false;
     for (const pl of rated) {
+      if (!before.has(pl.userId)) continue; // compte supprimé : plus de badges
       await evaluateAchievements(client, pl.userId);
 
       // Faits de jeu (événementiels) — uniquement en partie classée.

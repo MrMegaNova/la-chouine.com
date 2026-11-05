@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
+import { useOnlineStore } from '@/store/onlineStore';
 import { usersApi, type HistoryEntry } from '@/api/client';
 import { EyeToggle, PasswordChecklist, passwordValid } from '@/components/auth/password';
 import { AvatarContent } from '@/components/Avatar';
@@ -10,9 +11,12 @@ export default function Profile() {
   const { user, token, logout, refreshUser } = useAuthStore();
   const navigate = useNavigate();
   const [history, setHistory] = useState<HistoryEntry[]>([]);
+  // Suppression en cours (#238) : la session peut tomber avant la réponse (socket
+  // fermé par le serveur), et la fin du parcours mène à l'accueil, pas à la connexion.
+  const deleting = useRef(false);
 
   useEffect(() => {
-    if (!token) { navigate('/connexion'); return; }
+    if (!token) { if (!deleting.current) navigate('/connexion'); return; }
     refreshUser();
     if (token) usersApi.history(token).then(({ ok, data }) => { if (ok) setHistory(data); });
   }, [token]);
@@ -91,6 +95,8 @@ export default function Profile() {
           })}
         </div>
       )}
+
+      <DeleteAccountSection deleting={deleting} />
     </div>
   );
 }
@@ -241,6 +247,83 @@ function ChangePasswordSection() {
             {loading ? '…' : 'Valider le changement'}
           </button>
         </div>
+      )}
+    </div>
+  );
+}
+
+// Suppression définitive du compte (RGPD, #238) : mot de passe + confirmation
+// explicite. Après succès : déconnexion et retour à l'accueil.
+function DeleteAccountSection({ deleting }: { deleting: React.MutableRefObject<boolean> }) {
+  const { token, logout } = useAuthStore();
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const close = () => {
+    setOpen(false); setPassword(''); setShowPassword(false); setConfirmed(false); setError('');
+  };
+
+  const submit = async () => {
+    if (!token || !password || !confirmed || loading) return;
+    setError(''); setLoading(true);
+    deleting.current = true;
+    const { ok, status, data } = await usersApi.deleteAccount(password, token);
+    // Sans réponse exploitable, un 401 ou une session déjà fermée par le serveur
+    // indiquent que le compte n'existe plus : même sortie qu'un succès.
+    if (ok || status === 401 || !useAuthStore.getState().token) {
+      useOnlineStore.getState().forgetSession();
+      logout();
+      navigate('/', { replace: true });
+      return;
+    }
+    deleting.current = false;
+    setLoading(false);
+    setError(data.error ?? 'Erreur.');
+  };
+
+  return (
+    <div className="panel" style={{ marginTop: 30, maxWidth: 460 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <h3 style={{ fontFamily: 'var(--serif)', fontSize: 22, margin: 0, flex: 1 }}>Zone de danger</h3>
+        <button className="btn btn--ghost btn--sm" onClick={() => (open ? close() : setOpen(true))}>
+          {open ? 'Annuler' : 'Supprimer mon compte'}
+        </button>
+      </div>
+
+      {open && (
+        <form style={{ marginTop: 14 }} onSubmit={e => { e.preventDefault(); submit(); }}>
+          <p style={{ fontSize: 14, marginBottom: 8 }}>La suppression est immédiate et définitive :</p>
+          <ul style={{ fontSize: 14, margin: '0 0 12px', paddingLeft: 18 }}>
+            <li>votre email, votre mot de passe, votre photo, votre Elo, vos amis et vos badges sont effacés ;</li>
+            <li>si une partie en ligne est en cours, vous la perdez par forfait ;</li>
+            <li>vos parties déjà jouées restent dans l’historique de vos adversaires, sous votre pseudo, sans lien avec un compte.</li>
+          </ul>
+          <div className="field">
+            <label htmlFor="delete-account-password">Mot de passe actuel</label>
+            <div style={{ position: 'relative' }}>
+              <input id="delete-account-password" type={showPassword ? 'text' : 'password'} value={password}
+                autoComplete="current-password" placeholder="••••••••"
+                onChange={e => setPassword(e.target.value)}
+                style={{ paddingRight: 38, width: '100%' }} />
+              <EyeToggle shown={showPassword} onToggle={() => setShowPassword(s => !s)} />
+            </div>
+          </div>
+          <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 14, marginBottom: 12 }}>
+            <input type="checkbox" checked={confirmed} onChange={e => setConfirmed(e.target.checked)} />
+            <span>Je comprends que cette suppression est définitive.</span>
+          </label>
+
+          {error && <p className="form-error">{error}</p>}
+
+          <button type="submit" className="btn btn--wine btn--full" disabled={loading || !password || !confirmed}>
+            {loading ? '…' : 'Supprimer définitivement mon compte'}
+          </button>
+        </form>
       )}
     </div>
   );
