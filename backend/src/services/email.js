@@ -4,6 +4,8 @@ const nodemailer = require('nodemailer');
 const config = require('../config');
 const { logger } = require('../logger');
 
+const SMTP_CLIENT_NAME = 'la-chouine.com';
+
 let _transport = null;
 
 function getTransport() {
@@ -12,6 +14,8 @@ function getTransport() {
       host: config.smtp.host,
       port: config.smtp.port,
       secure: config.smtp.secure,
+      // Sans ce nom, nodemailer annonce `[127.0.0.1]` depuis un conteneur.
+      name: SMTP_CLIENT_NAME,
     };
     if (config.smtp.user && config.smtp.pass) {
       opts.auth = { user: config.smtp.user, pass: config.smtp.pass };
@@ -29,10 +33,11 @@ function getTransport() {
  */
 async function sendVerificationEmail(to, token, username) {
   const link = `${config.frontend.url}/verify-email?token=${token}`;
+  const subject = 'Confirmez votre compte La Chouine';
   await getTransport().sendMail({
     from: config.smtp.from,
     to,
-    subject: 'Confirmez votre compte La Chouine',
+    subject,
     text: [
       `Bonjour ${username},`,
       '',
@@ -45,7 +50,7 @@ async function sendVerificationEmail(to, token, username) {
       '',
       '— L\'équipe La Chouine',
     ].join('\n'),
-    html: `
+    html: htmlDocument(subject, `
       <p>Bonjour <strong>${escHtml(username)}</strong>,</p>
       <p>Merci de vous être inscrit sur <strong>la-chouine.com</strong>.<br>
       Cliquez sur le bouton ci-dessous pour activer votre compte (lien valable <strong>24&nbsp;h</strong>)&nbsp;:</p>
@@ -58,7 +63,7 @@ async function sendVerificationEmail(to, token, username) {
       </p>
       <p style="font-size:13px;color:#666">
         Si vous n'avez pas créé de compte, ignorez cet email.
-      </p>`,
+      </p>`),
   });
 }
 
@@ -67,10 +72,11 @@ async function sendVerificationEmail(to, token, username) {
  */
 async function sendPasswordResetEmail(to, token, username) {
   const link = `${config.frontend.url}/reset-password?token=${token}`;
+  const subject = 'Réinitialisation de votre mot de passe La Chouine';
   await getTransport().sendMail({
     from: config.smtp.from,
     to,
-    subject: 'Réinitialisation de votre mot de passe La Chouine',
+    subject,
     text: [
       `Bonjour ${username},`,
       '',
@@ -83,7 +89,7 @@ async function sendPasswordResetEmail(to, token, username) {
       '',
       '— L\'équipe La Chouine',
     ].join('\n'),
-    html: `
+    html: htmlDocument(subject, `
       <p>Bonjour <strong>${escHtml(username)}</strong>,</p>
       <p>Cliquez sur le bouton ci-dessous pour réinitialiser votre mot de passe
          (lien valable <strong>1&nbsp;h</strong>)&nbsp;:</p>
@@ -96,8 +102,20 @@ async function sendPasswordResetEmail(to, token, username) {
       </p>
       <p style="font-size:13px;color:#666">
         Si vous n'êtes pas à l'origine de cette demande, ignorez cet email.
-      </p>`,
+      </p>`),
   });
+}
+
+function htmlDocument(title, body) {
+  return `<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>${escHtml(title)}</title>
+</head>
+<body>${body}
+</body>
+</html>`;
 }
 
 function escHtml(str) {
