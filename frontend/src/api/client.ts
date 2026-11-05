@@ -55,6 +55,17 @@ export interface LoginResponse {
 export interface Achievement {
   code: string;
   unlockedAt: string;
+  verified: boolean; // false : repose sur des parties locales déclarées (#279)
+}
+interface GameTally {
+  wins: number;
+  losses: number;
+  plays: number;
+}
+// Résultats établis par le serveur (parties en ligne) ; `local` regroupe les
+// résultats déclarés par le navigateur, jamais additionnés aux premiers (#279).
+export interface PlayerStats extends GameTally {
+  local: GameTally;
 }
 export interface MeResponse {
   id: string;
@@ -62,7 +73,7 @@ export interface MeResponse {
   email: string;
   joined: string;
   avatar: string | null;
-  stats: { wins: number; losses: number; plays: number };
+  stats: PlayerStats;
   ratings: { classic: number; mondoubleau: number };
   achievements: Achievement[]; // badges débloqués (#217)
 }
@@ -112,7 +123,7 @@ export interface PublicProfile {
   id: string;
   username: string;
   avatar: string | null;
-  stats: { wins: number; losses: number; plays: number };
+  stats: PlayerStats;
   ratings: { classic: number; mondoubleau: number };
   achievements: Achievement[]; // badges débloqués (#217)
 }
