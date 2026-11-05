@@ -301,7 +301,7 @@ function DeleteAccountSection({ deleting }: { deleting: React.MutableRefObject<b
           <ul style={{ fontSize: 14, margin: '0 0 12px', paddingLeft: 18 }}>
             <li>votre email, votre mot de passe, votre photo, votre Elo, vos amis et vos badges sont effacés ;</li>
             <li>si une partie en ligne est en cours, vous la perdez par forfait ;</li>
-            <li>vos parties déjà jouées restent dans l’historique de vos adversaires, sous votre pseudo, sans lien avec un compte.</li>
+            <li>vos parties déjà jouées restent dans l’historique de vos adversaires, sous le nom « Ancien joueur ».</li>
           </ul>
           <div className="field">
             <label htmlFor="delete-account-password">Mot de passe actuel</label>

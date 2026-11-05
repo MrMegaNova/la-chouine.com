@@ -282,7 +282,7 @@ async function attachWebSocketServer(httpServer, opts = {}) {
   //   1. le marqueur empêche de rentrer en file ou d'ouvrir un défi entre-temps ;
   //   2. le match est enregistré AVANT la suppression : il faut les deux comptes
   //      pour calculer l'Elo de l'adversaire et inscrire la défaite, que le
-  //      trigger pseudonymise ensuite ;
+  //      trigger anonymise ensuite ;
   //   3. les sockets ne sont fermés qu'une fois le compte supprimé : si la
   //      suppression échoue, le joueur n'est pas déconnecté.
   // En cas d'échec, le forfait éventuel reste acquis : l'utilisateur peut réessayer.

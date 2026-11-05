@@ -264,8 +264,8 @@ router.post('/me/password', requireAuth, async (req, res) => {
 // ─── DELETE /api/users/me ─────────────────────────────────────────────────────
 // Suppression du compte (RGPD art. 17, #238) : exige le mot de passe courant et
 // prend effet immédiatement. Le joueur sort d'abord du temps réel (file, défis,
-// forfait de la partie en cours). En base, le trigger de la migration 006
-// pseudonymise ses sièges ; amitiés et badges suivent par CASCADE. Le JWT devient
+// forfait de la partie en cours). En base, le trigger de la migration 008
+// anonymise ses sièges ; amitiés et badges suivent par CASCADE. Le JWT devient
 // inutilisable : checkTokenVersion ne trouve plus le compte.
 
 router.delete('/me', deleteAccountLimiter, requireAuth, async (req, res) => {

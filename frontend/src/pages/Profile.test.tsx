@@ -54,7 +54,7 @@ beforeEach(() => {
 });
 
 describe('<Profile> : suppression de compte (#238)', () => {
-  it('le formulaire est replié et annoncé : forfait et pseudonymisation', async () => {
+  it('le formulaire est replié et annoncé : forfait et anonymisation', async () => {
     const user = userEvent.setup();
     renderProfile();
     expect(screen.getByRole('heading', { name: 'Zone de danger' })).toBeInTheDocument();
@@ -62,7 +62,7 @@ describe('<Profile> : suppression de compte (#238)', () => {
 
     await user.click(screen.getByRole('button', { name: 'Supprimer mon compte' }));
     expect(screen.getByText(/vous la perdez par forfait/)).toBeInTheDocument();
-    expect(screen.getByText(/sous votre pseudo, sans lien avec un compte/)).toBeInTheDocument();
+    expect(screen.getByText(/sous le nom « Ancien joueur »/)).toBeInTheDocument();
   });
 
   it('exige le mot de passe ET la case de confirmation', async () => {

@@ -13,6 +13,8 @@ function ratingColumn(variant) {
   return variant === 'mondoubleau' ? 'rating_mondoubleau' : 'rating_classic';
 }
 
+const DELETED_PLAYER_NAME = 'Ancien joueur';
+
 /**
  * @param {object} outcome  Issu de GameSession.getMatchOutcome() (+ sessionId)
  *   { variant, target, players: [{ userId, seat, score, won }, ...] }
@@ -55,13 +57,13 @@ async function recordMatch(outcome) {
     for (const pl of rated) {
       const rb = before.has(pl.userId) ? before.get(pl.userId) : null;
       const ra = nextRating(pl.userId);
-      // Compte supprimé entre-temps (#238) : siège pseudonymisé comme le fait le
-      // trigger de la migration 006, sinon la clé étrangère annule tout le match.
+      // Compte supprimé entre-temps (#238) : même libellé que le trigger de la
+      // migration 008, sinon la clé étrangère annule tout le match.
       const exists = before.has(pl.userId);
       await client.query(
         `INSERT INTO game_players (game_id, user_id, guest_name, seat, score, won, rating_before, rating_after)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-        [gameId, exists ? pl.userId : null, exists ? null : String(pl.name || 'Joueur').slice(0, 30),
+        [gameId, exists ? pl.userId : null, exists ? null : DELETED_PLAYER_NAME,
           pl.seat, pl.score, pl.won, rb, ra]
       );
       if (updated) {

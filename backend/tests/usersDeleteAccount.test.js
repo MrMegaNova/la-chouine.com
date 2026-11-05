@@ -1,6 +1,6 @@
 'use strict';
 
-// Suppression de compte (RGPD, #238) : route, pseudonymisation, forfait d'une
+// Suppression de compte (RGPD, #238) : route, anonymisation, forfait d'une
 // partie en cours, sortie de file et de défi, fermeture des WebSockets. Tests
 // d'intégration sur la vraie base : l'ordre forfait → enregistrement →
 // suppression ne se vérifie qu'avec les contraintes réelles.
@@ -44,13 +44,12 @@ async function waitFor(pred, what, timeout = 2000) {
 }
 
 async function cleanup() {
-  // Les parties de ce fichier : sièges liés à ses comptes, ou pseudonymisés
-  // (pseudos préfixés par `dela`).
+  // Les parties de ce fichier : celles où un siège est lié à l'un de ses comptes.
   await pool.query(
     `DELETE FROM games WHERE id IN (
        SELECT gp.game_id FROM game_players gp
-       LEFT JOIN users u ON u.id = gp.user_id
-       WHERE u.email LIKE '%' || $1 OR gp.guest_name LIKE 'dela\\_%')`,
+       JOIN users u ON u.id = gp.user_id
+       WHERE u.email LIKE '%' || $1)`,
     [DOMAIN]
   );
   await pool.query(`DELETE FROM users WHERE email LIKE '%' || $1`, [DOMAIN]);
@@ -164,7 +163,7 @@ test('JWT révoqué par token_version : 401', async () => {
   assert.equal(await userExists(user.id), true);
 });
 
-test('succès : compte effacé, sièges pseudonymisés, amitiés retirées, session invalide', async () => {
+test('succès : compte effacé, sièges anonymisés, amitiés retirées, session invalide', async () => {
   const { server } = await startServer();
   const [user, friend] = [await createUser(), await createUser()];
   await pool.query(
@@ -189,7 +188,7 @@ test('succès : compte effacé, sièges pseudonymisés, amitiés retirées, sess
   const { rows: seat } = await pool.query(
     `SELECT user_id, guest_name FROM game_players WHERE game_id = $1 AND seat = 0`, [g[0].id]);
   assert.equal(seat[0].user_id, null);
-  assert.equal(seat[0].guest_name, user.username);
+  assert.equal(seat[0].guest_name, 'Ancien joueur');
 
   const { rows: fr } = await pool.query(
     `SELECT 1 FROM friendships WHERE requester_id = $1 OR addressee_id = $1`, [user.id]);
@@ -204,9 +203,9 @@ test('succès : compte effacé, sièges pseudonymisés, amitiés retirées, sess
   const login = await supertest(server).post('/api/auth/login').send({ username: user.username, password: PASSWORD });
   assert.equal(login.status, 401);
 
-  // L'adversaire garde son historique, avec le pseudo du joueur supprimé.
+  // L'adversaire garde son historique, sans le pseudo du joueur supprimé.
   const hist = await supertest(server).get('/api/users/history').set('Authorization', `Bearer ${friend.token}`);
-  assert.equal(hist.body.find(h => h.id === g[0].id).opponents, user.username);
+  assert.equal(hist.body.find(h => h.id === g[0].id).opponents, 'Ancien joueur');
 });
 
 test('partie classée en cours : forfait, défaite enregistrée, Elo de l’adversaire crédité', async () => {
@@ -229,7 +228,7 @@ test('partie classée en cours : forfait, défaite enregistrée, Elo de l’adve
   assert.equal(rows.length, 2, 'la partie est enregistrée');
   const [deleted, winner] = rows;
   assert.equal(deleted.user_id, null);
-  assert.equal(deleted.guest_name, user.username);
+  assert.equal(deleted.guest_name, 'Ancien joueur');
   assert.equal(deleted.won, false, 'la défaite est inscrite');
   assert.ok(deleted.rating_after < deleted.rating_before, 'la défaite pèse sur l’Elo');
   assert.equal(winner.user_id, opp.id);
@@ -411,6 +410,6 @@ test('recordMatch : un compte déjà supprimé n’annule pas l’enregistrement
   const { rows } = await pool.query(
     `SELECT user_id, guest_name, rating_after FROM game_players WHERE game_id = $1 ORDER BY seat`, [res.gameId]);
   assert.equal(rows[0].user_id, null);
-  assert.equal(rows[0].guest_name, gone.username);
+  assert.equal(rows[0].guest_name, 'Ancien joueur');
   assert.equal(rows[1].user_id, opp.id);
 });
