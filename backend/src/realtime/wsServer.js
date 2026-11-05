@@ -128,6 +128,10 @@ async function attachWebSocketServer(httpServer, opts = {}) {
   const msgRatePerSec = opts.msgRatePerSec ?? 20;
   const msgBurst = opts.msgBurst ?? 40;
   const msgFloodKick = opts.msgFloodKick ?? 100;
+  // Messages gardés en attente pendant l'établissement de la connexion (#298) :
+  // très au-delà de ce qu'envoie un vrai client. Au-delà, le socket est fermé.
+  const pendingMaxMessages = opts.pendingMaxMessages ?? 32;
+  const pendingMaxBytes = opts.pendingMaxBytes ?? 64 * 1024;
   const clockOptions = opts.clockOptions;
 
   let stopped = false;
@@ -557,9 +561,73 @@ async function attachWebSocketServer(httpServer, opts = {}) {
     if (result.session.finished) await finishSession(result.session);
   }
 
+  // Traite un message d'un client authentifié. Ne rejette jamais.
+  function routeMessage(ws, user, raw) {
+    let msg;
+    try { msg = JSON.parse(raw.toString()); }
+    catch { send(ws, { t: 'error', error: 'JSON invalide.' }); return Promise.resolve(); }
+
+    const route = (async () => {
+      if (msg.t === 'queue') return handleQueue(ws, user, msg);
+      if (msg.t === 'challenge') return handleChallenge(ws, user, msg);
+      if (msg.t === 'sync') {
+        const s = await sessionStore.sessionForUser(user.id);
+        if (!s) return send(ws, { t: 'error', error: 'Aucune partie en cours.' });
+        return send(ws, { t: 'state', state: s.snapshotFor(user.id) });
+      }
+      if (msg.t === 'action') return handleAction(ws, user, msg.action);
+      send(ws, { t: 'error', error: 'Message inconnu.' });
+    })();
+    return route.catch(err => logger.error({ err }, 'ws: traitement message échoué'));
+  }
+
   // ── Connexions ──
   wss.on('connection', async (ws, req) => {
-    let user;
+    let user = null;
+    // Un client peut écrire dès `open` (#298) : tout est attaché AVANT le premier
+    // await, et ses messages attendent ici la fin de l'authentification et de la
+    // mise en ligne. Ils sont traités un par un, car les traitements sont
+    // asynchrones : en parallèle, un `leave` pourrait doubler le `join` qui le
+    // précède.
+    let pending = [];
+    let pendingBytes = 0;
+    const dropPending = () => { pending = []; pendingBytes = 0; };
+    let live = false;       // la file est vidée : traitement direct des messages
+    let settled = false;    // connexion établie et file vidée
+    let socketGone = false;
+
+    const releaseSocket = () => handleSocketGone(user.id, ws).catch(err => logger.error({ err }, 'ws: fermeture échouée'));
+    const onGone = () => {
+      if (socketGone) return; // `error` est suivi de `close`
+      socketGone = true;
+      dropPending();
+      // Pendant l'établissement, le nettoyage attend la fin des étapes en cours.
+      // Sinon, un `join` en cours remettrait en file un joueur déjà parti, et la
+      // reprise annulerait la grâce qui vient d'être armée.
+      if (settled) releaseSocket();
+    };
+    ws.on('close', onGone);
+    ws.on('error', onGone);
+
+    ws.isAlive = true;
+    ws.on('pong', () => { ws.isAlive = true; });
+
+    ws.on('message', (raw) => {
+      if (ws.readyState !== ws.OPEN) return; // fermeture demandée : plus rien à traiter
+      // Anti-flood (#124) à l'arrivée, y compris pendant l'attente.
+      if (!allowMessage(ws, Date.now())) {
+        if (ws.msgStrikes >= msgFloodKick) return ws.close(4002, 'rate-limit');
+        return send(ws, { t: 'error', error: 'Trop de messages. Ralentissez.', code: 'RATE_LIMIT' });
+      }
+      if (live) { routeMessage(ws, user, raw); return; }
+      if (pending.length >= pendingMaxMessages || pendingBytes + raw.length > pendingMaxBytes) {
+        dropPending();
+        return ws.close(4002, 'pending-overflow');
+      }
+      pending.push(raw);
+      pendingBytes += raw.length;
+    });
+
     try {
       const url = new URL(req.url, 'http://localhost');
       // #120 : auth par TICKET éphémère (le JWT ne doit plus être dans l'URL).
@@ -571,63 +639,53 @@ async function attachWebSocketServer(httpServer, opts = {}) {
     if (user) {
       try { if (!(await validateUser(user)) || await isBeingDeleted(user.id)) user = null; } catch { user = null; }
     }
+    // Parti ou exclu pendant l'attente : rien n'a encore été enregistré.
+    if (ws.readyState !== ws.OPEN) return;
     if (!user) {
+      dropPending();
       send(ws, { t: 'error', error: 'Authentification requise.' });
       ws.close(4001, 'unauthorized');
       return;
     }
     ws.userId = user.id;
-    ws.isAlive = true;
-    ws.on('pong', () => { ws.isAlive = true; });
     addSocket(user.id, ws);
 
-    // Attacher les listeners AVANT tout await : sinon un message client (ex.
-    // « queue join » envoyé dès l'ouverture) arriverait pendant le setup async
-    // et serait perdu (les awaits Redis prennent un temps réel non nul).
-    ws.on('message', (raw) => {
-      if (!allowMessage(ws, Date.now())) {
-        if (ws.msgStrikes >= msgFloodKick) return ws.close(4002, 'rate-limit');
-        return send(ws, { t: 'error', error: 'Trop de messages. Ralentissez.', code: 'RATE_LIMIT' });
+    try {
+      await presenceStore.addOnline(user.id);
+
+      // Reprise : annule un éventuel forfait en attente, prévient l'adversaire.
+      const hadGrace = (await presenceStore.getGrace(user.id)) !== null;
+      if (hadGrace) await presenceStore.clearGrace(user.id);
+      const sid = await sessionStore.sessionIdForUser(user.id);
+      if (hadGrace && sid) {
+        const s = await sessionStore.getSession(sid);
+        const opp = s ? opponentOf(s, user.id) : null;
+        if (opp) notify(opp.userId, { t: 'opponentReconnected' });
       }
-      let msg;
-      try { msg = JSON.parse(raw.toString()); }
-      catch { return send(ws, { t: 'error', error: 'JSON invalide.' }); }
+      send(ws, { t: 'hello', userId: user.id, inSession: !!sid });
+      send(ws, { t: 'presence', ...(await presenceStore.counts()) });
+      if (sid) {
+        const s = await sessionStore.getSession(sid);
+        if (s) send(ws, { t: 'state', state: s.snapshotFor(user.id) });
+      }
+      schedulePresence();
 
-      const route = (async () => {
-        if (msg.t === 'queue') return handleQueue(ws, user, msg);
-        if (msg.t === 'challenge') return handleChallenge(ws, user, msg);
-        if (msg.t === 'sync') {
-          const s = await sessionStore.sessionForUser(user.id);
-          if (!s) return send(ws, { t: 'error', error: 'Aucune partie en cours.' });
-          return send(ws, { t: 'state', state: s.snapshotFor(user.id) });
-        }
-        if (msg.t === 'action') return handleAction(ws, user, msg.action);
-        send(ws, { t: 'error', error: 'Message inconnu.' });
-      })();
-      route.catch(err => logger.error({ err }, 'ws: traitement message échoué'));
-    });
-    const gone = () => handleSocketGone(user.id, ws).catch(err => logger.error({ err }, 'ws: fermeture échouée'));
-    ws.on('close', gone);
-    ws.on('error', gone);
-
-    await presenceStore.addOnline(user.id);
-
-    // Reprise : annule un éventuel forfait en attente, prévient l'adversaire.
-    const hadGrace = (await presenceStore.getGrace(user.id)) !== null;
-    if (hadGrace) await presenceStore.clearGrace(user.id);
-    const sid = await sessionStore.sessionIdForUser(user.id);
-    if (hadGrace && sid) {
-      const s = await sessionStore.getSession(sid);
-      const opp = s ? opponentOf(s, user.id) : null;
-      if (opp) notify(opp.userId, { t: 'opponentReconnected' });
+      // Un message reçu pendant ce traitement rejoint la file et attend son tour.
+      while (pending.length > 0 && ws.readyState === ws.OPEN) {
+        const raw = pending.shift();
+        pendingBytes -= raw.length;
+        await routeMessage(ws, user, raw);
+      }
+      dropPending();
+      live = true;
+    } catch (err) {
+      // La connexion n'est pas utilisable : le client doit se reconnecter.
+      logger.error({ err }, 'ws: établissement de la connexion échoué');
+      dropPending();
+      ws.close(1011, 'setup-failed');
     }
-    send(ws, { t: 'hello', userId: user.id, inSession: !!sid });
-    send(ws, { t: 'presence', ...(await presenceStore.counts()) });
-    if (sid) {
-      const s = await sessionStore.getSession(sid);
-      if (s) send(ws, { t: 'state', state: s.snapshotFor(user.id) });
-    }
-    schedulePresence();
+    settled = true;
+    if (socketGone) releaseSocket();
   });
 
   // Fermeture d'un socket : si c'était le dernier (local + cross-instance) d'un
