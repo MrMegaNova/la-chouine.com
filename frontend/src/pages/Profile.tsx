@@ -6,6 +6,7 @@ import { usersApi, type HistoryEntry } from '@/api/client';
 import { EyeToggle, PasswordChecklist, passwordValid } from '@/components/auth/password';
 import { AvatarContent } from '@/components/Avatar';
 import { Achievements } from '@/components/Achievements';
+import { GameStats } from '@/components/GameStats';
 
 export default function Profile() {
   const { user, token, logout, refreshUser } = useAuthStore();
@@ -26,7 +27,6 @@ export default function Profile() {
   if (!user) return null;
 
   const joined = new Date(user.joined).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
-  const wr = user.stats.plays ? Math.round(user.stats.wins / user.stats.plays * 100) : 0;
 
   return (
     <div className="wrap" style={{ paddingTop: 36, paddingBottom: 60 }}>
@@ -39,19 +39,7 @@ export default function Profile() {
         <button className="btn btn--ghost btn--sm" style={{ marginLeft: 'auto' }} onClick={handleLogout}>Se déconnecter</button>
       </div>
 
-      <div style={{ display: 'flex', gap: 26, marginBottom: 26, flexWrap: 'wrap' }}>
-        {[
-          [user.stats.plays, 'Parties'],
-          [user.stats.wins, 'Victoires'],
-          [user.stats.losses, 'Défaites'],
-          [`${wr}%`, 'Réussite'],
-        ].map(([v, l]) => (
-          <div key={String(l)}>
-            <b style={{ fontFamily: 'var(--serif)', fontSize: 30, color: 'var(--gold-soft)', fontWeight: 900, display: 'block', lineHeight: 1 }}>{v}</b>
-            <span style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: 2, opacity: .7 }}>{l}</span>
-          </div>
-        ))}
-      </div>
+      <GameStats stats={user.stats} />
 
       <div style={{ display: 'flex', gap: 26, marginBottom: 30, flexWrap: 'wrap' }}>
         {[
@@ -60,7 +48,7 @@ export default function Profile() {
         ].map(([v, l]) => (
           <div key={String(l)}>
             <b style={{ fontFamily: 'var(--serif)', fontSize: 30, color: 'var(--gold-soft)', fontWeight: 900, display: 'block', lineHeight: 1 }}>{v}</b>
-            <span style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: 2, opacity: .7 }}>{l}</span>
+            <span style={{ fontSize: 'var(--fs-small)', textTransform: 'uppercase', letterSpacing: 1, opacity: .85 }}>{l}</span>
           </div>
         ))}
       </div>
@@ -78,12 +66,13 @@ export default function Profile() {
             const dt = new Date(g.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
             const mode = { ai: 'Ordinateur', local: 'Local', friend: 'Ami', online: 'En ligne' }[g.mode] || g.mode;
             const vLabel = g.variant === 'mondoubleau' ? ' · Mondoubleau' : '';
+            const declared = g.mode === 'online' ? '' : ' · Résultat déclaré'; // #279
             return (
               <div key={g.id} className="list-row">
                 <div className="list-row__avatar">{g.won ? '🏆' : '·'}</div>
                 <div className="list-row__meta">
                   <b className="list-row__name">vs {g.opponents ?? '?'}</b>
-                  <span className="list-row__sub">{mode} · {g.player_count}J{vLabel} · {dt}</span>
+                  <span className="list-row__sub">{mode} · {g.player_count}J{vLabel} · {dt}{declared}</span>
                 </div>
                 <div className="list-row__actions">
                   <span className={`badge ${g.won ? 'badge--win' : 'badge--loss'}`}>
@@ -174,7 +163,7 @@ function AvatarEditor() {
           <button className="btn btn--ghost btn--sm" disabled={busy} onClick={onRemove} aria-label="Retirer la photo de profil">✕</button>
         )}
       </div>
-      {error && <span className="form-error" style={{ fontSize: 11.5, margin: 0 }}>{error}</span>}
+      {error && <span className="form-error" style={{ margin: 0 }}>{error}</span>}
     </div>
   );
 }
@@ -210,7 +199,7 @@ function ChangePasswordSection() {
 
   return (
     <div className="panel" style={{ marginBottom: 30, maxWidth: 460 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <h3 style={{ fontFamily: 'var(--serif)', fontSize: 22, margin: 0, flex: 1 }}>🔒 Sécurité</h3>
         <button className="btn btn--ghost btn--sm" onClick={() => { setOpen(o => !o); setError(''); setSuccess(''); }}>
           {open ? 'Fermer' : 'Changer mon mot de passe'}
@@ -224,7 +213,7 @@ function ChangePasswordSection() {
             <div style={{ position: 'relative' }}>
               <input type={showCurrent ? 'text' : 'password'} value={current}
                 onChange={e => setCurrent(e.target.value)} placeholder="••••••••"
-                style={{ paddingRight: 38, width: '100%' }} />
+                style={{ paddingRight: 48, width: '100%' }} />
               <EyeToggle shown={showCurrent} onToggle={() => setShowCurrent(s => !s)} />
             </div>
           </div>
@@ -233,7 +222,7 @@ function ChangePasswordSection() {
             <div style={{ position: 'relative' }}>
               <input type={showNext ? 'text' : 'password'} value={next}
                 onChange={e => setNext(e.target.value)} placeholder="••••••••"
-                style={{ paddingRight: 38, width: '100%' }}
+                style={{ paddingRight: 48, width: '100%' }}
                 onKeyDown={e => e.key === 'Enter' && submit()} />
               <EyeToggle shown={showNext} onToggle={() => setShowNext(s => !s)} />
             </div>
@@ -288,7 +277,7 @@ function DeleteAccountSection({ deleting }: { deleting: React.MutableRefObject<b
 
   return (
     <div className="panel" style={{ marginTop: 30, maxWidth: 460 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <h3 style={{ fontFamily: 'var(--serif)', fontSize: 22, margin: 0, flex: 1 }}>Zone de danger</h3>
         <button className="btn btn--ghost btn--sm" onClick={() => (open ? close() : setOpen(true))}>
           {open ? 'Annuler' : 'Supprimer mon compte'}
@@ -297,8 +286,8 @@ function DeleteAccountSection({ deleting }: { deleting: React.MutableRefObject<b
 
       {open && (
         <form style={{ marginTop: 14 }} onSubmit={e => { e.preventDefault(); submit(); }}>
-          <p style={{ fontSize: 14, marginBottom: 8 }}>La suppression est immédiate et définitive :</p>
-          <ul style={{ fontSize: 14, margin: '0 0 12px', paddingLeft: 18 }}>
+          <p style={{ marginBottom: 8 }}>La suppression est immédiate et définitive :</p>
+          <ul style={{ margin: '0 0 12px', paddingLeft: 18 }}>
             <li>votre email, votre mot de passe, votre photo, votre Elo, vos amis et vos badges sont effacés ;</li>
             <li>si une partie en ligne est en cours, vous la perdez par forfait ;</li>
             <li>vos parties déjà jouées restent dans l’historique de vos adversaires, sous le nom « Ancien joueur ».</li>
@@ -309,12 +298,13 @@ function DeleteAccountSection({ deleting }: { deleting: React.MutableRefObject<b
               <input id="delete-account-password" type={showPassword ? 'text' : 'password'} value={password}
                 autoComplete="current-password" placeholder="••••••••"
                 onChange={e => setPassword(e.target.value)}
-                style={{ paddingRight: 38, width: '100%' }} />
+                style={{ paddingRight: 48, width: '100%' }} />
               <EyeToggle shown={showPassword} onToggle={() => setShowPassword(s => !s)} />
             </div>
           </div>
-          <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 14, marginBottom: 12 }}>
-            <input type="checkbox" checked={confirmed} onChange={e => setConfirmed(e.target.checked)} />
+          <label style={{ display: 'flex', gap: 10, alignItems: 'center', minHeight: 44, marginBottom: 12, cursor: 'pointer' }}>
+            <input type="checkbox" checked={confirmed} onChange={e => setConfirmed(e.target.checked)}
+              style={{ width: 22, height: 22, flex: '0 0 auto' }} />
             <span>Je comprends que cette suppression est définitive.</span>
           </label>
 

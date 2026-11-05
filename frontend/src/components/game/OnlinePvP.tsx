@@ -144,7 +144,7 @@ function ForfeitEnd({
         <h2 style={{ fontFamily: 'var(--serif)', fontSize: 26, margin: '0 0 8px' }}>
           {youWin ? 'Victoire par forfait !' : 'Défaite par forfait'}
         </h2>
-        <p className="note" style={{ marginBottom: 20 }}>{detail} Votre classement Elo a été mis à jour.</p>
+        <p className="dialog-text" style={{ marginBottom: 20 }}>{detail} Votre classement Elo a été mis à jour.</p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {onRematch && <button className="btn btn--gold btn--full" onClick={onRematch}>⚔ Rejouer</button>}
           <button className="btn btn--ghost btn--full" onClick={onHome}>Retour à l'accueil</button>
@@ -188,7 +188,7 @@ function Waiting({
               animation: 'lc-spin 0.8s linear infinite',
             }} />
             <h2 style={{ fontFamily: 'var(--serif)', fontSize: 26, margin: '0 0 8px' }}>Recherche d'un adversaire…</h2>
-            <p className="note" style={{ marginBottom: 20 }}>
+            <p className="dialog-text" style={{ marginBottom: 20 }}>
               On vous met en relation avec un joueur de niveau proche. {elapsed}s
             </p>
             <button className="btn btn--ghost btn--full" onClick={onCancel}>Annuler</button>
@@ -198,7 +198,7 @@ function Waiting({
           <>
             <div style={{ fontSize: 40, marginBottom: 10 }}>{rated === false ? '🤝' : '⚔️'}</div>
             <h2 style={{ fontFamily: 'var(--serif)', fontSize: 26, margin: '0 0 8px' }}>Adversaire trouvé&nbsp;!</h2>
-            <p className="note">
+            <p className="dialog-text">
               {opponent ? `Face à ${opponent}` : 'Préparation de la partie…'}
               {rated === false ? ' · partie amicale' : rated === true ? ' · partie classée' : ''}
             </p>
@@ -208,7 +208,7 @@ function Waiting({
           <>
             <div style={{ fontSize: 40, marginBottom: 10 }}>⚠️</div>
             <h2 style={{ fontFamily: 'var(--serif)', fontSize: 24, margin: '0 0 8px' }}>Connexion interrompue</h2>
-            <p className="note" style={{ marginBottom: 20 }}>{error ?? 'Une erreur est survenue.'}</p>
+            <p className="dialog-text" style={{ marginBottom: 20 }}>{error ?? 'Une erreur est survenue.'}</p>
             <button className="btn btn--gold btn--full" onClick={onHome}>Retour à l'accueil</button>
           </>
         )}

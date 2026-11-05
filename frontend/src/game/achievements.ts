@@ -17,15 +17,15 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { code: 'veteran',           label: 'Vétéran',            description: 'Jouer 100 parties.',                      icon: '🏛️' },
   { code: 'legende',           label: 'Légende',            description: 'Jouer 500 parties.',                      icon: '👑' },
   // Performance
-  { code: 'premiere-victoire', label: 'Première victoire',  description: 'Remporter votre première partie.',        icon: '🥇' },
-  { code: 'gagnant',           label: 'Gagnant',            description: 'Remporter 10 parties.',                   icon: '🏆' },
-  { code: 'champion',          label: 'Champion',           description: 'Remporter 100 parties.',                  icon: '🌟' },
+  { code: 'premiere-victoire', label: 'Première victoire',  description: 'Remporter votre première partie en ligne.',        icon: '🥇' },
+  { code: 'gagnant',           label: 'Gagnant',            description: 'Remporter 10 parties en ligne.',                   icon: '🏆' },
+  { code: 'champion',          label: 'Champion',           description: 'Remporter 100 parties en ligne.',                  icon: '🌟' },
   // Classement
   { code: 'classe-1600',       label: 'Classé 1600',        description: 'Atteindre 1600 d’Elo dans une variante.',  icon: '📈' },
   { code: 'expert-1800',       label: 'Expert 1800',        description: 'Atteindre 1800 d’Elo dans une variante.',  icon: '⚔️' },
   { code: 'maitre-2000',       label: 'Maître 2000',        description: 'Atteindre 2000 d’Elo dans une variante.',  icon: '💎' },
   // Variantes
-  { code: 'ambidextre',        label: 'Ambidextre',         description: 'Gagner au moins une partie en Classique ET en Mondoubleau.', icon: '🔄' },
+  { code: 'ambidextre',        label: 'Ambidextre',         description: 'Gagner en ligne au moins une partie en Classique ET en Mondoubleau.', icon: '🔄' },
   // Jours de jeu
   { code: 'joueur-weekend',    label: 'Joueur du week-end', description: 'Jouer une partie un samedi ou un dimanche.', icon: '🌅' },
   { code: 'jour-ferie',        label: 'Jour férié',         description: 'Jouer une partie un jour férié.',          icon: '🎉' },

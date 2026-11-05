@@ -8,21 +8,29 @@
 //    arbitré par le serveur (PvP), via `awardFact`. Pas de `test`.
 // Attribution côté serveur uniquement (jamais le client, #116).
 //
+// Provenance (#279) : un badge est « vérifié » quand les parties EN LIGNE,
+// arbitrées par le serveur, suffisent à le justifier. Les parties locales sont
+// déclarées par le navigateur : seuls les badges d'assiduité (`declarable`)
+// peuvent en découler, et ils restent non vérifiés, donc absents du profil public,
+// jusqu'à ce que le joueur remplisse la condition en ligne.
+//
 // Le frontend duplique ce catalogue (labels/icônes) dans
 // `frontend/src/game/achievements.ts` — garder les CODES synchronisés.
 
+const { STATS_JOIN, STATS_COLUMNS, formatStats } = require('./playerStats');
+
 const CATALOG = [
   // ── Assiduité (nombre de parties) ──
-  { code: 'premiere-partie',   label: 'Première partie',   description: 'Jouer votre toute première partie.',        icon: '🎴', test: s => s.plays >= 1 },
-  { code: 'habitue',           label: 'Habitué',           description: 'Jouer 10 parties.',                          icon: '🃏', test: s => s.plays >= 10 },
-  { code: 'pilier',            label: 'Pilier',            description: 'Jouer 50 parties.',                          icon: '🛡️', test: s => s.plays >= 50 },
-  { code: 'veteran',           label: 'Vétéran',           description: 'Jouer 100 parties.',                         icon: '🏛️', test: s => s.plays >= 100 },
-  { code: 'legende',           label: 'Légende',           description: 'Jouer 500 parties.',                         icon: '👑', test: s => s.plays >= 500 },
+  { code: 'premiere-partie',   label: 'Première partie',   description: 'Jouer votre toute première partie.',        icon: '🎴', declarable: true, test: s => s.plays >= 1 },
+  { code: 'habitue',           label: 'Habitué',           description: 'Jouer 10 parties.',                          icon: '🃏', declarable: true, test: s => s.plays >= 10 },
+  { code: 'pilier',            label: 'Pilier',            description: 'Jouer 50 parties.',                          icon: '🛡️', declarable: true, test: s => s.plays >= 50 },
+  { code: 'veteran',           label: 'Vétéran',           description: 'Jouer 100 parties.',                         icon: '🏛️', declarable: true, test: s => s.plays >= 100 },
+  { code: 'legende',           label: 'Légende',           description: 'Jouer 500 parties.',                         icon: '👑', declarable: true, test: s => s.plays >= 500 },
 
   // ── Performance (victoires) ──
-  { code: 'premiere-victoire', label: 'Première victoire', description: 'Remporter votre première partie.',           icon: '🥇', test: s => s.wins >= 1 },
-  { code: 'gagnant',           label: 'Gagnant',           description: 'Remporter 10 parties.',                      icon: '🏆', test: s => s.wins >= 10 },
-  { code: 'champion',          label: 'Champion',          description: 'Remporter 100 parties.',                     icon: '🌟', test: s => s.wins >= 100 },
+  { code: 'premiere-victoire', label: 'Première victoire', description: 'Remporter votre première partie en ligne.',           icon: '🥇', test: s => s.wins >= 1 },
+  { code: 'gagnant',           label: 'Gagnant',           description: 'Remporter 10 parties en ligne.',                      icon: '🏆', test: s => s.wins >= 10 },
+  { code: 'champion',          label: 'Champion',          description: 'Remporter 100 parties en ligne.',                     icon: '🌟', test: s => s.wins >= 100 },
 
   // ── Classement (Elo) ──
   { code: 'classe-1600',       label: 'Classé 1600',       description: 'Atteindre 1600 d’Elo dans une variante.',    icon: '📈', test: s => s.ratingMax >= 1600 },
@@ -30,12 +38,12 @@ const CATALOG = [
   { code: 'maitre-2000',       label: 'Maître 2000',       description: 'Atteindre 2000 d’Elo dans une variante.',    icon: '💎', test: s => s.ratingMax >= 2000 },
 
   // ── Variantes ──
-  { code: 'ambidextre',        label: 'Ambidextre',        description: 'Gagner au moins une partie en Classique ET en Mondoubleau.', icon: '🔄', test: s => s.winsClassic >= 1 && s.winsMondoubleau >= 1 },
+  { code: 'ambidextre',        label: 'Ambidextre',        description: 'Gagner en ligne au moins une partie en Classique ET en Mondoubleau.', icon: '🔄', test: s => s.winsClassic >= 1 && s.winsMondoubleau >= 1 },
 
   // ── Jours de jeu ──
-  { code: 'joueur-weekend',    label: 'Joueur du week-end', description: 'Jouer une partie un samedi ou un dimanche.', icon: '🌅', test: s => s.playedWeekend },
-  { code: 'jour-ferie',        label: 'Jour férié',         description: 'Jouer une partie un jour férié.',            icon: '🎉', test: s => s.playedHoliday },
-  { code: 'assidu',            label: 'Assidu',             description: 'Jouer 3 jours consécutifs.',                 icon: '🔥', test: s => s.maxConsecutiveDays >= 3 },
+  { code: 'joueur-weekend',    label: 'Joueur du week-end', description: 'Jouer une partie un samedi ou un dimanche.', icon: '🌅', declarable: true, test: s => s.playedWeekend },
+  { code: 'jour-ferie',        label: 'Jour férié',         description: 'Jouer une partie un jour férié.',            icon: '🎉', declarable: true, test: s => s.playedHoliday },
+  { code: 'assidu',            label: 'Assidu',             description: 'Jouer 3 jours consécutifs.',                 icon: '🔥', declarable: true, test: s => s.maxConsecutiveDays >= 3 },
 
   // ── Faits de jeu (événementiels, PvP arbitré par le serveur) ──
   { code: 'partie-blanche',    label: 'Partie blanche',    description: 'Gagner une partie classée sans que l’adversaire ne remporte une manche.', icon: '⬜', event: true },
@@ -111,36 +119,30 @@ function dayFacts(dates) {
 
 /**
  * Évalue et débloque les badges DÉRIVÉS d'un joueur depuis ses stats cumulées.
- * À appeler DANS la transaction qui vient d'enregistrer une partie. Idempotent
- * (ON CONFLICT DO NOTHING). Renvoie la liste des codes nouvellement débloqués.
+ * À appeler DANS la transaction qui vient d'enregistrer une partie. Idempotent.
+ * Un badge déjà obtenu n'est jamais retiré ; il devient vérifié si les parties en
+ * ligne le justifient désormais. Renvoie la liste des codes nouvellement débloqués.
  */
 async function evaluateAchievements(client, userId) {
   if (!userId) return [];
 
   const base = await client.query(
     `SELECT u.rating_classic, u.rating_mondoubleau,
-            COALESCE(s.wins, 0)   AS wins,
-            COALESCE(s.losses, 0) AS losses,
-            COALESCE(s.plays, 0)  AS plays
+            ${STATS_COLUMNS}
      FROM users u
-     LEFT JOIN (
-       SELECT gp.user_id,
-              COUNT(*) FILTER (WHERE gp.won = TRUE)  AS wins,
-              COUNT(*) FILTER (WHERE gp.won = FALSE) AS losses,
-              COUNT(*)                                AS plays
-       FROM game_players gp WHERE gp.user_id = $1 GROUP BY gp.user_id
-     ) s ON s.user_id = u.id
+     ${STATS_JOIN}
      WHERE u.id = $1`,
     [userId]
   );
   if (!base.rows.length) return [];
   const r = base.rows[0];
+  const counts = formatStats(r);
 
-  // Victoires par variante (pour le badge « ambidextre »).
+  // Victoires en ligne par variante (pour le badge « ambidextre »).
   const variants = await client.query(
-    `SELECT g.variant, COUNT(*) AS wins
+    `SELECT g.variant, COUNT(DISTINCT gp.game_id) AS wins
      FROM game_players gp JOIN games g ON g.id = gp.game_id
-     WHERE gp.user_id = $1 AND gp.won = TRUE
+     WHERE gp.user_id = $1 AND gp.won = TRUE AND g.mode = 'online'
      GROUP BY g.variant`,
     [userId]
   );
@@ -148,26 +150,46 @@ async function evaluateAchievements(client, userId) {
 
   // Dates de jeu distinctes (heure de Paris) pour les badges « jours ».
   const days = await client.query(
-    `SELECT DISTINCT to_char((g.ended_at AT TIME ZONE 'Europe/Paris')::date, 'YYYY-MM-DD') AS d
+    `SELECT to_char((g.ended_at AT TIME ZONE 'Europe/Paris')::date, 'YYYY-MM-DD') AS d,
+            BOOL_OR(g.mode = 'online') AS online
      FROM game_players gp JOIN games g ON g.id = gp.game_id
      WHERE gp.user_id = $1 AND g.ended_at IS NOT NULL
+     GROUP BY d
      ORDER BY d`,
     [userId]
   );
-  const facts = dayFacts(days.rows.map(row => row.d));
 
-  const stats = {
-    plays: Number(r.plays),
-    wins: Number(r.wins),
-    losses: Number(r.losses),
+  // Établi par le serveur : parties en ligne et Elo.
+  const serverStats = {
+    plays: counts.plays,
+    wins: counts.wins,
+    losses: counts.losses,
     ratingMax: Math.max(Number(r.rating_classic), Number(r.rating_mondoubleau)),
     winsClassic: winsByVariant.get('classic') || 0,
     winsMondoubleau: winsByVariant.get('mondoubleau') || 0,
-    ...facts,
+    ...dayFacts(days.rows.filter(row => row.online).map(row => row.d)),
+  };
+  // Assiduité toutes parties confondues : ne débloque que des badges `declarable`.
+  const activityStats = {
+    ...serverStats,
+    plays: counts.plays + counts.local.plays,
+    ...dayFacts(days.rows.map(row => row.d)),
   };
 
-  const earned = CATALOG.filter(a => a.test && a.test(stats)).map(a => a.code);
-  return insertEarned(client, userId, earned);
+  const verified = CATALOG.filter(a => a.test && a.test(serverStats)).map(a => a.code);
+  const declared = CATALOG
+    .filter(a => a.declarable && a.test(activityStats) && !verified.includes(a.code))
+    .map(a => a.code);
+
+  await client.query(
+    `UPDATE user_achievements SET verified = TRUE
+     WHERE user_id = $1 AND code = ANY($2::text[]) AND verified = FALSE`,
+    [userId, verified]
+  );
+  return [
+    ...await insertEarned(client, userId, verified),
+    ...await insertEarned(client, userId, declared, false),
+  ];
 }
 
 /**
@@ -179,28 +201,33 @@ async function awardFact(client, userId, code) {
   return insertEarned(client, userId, [code]);
 }
 
-async function insertEarned(client, userId, codes) {
+async function insertEarned(client, userId, codes, verified = true) {
   if (!codes.length) return [];
-  const values = codes.map((_, i) => `($1, $${i + 2})`).join(', ');
+  const values = codes.map((_, i) => `($1, $2, $${i + 3})`).join(', ');
   const res = await client.query(
-    `INSERT INTO user_achievements (user_id, code)
+    `INSERT INTO user_achievements (user_id, verified, code)
      VALUES ${values}
      ON CONFLICT (user_id, code) DO NOTHING
      RETURNING code`,
-    [userId, ...codes]
+    [userId, verified, ...codes]
   );
   return res.rows.map(row => row.code);
 }
 
-/** Liste les badges débloqués d'un joueur (codes valides du catalogue). */
-async function listAchievements(query, userId) {
+/**
+ * Liste les badges débloqués d'un joueur (codes valides du catalogue).
+ * `verifiedOnly` : vue publique, sans les badges reposant sur du déclaré (#279).
+ */
+async function listAchievements(query, userId, { verifiedOnly = false } = {}) {
   const { rows } = await query(
-    `SELECT code, unlocked_at FROM user_achievements WHERE user_id = $1 ORDER BY unlocked_at`,
-    [userId]
+    `SELECT code, unlocked_at, verified FROM user_achievements
+     WHERE user_id = $1 AND (verified OR NOT $2::boolean)
+     ORDER BY unlocked_at`,
+    [userId, verifiedOnly]
   );
   return rows
     .filter(r => CODES.has(r.code))
-    .map(r => ({ code: r.code, unlockedAt: r.unlocked_at }));
+    .map(r => ({ code: r.code, unlockedAt: r.unlocked_at, verified: r.verified }));
 }
 
 module.exports = { CATALOG, CODES, evaluateAchievements, awardFact, listAchievements, easterSunday, dayFacts };

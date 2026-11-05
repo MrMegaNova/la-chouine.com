@@ -23,8 +23,8 @@ export function EyeToggle({ shown, onToggle }: { shown: boolean; onToggle: () =>
       title={shown ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
       onClick={onToggle}
       style={{
-        position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
-        background: 'none', border: 'none', cursor: 'pointer', padding: 2,
+        position: 'absolute', right: 0, top: '50%', transform: 'translateY(-50%)',
+        width: 44, height: 44, background: 'none', border: 'none', cursor: 'pointer', padding: 0,
         color: 'var(--gold-soft)', fontSize: 16, lineHeight: 1,
       }}
     >
@@ -39,7 +39,7 @@ export function PasswordChecklist({ password }: { password: string }) {
   return (
     <ul style={{ listStyle: 'none', margin: '6px 0 0', padding: 0, display: 'flex', flexWrap: 'wrap', gap: '4px 12px' }}>
       {pwdRules.map(r => (
-        <li key={r.label} style={{ fontSize: 12, color: r.test(password) ? 'var(--green, #4caf50)' : 'var(--muted, #888)' }}>
+        <li key={r.label} style={{ fontSize: 'var(--fs-small)', color: r.test(password) ? 'var(--green, #4caf50)' : 'var(--muted, #888)' }}>
           {r.test(password) ? '✓' : '○'} {r.label}
         </li>
       ))}

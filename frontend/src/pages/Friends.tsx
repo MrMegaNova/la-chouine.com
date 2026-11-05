@@ -114,7 +114,7 @@ export default function Friends() {
                     <Link to={`/joueur/${u.id}`} className="list-row__avatar" aria-label={`Profil de ${u.username}`}><AvatarContent src={u.avatar} name={u.username} /></Link>
                     <div className="list-row__meta">
                       <b className="list-row__name"><PlayerLink id={u.id} name={u.username} /></b>
-                      <span className="list-row__sub">{u.wins} victoires · {u.plays} parties</span>
+                      <span className="list-row__sub">{u.wins} victoires · {u.plays} parties en ligne</span>
                     </div>
                     <div className="list-row__actions">
                       {u.friendshipStatus === 'accepted'
@@ -146,7 +146,7 @@ export default function Friends() {
                     <div className="list-row__meta">
                       <b className="list-row__name"><PresenceDot online={f.online} inGame={f.inGame} /><PlayerLink id={f.id} name={f.username} /></b>
                       <span className="list-row__sub">
-                        {f.inGame ? 'en partie · ' : f.online ? 'en ligne · ' : ''}{f.wins} victoires
+                        {f.inGame ? 'en partie · ' : f.online ? 'en ligne · ' : ''}{f.wins} victoires en ligne
                       </span>
                     </div>
                     <div className="list-row__actions">

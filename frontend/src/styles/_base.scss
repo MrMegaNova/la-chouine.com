@@ -2,10 +2,12 @@
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+html { font-size: 100%; }
 html, body { height: 100%; }
 
 body {
   font-family: var(--sans);
+  font-size: var(--fs-body);
   color: var(--cream);
   // Couleur de repli unie (évite tout flash blanc avant/autour de la couche
   // fixe du fond) ; le dégradé felt est porté par ::after ci-dessous.
@@ -39,6 +41,7 @@ body {
 }
 
 a { color: inherit; }
-button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+button { font-family: inherit; font-size: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+select { font-family: inherit; font-size: var(--fs-body); }
 
 #root { min-height: 100vh; display: flex; flex-direction: column; }

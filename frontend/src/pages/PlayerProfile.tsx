@@ -4,6 +4,7 @@ import { useAuthStore } from '@/store/authStore';
 import { usersApi, type PublicProfile } from '@/api/client';
 import { AvatarContent } from '@/components/Avatar';
 import { Achievements } from '@/components/Achievements';
+import { GameStats } from '@/components/GameStats';
 
 // Page profil PUBLIQUE d'un joueur (#85) : Elo, parties, ratio V/D. Réutilise la
 // mise en page de Profile.tsx, sans les éléments privés (historique détaillé,
@@ -44,11 +45,10 @@ export default function PlayerProfile() {
     );
   }
 
-  const wr = profile.stats.plays ? Math.round(profile.stats.wins / profile.stats.plays * 100) : 0;
   const statBlock = (v: string | number, l: string) => (
     <div key={l}>
       <b style={{ fontFamily: 'var(--serif)', fontSize: 30, color: 'var(--gold-soft)', fontWeight: 900, display: 'block', lineHeight: 1 }}>{v}</b>
-      <span style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: 2, opacity: .7 }}>{l}</span>
+      <span style={{ fontSize: 'var(--fs-small)', textTransform: 'uppercase', letterSpacing: 1, opacity: .85 }}>{l}</span>
     </div>
   );
 
@@ -65,19 +65,14 @@ export default function PlayerProfile() {
         <Link to="/amis" className="btn btn--ghost btn--sm" style={{ marginLeft: 'auto' }}>← Joueurs</Link>
       </div>
 
-      <div style={{ display: 'flex', gap: 26, marginBottom: 26, flexWrap: 'wrap' }}>
-        {statBlock(profile.stats.plays, 'Parties')}
-        {statBlock(profile.stats.wins, 'Victoires')}
-        {statBlock(profile.stats.losses, 'Défaites')}
-        {statBlock(`${wr}%`, 'Réussite')}
-      </div>
+      <GameStats stats={profile.stats} />
 
       <div style={{ display: 'flex', gap: 26, flexWrap: 'wrap', marginBottom: 30 }}>
         {statBlock(profile.ratings.classic, 'Elo Classique')}
         {statBlock(profile.ratings.mondoubleau, 'Elo Mondoubleau')}
       </div>
 
-      <Achievements unlocked={profile.achievements ?? []} />
+      <Achievements unlocked={profile.achievements ?? []} publicView />
     </div>
   );
 }

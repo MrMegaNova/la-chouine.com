@@ -4,10 +4,11 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const { query } = require('../db');
 const { requireAuth, signToken } = require('../middleware/auth');
-const { deleteAccountLimiter } = require('../middleware/rateLimiter');
+const { deleteAccountLimiter, changePasswordLimiter } = require('../middleware/rateLimiter');
 const accountRemoval = require('../realtime/accountRemoval');
 const { validatePassword } = require('../services/passwordPolicy');
 const { listAchievements } = require('../services/achievements');
+const { STATS_JOIN, STATS_COLUMNS, formatStats } = require('../services/playerStats');
 const { ensureInviteCode, inviteUrl } = require('../services/invitations');
 const { isUuid } = require('../services/uuid');
 const config = require('../config');
@@ -21,19 +22,9 @@ router.get('/me', requireAuth, async (req, res) => {
     const { rows } = await query(
       `SELECT u.id, u.username, u.email, u.created_at, u.avatar,
               u.rating_classic, u.rating_mondoubleau,
-              COALESCE(stats.wins, 0)   AS wins,
-              COALESCE(stats.losses, 0) AS losses,
-              COALESCE(stats.plays, 0)  AS plays
+              ${STATS_COLUMNS}
        FROM users u
-       LEFT JOIN (
-         SELECT gp.user_id,
-                COUNT(*) FILTER (WHERE gp.won = TRUE)  AS wins,
-                COUNT(*) FILTER (WHERE gp.won = FALSE) AS losses,
-                COUNT(*)                                AS plays
-         FROM game_players gp
-         WHERE gp.user_id = $1
-         GROUP BY gp.user_id
-       ) stats ON stats.user_id = u.id
+       ${STATS_JOIN}
        WHERE u.id = $1`,
       [req.user.id]
     );
@@ -45,11 +36,7 @@ router.get('/me', requireAuth, async (req, res) => {
       email: u.email,
       joined: u.created_at,
       avatar: u.avatar || null,
-      stats: {
-        wins: Number(u.wins),
-        losses: Number(u.losses),
-        plays: Number(u.plays),
-      },
+      stats: formatStats(u),
       ratings: {
         classic: Number(u.rating_classic),
         mondoubleau: Number(u.rating_mondoubleau),
@@ -91,17 +78,13 @@ router.get('/search', requireAuth, async (req, res) => {
   try {
     const { rows } = await query(
       `SELECT u.id, u.username, u.avatar,
-              COALESCE(stats.wins, 0) AS wins,
-              COALESCE(stats.plays, 0) AS plays,
+              -- Comparaison entre joueurs : résultats établis par le serveur (#279).
+              stats.online_wins AS wins,
+              stats.online_plays AS plays,
               f.status AS friendship_status,
               f.requester_id AS friendship_requester
        FROM users u
-       LEFT JOIN (
-         SELECT gp.user_id,
-                COUNT(*) FILTER (WHERE gp.won = TRUE) AS wins,
-                COUNT(*) AS plays
-         FROM game_players gp GROUP BY gp.user_id
-       ) stats ON stats.user_id = u.id
+       ${STATS_JOIN}
        LEFT JOIN friendships f ON (
          (f.requester_id = $1 AND f.addressee_id = u.id) OR
          (f.addressee_id = $1 AND f.requester_id = u.id)
@@ -161,9 +144,9 @@ router.get('/history', requireAuth, async (req, res) => {
 });
 
 // ─── GET /api/users/:id/achievements ─────────────────────────────────────────
-// Badges PUBLICS débloqués par un joueur (#217). Auth requise (comme la
-// recherche) ; pas de donnée privée. Compte non vérifié → 404. Route à deux
-// segments, distincte de `/:id` ci-dessous.
+// Badges PUBLICS débloqués par un joueur (#217), limités à ceux établis par le
+// serveur (#279). Auth requise (comme la recherche) ; pas de donnée privée. Compte
+// non vérifié → 404. Route à deux segments, distincte de `/:id` ci-dessous.
 
 router.get('/:id/achievements', requireAuth, async (req, res) => {
   const { id } = req.params;
@@ -172,7 +155,7 @@ router.get('/:id/achievements', requireAuth, async (req, res) => {
     const { rows } = await query(
       `SELECT 1 FROM users WHERE id = $1 AND email_verified = TRUE`, [id]);
     if (!rows.length) return res.status(404).json({ error: 'Joueur introuvable.' });
-    res.json({ achievements: await listAchievements(query, id) });
+    res.json({ achievements: await listAchievements(query, id, { verifiedOnly: true }) });
   } catch (err) {
     req.log.error({ err }, 'GET /users/:id/achievements');
     res.status(500).json({ error: 'Erreur interne.' });
@@ -180,8 +163,9 @@ router.get('/:id/achievements', requireAuth, async (req, res) => {
 });
 
 // ─── GET /api/users/:id ───────────────────────────────────────────────────────
-// Profil PUBLIC d'un joueur (#85) : Elo par variante, parties, ratio V/D, badges
-// (#217). Aucune donnée privée. Auth requise comme le reste des routes sociales :
+// Profil PUBLIC d'un joueur (#85) : Elo par variante, parties en ligne, parties
+// locales à part (#279), badges vérifiés (#217). Aucune donnée privée. Auth
+// requise comme le reste des routes sociales :
 // pas de scraping anonyme. `:id` doit être un UUID — sinon 404.
 
 router.get('/:id', requireAuth, async (req, res) => {
@@ -193,19 +177,9 @@ router.get('/:id', requireAuth, async (req, res) => {
     const { rows } = await query(
       `SELECT u.id, u.username, u.avatar,
               u.rating_classic, u.rating_mondoubleau,
-              COALESCE(stats.wins, 0)   AS wins,
-              COALESCE(stats.losses, 0) AS losses,
-              COALESCE(stats.plays, 0)  AS plays
+              ${STATS_COLUMNS}
        FROM users u
-       LEFT JOIN (
-         SELECT gp.user_id,
-                COUNT(*) FILTER (WHERE gp.won = TRUE)  AS wins,
-                COUNT(*) FILTER (WHERE gp.won = FALSE) AS losses,
-                COUNT(*)                                AS plays
-         FROM game_players gp
-         WHERE gp.user_id = $1
-         GROUP BY gp.user_id
-       ) stats ON stats.user_id = u.id
+       ${STATS_JOIN}
        WHERE u.id = $1 AND u.email_verified = TRUE`,
       [id]
     );
@@ -215,16 +189,12 @@ router.get('/:id', requireAuth, async (req, res) => {
       id: u.id,
       username: u.username,
       avatar: u.avatar || null,
-      stats: {
-        wins: Number(u.wins),
-        losses: Number(u.losses),
-        plays: Number(u.plays),
-      },
+      stats: formatStats(u),
       ratings: {
         classic: Number(u.rating_classic),
         mondoubleau: Number(u.rating_mondoubleau),
       },
-      achievements: await listAchievements(query, u.id), // badges publics (#85 + #217)
+      achievements: await listAchievements(query, u.id, { verifiedOnly: true }), // badges publics (#85, #217, #279)
     });
   } catch (err) {
     req.log.error({ err }, 'GET /users/:id');
@@ -236,7 +206,7 @@ router.get('/:id', requireAuth, async (req, res) => {
 // Changement de mot de passe par un utilisateur connecté (#108) : exige le mot
 // de passe actuel, applique la politique, et refuse un nouveau identique.
 
-router.post('/me/password', requireAuth, async (req, res) => {
+router.post('/me/password', changePasswordLimiter, requireAuth, async (req, res) => {
   const { currentPassword, newPassword } = req.body || {};
   if (!currentPassword || !newPassword) {
     return res.status(422).json({ error: 'Mot de passe actuel et nouveau requis.' });

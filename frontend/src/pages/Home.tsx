@@ -56,8 +56,8 @@ export default function Home() {
                 <button type="button" className="btn btn--gold btn--lg" aria-describedby="quick-play-hint" onClick={() => startAI()}>
                   Jouer contre l'ordinateur
                 </button>
-                <Link to="/jouer" className="btn btn--ghost btn--tap">Choisir les options</Link>
-                <Link to="/regles" className="btn btn--ghost btn--tap">Apprendre les règles</Link>
+                <Link to="/jouer" className="btn btn--ghost">Choisir les options</Link>
+                <Link to="/regles" className="btn btn--ghost">Apprendre les règles</Link>
               </div>
               <p id="quick-play-hint" className="note" style={{ marginTop: 12 }}>
                 La partie démarre aussitôt, sans inscription : à deux, variante classique, niveau Confirmé, en 3 points.
@@ -83,10 +83,10 @@ export default function Home() {
                 <div style={{ position: 'relative', border: '1px solid var(--line)', borderRadius: 'var(--r)', padding: '26px 22px', background: 'linear-gradient(180deg,rgba(247,240,223,.04),rgba(247,240,223,.015))', cursor: 'pointer', transition: '.22s' }}
                   onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-4px)'; (e.currentTarget as HTMLElement).style.borderColor = 'var(--gold)'; }}
                   onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = ''; (e.currentTarget as HTMLElement).style.borderColor = 'var(--line)'; }}>
-                  <span style={{ position: 'absolute', top: 16, right: 16, fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--gold)', opacity: .7 }}>{m.tag}</span>
+                  <span style={{ position: 'absolute', top: 16, right: 16, fontSize: 'var(--fs-small)', letterSpacing: .5, textTransform: 'uppercase', color: 'var(--gold)', opacity: .85 }}>{m.tag}</span>
                   <div style={{ width: 50, height: 50, borderRadius: 13, display: 'grid', placeItems: 'center', fontSize: 24, background: 'rgba(201,161,74,.14)', border: '1px solid var(--line)', marginBottom: 16 }}>{m.icon}</div>
                   <h3 style={{ fontFamily: 'var(--serif)', fontSize: 23, fontWeight: 600, marginBottom: 6 }}>{m.title}</h3>
-                  <p style={{ color: 'var(--cream-2)', fontSize: 14.5, lineHeight: 1.5, opacity: .85, minHeight: 62 }}>{m.desc}</p>
+                  <p style={{ color: 'var(--cream-2)', fontSize: 'var(--fs-body)', lineHeight: 1.5, opacity: .85, minHeight: 62 }}>{m.desc}</p>
                   <span className={`btn ${m.primary ? 'btn--gold' : 'btn--ghost'} btn--sm`} style={{ marginTop: 8 }}>{m.cta}</span>
                 </div>
               </Link>
@@ -104,7 +104,7 @@ export default function Home() {
               <div key={n} style={{ borderTop: '2px solid var(--line)', paddingTop: 16 }}>
                 <b style={{ fontFamily: 'var(--serif)', fontSize: 40, color: 'var(--gold-soft)', fontWeight: 900, display: 'block', lineHeight: 1 }}>{n}</b>
                 <h4 style={{ margin: '8px 0 6px', fontSize: 16 }}>{h}</h4>
-                <p style={{ fontSize: 13.5, color: 'var(--cream-2)', opacity: .8, lineHeight: 1.5, whiteSpace: 'pre-line' }}>{p}</p>
+                <p style={{ color: 'var(--cream-2)', opacity: .85, lineHeight: 1.5, whiteSpace: 'pre-line' }}>{p}</p>
               </div>
             ))}
           </div>

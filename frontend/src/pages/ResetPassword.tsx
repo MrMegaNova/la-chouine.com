@@ -61,7 +61,7 @@ export default function ResetPassword() {
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  style={{ paddingRight: 38, width: '100%' }}
+                  style={{ paddingRight: 48, width: '100%' }}
                   onKeyDown={e => e.key === 'Enter' && handleSubmit()}
                 />
                 <EyeToggle shown={showPassword} onToggle={() => setShowPassword(s => !s)} />
@@ -75,7 +75,7 @@ export default function ResetPassword() {
               {loading ? '…' : 'Changer mon mot de passe'}
             </button>
             <p className="note" style={{ marginTop: 12, textAlign: 'center' }}>
-              <Link to="/connexion" style={{ color: 'var(--gold-soft)' }}>← Retour à la connexion</Link>
+              <Link to="/connexion" className="link-btn">← Retour à la connexion</Link>
             </p>
           </>
         )}

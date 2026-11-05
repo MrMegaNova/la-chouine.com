@@ -141,7 +141,7 @@ export default function Login() {
             <div style={{ position: 'relative' }}>
               <input type={showPassword ? 'text' : 'password'} value={password}
                 onChange={e => setPassword(e.target.value)} placeholder="••••••••"
-                style={{ paddingRight: 38, width: '100%' }}
+                style={{ paddingRight: 48, width: '100%' }}
                 onKeyDown={e => e.key === 'Enter' && (tab === 'login' ? handleLogin() : handleRegister())} />
               <EyeToggle shown={showPassword} onToggle={() => setShowPassword(s => !s)} />
             </div>
@@ -172,7 +172,7 @@ export default function Login() {
 
         {tab === 'login' && (
           <p className="note" style={{ marginTop: 12, textAlign: 'center' }}>
-            <button style={{ background: 'none', border: 'none', color: 'var(--gold-soft)', cursor: 'pointer', textDecoration: 'underline', fontSize: 12.5 }}
+            <button className="link-btn"
               onClick={() => { setTab('forgot'); reset(); }}>
               Mot de passe oublié ?
             </button>
@@ -180,7 +180,7 @@ export default function Login() {
         )}
         {tab === 'forgot' && (
           <p className="note" style={{ marginTop: 12, textAlign: 'center' }}>
-            <button style={{ background: 'none', border: 'none', color: 'var(--gold-soft)', cursor: 'pointer', textDecoration: 'underline', fontSize: 12.5 }}
+            <button className="link-btn"
               onClick={() => { setTab('login'); reset(); }}>
               ← Retour à la connexion
             </button>

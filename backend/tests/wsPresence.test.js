@@ -15,6 +15,7 @@ process.env.REDIS_URL = process.env.REDIS_URL || 'redis://mock';
 const { test, beforeEach, after } = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('http');
+const { isDeepStrictEqual } = require('util');
 const { WebSocket } = require('ws');
 
 const { useMockRedis, flush, closeRedis } = require('./helpers/redis');
@@ -55,6 +56,24 @@ async function setup(t) {
 }
 
 const lastPresence = (msgs) => msgs.filter(m => m.t === 'presence').pop();
+
+// Interroge `read` jusqu'à obtenir `expected` ; au-delà du délai maximal, échoue
+// en affichant le dernier état lu. Délai inférieur à la grâce de `setup` (5 s).
+async function waitForState(read, expected, timeoutMs = 3000) {
+  const deadline = Date.now() + timeoutMs;
+  let actual = await read();
+  while (!isDeepStrictEqual(actual, expected) && Date.now() < deadline) {
+    await delay(10);
+    actual = await read();
+  }
+  assert.deepEqual(actual, expected);
+}
+const waitForPresence = (userId, expected) => waitForState(() => presenceStore.userPresence(userId), expected);
+
+// `hello` conclut la mise en place de la connexion côté serveur, ce que `open` ne
+// garantit pas. Avant lui, un message envoyé peut être perdu, et interroger la
+// présence du joueur peut effacer le marqueur en cours d'écriture.
+const waitForHello = (client) => waitForState(() => client.msgs.some(m => m.t === 'hello'), true);
 
 test('présence : dédupliquée par joueur, poussée à la connexion et à la déconnexion', async (t) => {
   const { connect } = await setup(t);
@@ -102,7 +121,7 @@ test('présence individuelle (#46) : en ligne, en partie, hors ligne', async (t)
   const { connect } = await setup(t);
   const c1 = await connect('u1', 'Alice');
   await connect('u2', 'Bob');
-  await delay(40);
+  await waitForHello(c1);
 
   // (1) Connectés mais pas en partie.
   assert.deepEqual(await presenceStore.userPresence('u1'), { online: true, inGame: false });
@@ -112,15 +131,14 @@ test('présence individuelle (#46) : en ligne, en partie, hors ligne', async (t)
   c1.ws.send(JSON.stringify({ t: 'queue', action: 'join', variant: 'classic' }));
   await delay(60);
   const c2bis = await connect('u2', 'Bob'); // déjà compté, juste pour envoyer
+  await waitForHello(c2bis);
   c2bis.ws.send(JSON.stringify({ t: 'queue', action: 'join', variant: 'classic' }));
-  await delay(400);
-  assert.deepEqual(await presenceStore.userPresence('u1'), { online: true, inGame: true });
+  await waitForPresence('u1', { online: true, inGame: true });
 
   // (3) Déconnexion totale → hors ligne (même si la session de jeu persiste).
+  // inGame reste vrai : la partie attend son retour (délai de grâce #30).
   c1.ws.close();
-  await delay(80);
-  assert.equal((await presenceStore.userPresence('u1')).online, false);
-  assert.equal((await presenceStore.userPresence('u1')).inGame, true, 'la partie attend son retour (délai de grâce #30)');
+  await waitForPresence('u1', { online: false, inGame: true });
 });
 
 test('présence : Redis vide → compteurs à zéro', async () => {

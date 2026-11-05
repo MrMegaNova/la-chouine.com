@@ -23,7 +23,7 @@ const mocked = <T,>(fn: T) => fn as unknown as ReturnType<typeof vi.fn>;
 
 const ME: MeResponse = {
   id: 'u1', username: 'alice', email: 'alice@example.com', joined: '2026-01-01T00:00:00Z', avatar: null,
-  stats: { wins: 0, losses: 0, plays: 0 }, ratings: { classic: 1500, mondoubleau: 1500 }, achievements: [],
+  stats: { wins: 0, losses: 0, plays: 0, local: { wins: 0, losses: 0, plays: 0 } }, ratings: { classic: 1500, mondoubleau: 1500 }, achievements: [],
 };
 
 function renderProfile() {
@@ -127,5 +127,24 @@ describe('<Profile> : suppression de compte (#238)', () => {
     renderProfile();
     act(() => useAuthStore.getState().logout());
     expect(await screen.findByText('Page connexion')).toBeInTheDocument();
+  });
+});
+
+describe('<Profile> : résultats déclarés (#279)', () => {
+  const game = (mode: string, id: string) => ({
+    id, mode, variant: 'classic', player_count: 2, target_score: 3,
+    date: '2026-01-01T12:00:00Z', my_score: 3, won: true, opponents: id,
+  });
+
+  it('l’historique signale les parties locales, pas les parties en ligne', async () => {
+    mocked(usersApi.history).mockResolvedValue({
+      ok: true, status: 200, data: [game('ai', 'Ordinateur'), game('online', 'Bob')],
+    });
+    renderProfile();
+
+    const local = (await screen.findByText('vs Ordinateur')).parentElement;
+    const online = screen.getByText('vs Bob').parentElement;
+    expect(local).toHaveTextContent('Résultat déclaré');
+    expect(online).not.toHaveTextContent('Résultat déclaré');
   });
 });

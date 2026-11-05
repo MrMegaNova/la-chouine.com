@@ -102,6 +102,9 @@ async function isVerified(userId) {
   return rows[0].email_verified;
 }
 
+// Les index 1 à 15 sont tous pris : ce fichier partage le 15 avec
+// usersStatsSeparation.test.js. Il ne fait que lire la présence (liste d'amis),
+// sans écrire ni vider la base Redis, donc sans effet sur l'autre fichier.
 before(() => { useMockRedis(15); });
 beforeEach(cleanup);
 after(async () => {

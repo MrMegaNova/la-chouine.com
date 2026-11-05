@@ -5,6 +5,7 @@ const { query } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { notifyUser } = require('../realtime/notifier');
 const { userPresence } = require('../realtime/presenceStore');
+const { STATS_JOIN } = require('../services/playerStats');
 const { isUuid, normalizeUuid } = require('../services/uuid');
 const { findInviter } = require('../services/invitations');
 
@@ -16,19 +17,15 @@ router.get('/', requireAuth, async (req, res) => {
   try {
     const { rows } = await query(
       `SELECT u.id, u.username, u.avatar,
-              COALESCE(stats.wins, 0)  AS wins,
-              COALESCE(stats.plays, 0) AS plays
+              -- Comparaison entre joueurs : résultats établis par le serveur (#279).
+              stats.online_wins AS wins,
+              stats.online_plays AS plays
        FROM friendships f
        JOIN users u ON u.id = CASE
          WHEN f.requester_id = $1 THEN f.addressee_id
          ELSE f.requester_id
        END
-       LEFT JOIN (
-         SELECT gp.user_id,
-                COUNT(*) FILTER (WHERE gp.won = TRUE) AS wins,
-                COUNT(*) AS plays
-         FROM game_players gp GROUP BY gp.user_id
-       ) stats ON stats.user_id = u.id
+       ${STATS_JOIN}
        WHERE (f.requester_id = $1 OR f.addressee_id = $1)
          AND f.status = 'accepted'
        ORDER BY u.username`,
