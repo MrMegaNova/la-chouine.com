@@ -17,7 +17,7 @@ import { useAuthStore } from '@/store/authStore';
 
 const mocked = <T,>(fn: T) => fn as unknown as ReturnType<typeof vi.fn>;
 
-const CODE = 'a'.repeat(32);
+const CODE = 'k7m3qx';
 const signedInAs = (username: string) =>
   useAuthStore.setState({ token: 't', user: { id: 'u1', username } as MeResponse });
 
@@ -28,9 +28,9 @@ function CurrentUrl() {
 
 function renderPage() {
   return render(
-    <MemoryRouter initialEntries={[`/invitation/${CODE}`]}>
+    <MemoryRouter initialEntries={[`/i/${CODE}`]}>
       <Routes>
-        <Route path="/invitation/:code" element={<Invitation />} />
+        <Route path="/i/:code" element={<Invitation />} />
         <Route path="*" element={<CurrentUrl />} />
       </Routes>
     </MemoryRouter>,

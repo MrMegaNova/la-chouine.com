@@ -23,7 +23,7 @@ describe('metaForPath', () => {
   });
 
   it('exclut de l\'index les pages privées', () => {
-    for (const path of ['/profil', '/amis', '/connexion', '/joueur/abc', '/reset-password', '/invitation/abc']) {
+    for (const path of ['/profil', '/amis', '/connexion', '/joueur/abc', '/reset-password', '/invitation/abc', '/i/abc']) {
       const meta = metaForPath(path);
       expect(meta.noindex).toBe(true);
       expect(meta.canonical).toBeNull();

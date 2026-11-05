@@ -57,7 +57,8 @@ export default function App() {
   // via la présence) se réhydrate dans le nouvel onglet et masque la page.
   const location = useLocation();
   usePageMeta(location.pathname);
-  const standalonePage = location.pathname.startsWith('/joueur/') || location.pathname.startsWith('/invitation/');
+  const standalonePage = location.pathname.startsWith('/joueur/') || location.pathname.startsWith('/invitation/')
+    || location.pathname.startsWith('/i/');
 
   // Le header est masqué dès qu'une table (locale ou en ligne) occupe l'écran.
   const tableActive = !standalonePage && (!!game || onlineStatus !== 'idle');
@@ -85,6 +86,8 @@ export default function App() {
           <Route path="/a-propos" element={<About />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/verify-email" element={<VerifyEmail />} />
+          <Route path="/i/:code" element={<Invitation />} />
+          {/* Ancien format de lien (#295), toujours valide. */}
           <Route path="/invitation/:code" element={<Invitation />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

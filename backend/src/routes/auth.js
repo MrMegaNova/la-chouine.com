@@ -66,10 +66,12 @@ function hashToken(raw) {
 
 function insertUser(username, email, passwordHash, verifyHash, verifyExpires, inviteCode) {
   // Un code inconnu donne NULL : l'inscription réussit à l'identique (#295).
+  // La colonne vient d'une liste fermée (`codeColumn`), jamais de la requête.
+  const column = inviteCode ? invitations.codeColumn(inviteCode) : 'invite_code';
   return query(
     `INSERT INTO users (username, email, password_hash, verify_token, verify_expires, invited_by)
      VALUES ($1, $2, $3, $4, $5,
-             (SELECT id FROM users WHERE invite_code = $6 AND email_verified = TRUE))
+             (SELECT id FROM users WHERE ${column} = $6 AND email_verified = TRUE))
      RETURNING id, username, email`,
     [username, email, passwordHash, verifyHash, verifyExpires, inviteCode]
   );
@@ -100,7 +102,7 @@ router.post('/register', async (req, res) => {
   if (errors.length) return res.status(422).json({ errors });
 
   const { username, email, password, invitationCode } = req.body;
-  const inviteCode = invitations.isInviteCode(invitationCode) ? invitationCode : null;
+  const inviteCode = invitations.normalizeInviteCode(invitationCode);
 
   try {
     // Vérifier unicité insensible à la casse

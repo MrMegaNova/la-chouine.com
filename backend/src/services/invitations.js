@@ -9,36 +9,75 @@ const config = require('../config');
 const { awardFact } = require('./achievements');
 
 const AMBASSADOR_BADGE = 'ambassadeur';
-const INVITE_CODE_RE = /^[0-9a-f]{32}$/;
 
-function isInviteCode(value) {
-  return typeof value === 'string' && INVITE_CODE_RE.test(value);
+// Code court (#306) : 6 caractères sans caractères ambigus (ni 0, 1, i, l, o),
+// soit 31^6 ≈ 887 millions de codes. Deviner un code ne révèle qu'un pseudo,
+// déjà public, et les routes qui l'acceptent sont limitées en débit.
+const CODE_ALPHABET = '23456789abcdefghjkmnpqrstuvwxyz';
+const CODE_LENGTH = 6;
+const SHORT_CODE_RE = /^[2-9a-hjkmnp-z]{6}$/;
+// Codes distribués avant #306, toujours acceptés.
+const LEGACY_CODE_RE = /^[0-9a-f]{32}$/;
+const MAX_CODE_ATTEMPTS = 5;
+
+/**
+ * Code d'invitation normalisé, ou null s'il est mal formé. Un code court saisi
+ * en majuscules est accepté.
+ */
+function normalizeInviteCode(value) {
+  if (typeof value !== 'string') return null;
+  const code = value.trim().toLowerCase();
+  return SHORT_CODE_RE.test(code) || LEGACY_CODE_RE.test(code) ? code : null;
 }
 
+function isInviteCode(value) {
+  return normalizeInviteCode(value) !== null;
+}
+
+function generateInviteCode() {
+  let code = '';
+  for (let i = 0; i < CODE_LENGTH; i++) code += CODE_ALPHABET[crypto.randomInt(CODE_ALPHABET.length)];
+  return code;
+}
+
+// Lien le plus court : sans `www.`, le domaine nu redirige en gardant le chemin.
 function inviteUrl(code) {
-  return `${config.frontend.url}/invitation/${code}`;
+  return `${config.frontend.url.replace('://www.', '://')}/i/${code}`;
 }
 
 /**
  * Renvoie le code du joueur, créé à sa première demande. COALESCE garde le
- * premier code si deux requêtes arrivent en même temps. 128 bits aléatoires,
- * sans lien avec l'email ou l'identifiant.
+ * premier code si deux requêtes arrivent en même temps. Un code déjà pris par
+ * un autre joueur (violation d'unicité) est retiré au sort.
  */
 async function ensureInviteCode(query, userId) {
-  const { rows } = await query(
-    `UPDATE users SET invite_code = COALESCE(invite_code, $1)
-     WHERE id = $2
-     RETURNING invite_code`,
-    [crypto.randomBytes(16).toString('hex'), userId]
-  );
-  return rows[0]?.invite_code ?? null;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const { rows } = await query(
+        `UPDATE users SET invite_code = COALESCE(invite_code, $1)
+         WHERE id = $2
+         RETURNING invite_code`,
+        // Passe par module.exports pour que les tests puissent forcer une collision.
+        [module.exports.generateInviteCode(), userId]
+      );
+      return rows[0]?.invite_code ?? null;
+    } catch (err) {
+      if (err.code !== '23505' || attempt >= MAX_CODE_ATTEMPTS) throw err;
+    }
+  }
+}
+
+/** Colonne qui porte ce code normalisé : court ou d'avant #306. */
+function codeColumn(code) {
+  return SHORT_CODE_RE.test(code) ? 'invite_code' : 'invite_code_legacy';
 }
 
 /** Compte qui porte ce code, ou null. Seul un compte vérifié peut inviter. */
-async function findInviter(query, code) {
-  if (!isInviteCode(code)) return null;
+async function findInviter(query, rawCode) {
+  const code = normalizeInviteCode(rawCode);
+  if (!code) return null;
   const { rows } = await query(
-    `SELECT id, username FROM users WHERE invite_code = $1 AND email_verified = TRUE`,
+    `SELECT id, username FROM users WHERE ${codeColumn(code)} = $1 AND email_verified = TRUE`,
     [code]
   );
   return rows[0] ?? null;
@@ -95,7 +134,10 @@ async function applyInvitation(client, invitee, log) {
 }
 
 module.exports = {
+  normalizeInviteCode,
   isInviteCode,
+  generateInviteCode,
+  codeColumn,
   inviteUrl,
   ensureInviteCode,
   findInviter,

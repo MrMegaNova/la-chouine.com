@@ -53,6 +53,7 @@ const PRIVATE_TITLES: Array<[prefix: string, title: string]> = [
   ['/reset-password', 'Nouveau mot de passe'],
   ['/jeu', 'Partie en cours'],
   ['/invitation/', 'Invitation'],
+  ['/i/', 'Invitation'],
 ];
 
 function normalize(pathname: string): string {

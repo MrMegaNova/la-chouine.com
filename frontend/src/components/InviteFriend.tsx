@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { usersApi } from '@/api/client';
 import { useAuthStore } from '@/store/authStore';
+import { displayInviteUrl } from '@/invitation';
 
 // Lien d'invitation personnel (#295) : à copier, ou à partager si l'appareil le permet.
 export function InviteFriend() {
@@ -75,9 +76,9 @@ export function InviteFriend() {
               id="invite-link"
               ref={input}
               readOnly
-              value={invitation.url}
+              value={displayInviteUrl(invitation.url)}
               onFocus={e => e.target.select()}
-              style={{ fontSize: 16, minHeight: 44 }}
+              style={{ fontSize: 18, minHeight: 44 }}
             />
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>

@@ -13,7 +13,8 @@ import { usersApi } from '@/api/client';
 import { useAuthStore } from '@/store/authStore';
 
 const mocked = <T,>(fn: T) => fn as unknown as ReturnType<typeof vi.fn>;
-const INVITE_URL = `https://www.la-chouine.com/invitation/${'a'.repeat(32)}`;
+const INVITE_URL = 'https://la-chouine.com/i/k7m3qx';
+const DISPLAYED_URL = 'la-chouine.com/i/k7m3qx';
 
 function stubNavigator(property: 'clipboard' | 'share', value: unknown) {
   Object.defineProperty(navigator, property, { configurable: true, value });
@@ -35,7 +36,7 @@ describe('<InviteFriend>', () => {
     const user = userEvent.setup();
     const writeText = vi.fn().mockResolvedValue(undefined);
     render(<InviteFriend />);
-    expect(await screen.findByLabelText('Votre lien')).toHaveValue(INVITE_URL);
+    expect(await screen.findByLabelText('Votre lien')).toHaveValue(DISPLAYED_URL);
     stubNavigator('clipboard', { writeText });
 
     await user.click(screen.getByRole('button', { name: 'Copier le lien' }));
@@ -53,7 +54,7 @@ describe('<InviteFriend>', () => {
     await user.click(screen.getByRole('button', { name: 'Copier le lien' }));
 
     expect(await screen.findByText(/Copie impossible/)).toBeInTheDocument();
-    expect(input.selectionEnd).toBe(INVITE_URL.length);
+    expect(input.selectionEnd).toBe(DISPLAYED_URL.length);
   });
 
   it('ne propose le partage que s’il existe', async () => {
