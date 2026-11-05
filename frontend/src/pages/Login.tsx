@@ -3,6 +3,7 @@ import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { authApi } from '@/api/client';
 import { EyeToggle, PasswordChecklist } from '@/components/auth/password';
+import { invitePath, isInviteCode } from '@/invitation';
 
 type Tab = 'login' | 'register' | 'forgot';
 
@@ -10,7 +11,7 @@ export default function Login() {
   // Parcours d'invitation (#295) : le code reste dans l'URL jusqu'à l'inscription.
   const [params, setParams] = useSearchParams();
   const rawInvitation = params.get('invitation');
-  const invitation = rawInvitation && /^[0-9a-f]{32}$/.test(rawInvitation) ? rawInvitation : undefined;
+  const invitation = rawInvitation && isInviteCode(rawInvitation) ? rawInvitation : undefined;
   const [tab, setTab] = useState<Tab>(params.get('onglet') === 'inscription' ? 'register' : 'login');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
@@ -49,7 +50,7 @@ export default function Login() {
         setError(err);
       }
     } else {
-      navigate(invitation ? `/invitation/${invitation}` : '/profil');
+      navigate(invitation ? invitePath(invitation) : '/profil');
     }
   };
 

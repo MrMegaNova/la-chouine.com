@@ -28,7 +28,8 @@ const request = supertest(app);
 const DOMAIN = '@invitations.invalid';
 const PASSWORD = 'Motdepasse123!';
 const hash = bcrypt.hashSync(PASSWORD, 4);
-const UNKNOWN_CODE = 'f'.repeat(32);
+const UNKNOWN_CODE = 'zzzzzz';
+const UNKNOWN_LEGACY_CODE = 'f'.repeat(32);
 
 async function cleanup() {
   await pool.query(`DELETE FROM users WHERE email LIKE '%' || $1`, [DOMAIN]);
@@ -119,14 +120,63 @@ test('le lien repose sur un code aléatoire stable, sans donnée du compte', asy
   const inviter = await createInviter();
   const res = await request.get('/api/users/me/invitation').set('Authorization', `Bearer ${inviter.token}`);
   assert.equal(res.status, 200);
-  assert.equal(res.body.url, `${config.frontend.url}/invitation/${inviter.code}`);
+  assert.equal(res.body.url, `${config.frontend.url.replace('://www.', '://')}/i/${inviter.code}`);
   assert.equal(res.body.invitedCount, 0);
-  assert.match(inviter.code, /^[0-9a-f]{32}$/);
+  assert.match(inviter.code, /^[2-9a-hjkmnp-z]{6}$/);
   assert.ok(!res.body.url.includes(inviter.id));
   assert.ok(!res.body.url.includes(inviter.username));
 
   const other = await createInviter();
   assert.notEqual(other.code, inviter.code);
+});
+
+test('le lien part du domaine sans www (#306)', () => {
+  const saved = config.frontend.url;
+  try {
+    config.frontend.url = 'https://www.la-chouine.com';
+    assert.equal(invitations.inviteUrl('abcdef'), 'https://la-chouine.com/i/abcdef');
+    config.frontend.url = 'http://localhost:5173';
+    assert.equal(invitations.inviteUrl('abcdef'), 'http://localhost:5173/i/abcdef');
+  } finally {
+    config.frontend.url = saved;
+  }
+});
+
+test('un code déjà pris est retiré au sort (#306)', async () => {
+  const taken = await createInviter();
+  const inviter = await createInviter();
+  await pool.query(`UPDATE users SET invite_code = NULL WHERE id = $1`, [inviter.id]);
+  const generate = mock.method(invitations, 'generateInviteCode');
+  generate.mock.mockImplementationOnce(() => taken.code, 0);
+  try {
+    const res = await request.get('/api/users/me/invitation').set('Authorization', `Bearer ${inviter.token}`);
+    assert.equal(res.status, 200);
+    const code = res.body.url.split('/').pop();
+    assert.notEqual(code, taken.code);
+    assert.match(code, /^[2-9a-hjkmnp-z]{6}$/);
+    assert.equal(generate.mock.callCount(), 2);
+  } finally {
+    generate.mock.restore();
+  }
+});
+
+test('un ancien code (avant #306) reste valide, à la résolution comme à l’inscription', async () => {
+  const inviter = await createInviter();
+  const legacy = crypto.randomBytes(16).toString('hex');
+  await pool.query(`UPDATE users SET invite_code_legacy = $1 WHERE id = $2`, [legacy, inviter.id]);
+  const res = await request.get(`/api/invitations/${legacy}`);
+  assert.equal(res.status, 200);
+  assert.deepEqual(res.body, { username: inviter.username });
+  const invitee = await register(legacy);
+  assert.equal(invitee.invited_by, inviter.id);
+});
+
+test('un code saisi en majuscules est accepté', async () => {
+  const inviter = await createInviter();
+  const res = await request.get(`/api/invitations/${inviter.code.toUpperCase()}`);
+  assert.equal(res.status, 200);
+  const invitee = await register(inviter.code.toUpperCase());
+  assert.equal(invitee.invited_by, inviter.id);
 });
 
 test('le lien personnel exige une session', async () => {
@@ -154,6 +204,8 @@ test('la résolution ne renvoie que le pseudo', async () => {
 
 test('la résolution répond 404 de la même façon à un code inconnu ou mal formé', async () => {
   const unknown = await request.get(`/api/invitations/${UNKNOWN_CODE}`);
+  const unknownLegacy = await request.get(`/api/invitations/${UNKNOWN_LEGACY_CODE}`);
+  assert.equal(unknownLegacy.status, 404);
   const malformed = await request.get(`/api/invitations/${encodeURIComponent("' OR 1=1 --")}`);
   assert.equal(unknown.status, 404);
   assert.equal(malformed.status, 404);
@@ -182,7 +234,7 @@ test('inscription avec un code invalide : réussit à l’identique, sans invita
   const absent = await register(undefined);
   assert.equal(absent.invited_by, null);
 
-  for (const bad of [UNKNOWN_CODE, 'court', 42, { $ne: null }, ['a'], null]) {
+  for (const bad of [UNKNOWN_CODE, UNKNOWN_LEGACY_CODE, 'court', 'abcde0', 42, { $ne: null }, ['a'], null]) {
     const invitee = await register(bad);
     assert.equal(invitee.invited_by, null);
     assert.deepEqual(invitee.body, absent.body);

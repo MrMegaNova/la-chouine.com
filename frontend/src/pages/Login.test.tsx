@@ -94,7 +94,7 @@ describe('<Login>', () => {
   });
 
   describe('parcours d’invitation (#295)', () => {
-    const CODE = 'a'.repeat(32);
+    const CODE = 'k7m3qx';
 
     function renderAt(url: string) {
       return render(
@@ -102,7 +102,7 @@ describe('<Login>', () => {
           <Routes>
             <Route path="/connexion" element={<Login />} />
             <Route path="/profil" element={<div>Page profil</div>} />
-            <Route path="/invitation/:code" element={<div>Page invitation</div>} />
+            <Route path="/i/:code" element={<div>Page invitation</div>} />
           </Routes>
         </MemoryRouter>,
       );
