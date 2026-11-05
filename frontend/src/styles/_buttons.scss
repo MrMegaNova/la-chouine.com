@@ -34,6 +34,15 @@
   }
   &--sm { padding: 8px 13px; font-size: 13.5px; border-radius: 10px; }
   &--full { width: 100%; }
+  // Zone tactile d'au moins 44 px (#253).
+  &--tap { min-height: 44px; }
+  &--lg {
+    min-height: 56px;
+    padding: 14px 28px;
+    font-size: 18px;
+    border-radius: 14px;
+    @media (max-width: 560px) { width: 100%; }
+  }
 }
 
 // Groupe de boutons toggle (difficulté, target, etc.)
