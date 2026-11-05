@@ -197,6 +197,59 @@ test('coupe (#201) : un joueur qui ne pioche pas perd par forfait à l’échéa
   assert.equal(recorded[0].players.find(p => p.userId === 'u1').won, true);
 });
 
+test('coupe (#228) : si aucun joueur ne pioche, le match est annulé, sans enregistrement', async (t) => {
+  const recorded = [];
+  const server = http.createServer();
+  const rt = await attachWebSocketServer(server, {
+    tickMs: 15,
+    sweepMs: 20,
+    cutMs: 120,
+    heartbeatMs: 0,
+    getRating: () => Promise.resolve(1500),
+    onMatchComplete: (outcome) => recorded.push(outcome),
+  });
+  await new Promise(r => server.listen(0, r));
+  const port = server.address().port;
+
+  const connect = async (userId, name) => {
+    const token = signToken({ id: userId, username: name });
+    const ws = new WebSocket(`ws://localhost:${port}/ws?token=${token}`);
+    const msgs = [];
+    ws.on('message', d => msgs.push(JSON.parse(d.toString())));
+    await once(ws, 'open');
+    return { ws, msgs };
+  };
+  const c1 = await connect('u1', 'Alice');
+  const c2 = await connect('u2', 'Bob');
+  t.after(async () => { rt.stop(); try { c1.ws.close(); c2.ws.close(); } catch { /* ignore */ } server.close(); await closeRedis(); });
+
+  const lastState = (c) => c.msgs.filter(m => m.t === 'state').pop();
+  const waitFor = async (pred, what, timeout = 2000) => {
+    const t0 = Date.now();
+    while (!(await pred())) {
+      if (Date.now() - t0 > timeout) assert.fail(`état non atteint : ${what}`);
+      await delay(10);
+    }
+  };
+
+  c1.ws.send(JSON.stringify({ t: 'queue', action: 'join', variant: 'classic' }));
+  c2.ws.send(JSON.stringify({ t: 'queue', action: 'join', variant: 'classic' }));
+  await waitFor(() => lastState(c1)?.state.phase === 'cut', 'phase de coupe');
+
+  // Personne ne pioche.
+  await waitFor(() => lastState(c1)?.state.finished && lastState(c2)?.state.finished, 'fin du match');
+  for (const c of [c1, c2]) {
+    const { matchResult } = lastState(c).state;
+    assert.equal(matchResult.winnerSeat, null, 'aucun vainqueur');
+    assert.equal(matchResult.cancelled.reason, 'cut-timeout');
+    assert.equal(matchResult.forfeit, undefined);
+  }
+  // La session est close après la décision d'enregistrer : une fois close,
+  // l'absence d'enregistrement est définitive.
+  await waitFor(async () => (await sessionStore.sessionForUser('u1')) === null, 'session close');
+  assert.equal(recorded.length, 0, 'ni partie ni Elo enregistrés');
+});
+
 test('abandon volontaire : action forfeit → victoire adverse immédiate, enregistrée', async (t) => {
   const { c1, c2, recorded } = await setup(t);
 

@@ -299,10 +299,32 @@ class GameSession {
    *  retard. Renvoie { ok, seat? }. */
   cutTimeout() {
     if (this.finished || this.state.phase !== 'cut') return { ok: false };
-    const seat = this.state.cut.picks.findIndex(p => p === null);
-    if (seat < 0) return { ok: false };
-    const res = this.forfeit(seat, 'timeout');
-    return res.ok ? { ok: true, seat } : { ok: false };
+    const late = [0, 1].filter(seat => this.state.cut.picks[seat] === null);
+    if (late.length === 0) return { ok: false };
+    // Aucun des deux n'a pioché (#228) : personne ne mérite la victoire. La
+    // partie est annulée, sans vainqueur ni enregistrement (donc sans Elo).
+    if (late.length === 2) {
+      this.cancel('cut-timeout');
+      return { ok: true, seat: null, cancelled: true };
+    }
+    const res = this.forfeit(late[0], 'timeout');
+    return res.ok ? { ok: true, seat: late[0] } : { ok: false };
+  }
+
+  /** Annule le match sans vainqueur (#228). Le driver ne l'enregistre pas. */
+  cancel(reason) {
+    if (this.finished) return { ok: false };
+    this.finished = true;
+    this.matchResult = {
+      winnerSeat: null,
+      scores: [...this.state.scores],
+      cancelled: { reason },
+    };
+    return { ok: true };
+  }
+
+  get cancelled() {
+    return !!this.matchResult?.cancelled;
   }
 
   /** Échéance de révélation atteinte (#201) : on clôt la phase `cutReveal` et on
@@ -338,7 +360,7 @@ class GameSession {
 
   /** Résultat du match pour l'enregistrement classé (Elo), ou null si non terminé. */
   getMatchOutcome() {
-    if (!this.finished || !this.matchResult) return null;
+    if (!this.finished || !this.matchResult || this.cancelled) return null;
     const { winnerSeat, scores } = this.matchResult;
     return {
       variant: this.variant,

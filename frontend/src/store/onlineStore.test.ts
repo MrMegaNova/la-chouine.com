@@ -82,3 +82,19 @@ describe('onlineStore : compte supprimé (#238)', () => {
     expect(useOnlineStore.getState().status).toBe('idle');
   });
 });
+
+// Instantané produit par le GameSession du serveur après une coupe sans pioche.
+const CANCELLED_SNAPSHOT = {"sessionId":"t","you":0,"variant":"classic","target":3,"rated":true,"names":["Alice","Bob"],"scores":[0,0],"trump":null,"turnUp":null,"talonCount":0,"trick":[],"leader":0,"turn":0,"phase":"cut","handOver":false,"handNo":0,"cut":{"picks":[null,null],"deadline":null,"deckCount":32},"lastTrick":null,"opponentLastTrick":null,"clock":{"seat":null,"remainingMs":null,"paused":false,"baseMs":20000,"reserveMs":[120000,120000],"timeouts":[0,0]},"lastExchange":null,"lastAnnounce":null,"lastHandResult":null,"finished":true,"matchResult":{"winnerSeat":null,"scores":[0,0],"cancelled":{"reason":"cut-timeout"}},"players":[{"seat":0,"id":"u1","handCount":0,"annonce":0,"wonCount":0,"hand":[],"won":[],"legalMoves":[]},{"seat":1,"id":"u2","handCount":0,"annonce":0,"wonCount":0}]};
+
+describe('onlineStore : match annulé (#228)', () => {
+  it('un état annulé termine la partie, sans forfait', async () => {
+    const ws = await openSocket();
+    useOnlineStore.setState({ status: 'playing' });
+
+    ws.onmessage?.({ data: JSON.stringify({ t: 'state', state: CANCELLED_SNAPSHOT }) });
+    const st = useOnlineStore.getState();
+    expect(st.status).toBe('over');
+    expect(st.cancelled).toBe(true);
+    expect(st.forfeit).toBeNull();
+  });
+});

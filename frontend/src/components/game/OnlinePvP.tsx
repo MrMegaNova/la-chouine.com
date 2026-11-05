@@ -71,6 +71,12 @@ export function OnlinePvP() {
       {o.status === 'playing' && !o.reconnecting && o.opponentDisconnected && (
         <OpponentGoneBanner opponent={o.opponent} deadline={o.opponentDeadline} />
       )}
+      {o.status === 'over' && o.cancelled && (
+        <CancelledEnd
+          onRematch={token ? () => o.rematch(token) : null}
+          onHome={goHome}
+        />
+      )}
       {o.status === 'over' && o.forfeit && (
         <ForfeitEnd
           youWin={o.forfeit.youWin}
@@ -114,6 +120,30 @@ function OpponentGoneBanner({ opponent, deadline }: { opponent: string | null; d
       ? `⚠️ ${who} est déconnecté — victoire par forfait dans ${left}s s'il ne revient pas.`
       : `⚠️ ${who} est déconnecté — en attente de son retour…`}
     />
+  );
+}
+
+// Match annulé (#228) : aucun des deux joueurs n'a coupé à temps.
+function CancelledEnd({ onRematch, onHome }: { onRematch: (() => void) | null; onHome: () => void }) {
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 80,
+      background: 'rgba(8, 23, 16, .82)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 18,
+    }}>
+      <div role="dialog" aria-labelledby="cancelled-title" style={{ textAlign: 'center', maxWidth: 380, padding: 32, border: '1px solid var(--gold)', borderRadius: 20, background: '#102a20' }}>
+        <h2 id="cancelled-title" style={{ fontFamily: 'var(--serif)', fontSize: 26, margin: '0 0 8px' }}>
+          Partie annulée
+        </h2>
+        <p className="dialog-text" style={{ marginBottom: 20 }}>
+          Aucun des deux joueurs n'a coupé à temps. La partie ne compte pas : votre classement Elo ne change pas.
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {onRematch && <button className="btn btn--gold btn--full" onClick={onRematch}>⚔ Rejouer</button>}
+          <button className="btn btn--ghost btn--full" onClick={onHome}>Retour à l'accueil</button>
+        </div>
+      </div>
+    </div>
   );
 }
 

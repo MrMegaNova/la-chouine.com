@@ -60,9 +60,10 @@ interface ServerSnapshot {
   lastHandResult: HandResult | null;
   finished: boolean;
   matchResult: {
-    winnerSeat: number;
+    winnerSeat: number | null; // null : match annulé (#228)
     scores: number[];
     forfeit?: { by: number; reason: 'abandon' | 'timeout' };
+    cancelled?: { reason: 'cut-timeout' };
   } | null;
   players: SnapshotPlayer[];
 }
@@ -120,6 +121,7 @@ interface OnlineState {
   opponentDeadline: number | null; // échéance (ms epoch) avant forfait adverse
   reconnecting: boolean;           // notre propre connexion est en cours de reprise
   forfeit: ForfeitInfo | null;     // issue du match si terminé par forfait
+  cancelled: boolean;              // match annulé sans vainqueur ni Elo (#228)
   // Présence (#43)
   presence: Presence | null;       // compteurs poussés par le serveur
   // Défis entre amis (#45/#47)
@@ -295,6 +297,7 @@ export const useOnlineStore = create<OnlineState>((set, get) => {
       game,
       pendingResult,
       forfeit,
+      cancelled: snap.finished && !!mr?.cancelled,
       gameRated: snap.rated ?? get().gameRated,
       clock: snap.finished ? null : (snap.clock ?? null), // horloge de coup (#141)
       cutDeadline: snap.finished ? null : (snap.cut?.deadline ?? null), // coupe (#201)
@@ -511,7 +514,7 @@ export const useOnlineStore = create<OnlineState>((set, get) => {
     opponentDisconnected: false,
     opponentDeadline: null,
     reconnecting: false,
-    forfeit: null,
+    forfeit: null, cancelled: false,
     presence: null,
     incomingChallenge: null,
     outgoingChallenge: null,
@@ -570,7 +573,7 @@ export const useOnlineStore = create<OnlineState>((set, get) => {
       set({
         status: 'idle', game: null, pendingResult: null, opponent: null,
         searchStartedAt: null, error: null, gameRated: null, clock: null, cutDeadline: null,
-        opponentDisconnected: false, opponentDeadline: null, reconnecting: false, forfeit: null,
+        opponentDisconnected: false, opponentDeadline: null, reconnecting: false, forfeit: null, cancelled: false,
         presence: null, incomingChallenge: null, outgoingChallenge: null,
       });
     },
@@ -580,7 +583,7 @@ export const useOnlineStore = create<OnlineState>((set, get) => {
       set({
         status: 'searching', variant, opponent: null, error: null, game: null,
         pendingResult: null, searchStartedAt: Date.now(),
-        opponentDisconnected: false, opponentDeadline: null, reconnecting: false, forfeit: null,
+        opponentDisconnected: false, opponentDeadline: null, reconnecting: false, forfeit: null, cancelled: false,
       });
       ensureSocket(token, () => send({ t: 'queue', action: 'join', variant }));
     },
@@ -611,7 +614,7 @@ export const useOnlineStore = create<OnlineState>((set, get) => {
       set({
         status: 'searching', opponent: null, game: null, pendingResult: null, error: null,
         searchStartedAt: Date.now(),
-        opponentDisconnected: false, opponentDeadline: null, reconnecting: false, forfeit: null,
+        opponentDisconnected: false, opponentDeadline: null, reconnecting: false, forfeit: null, cancelled: false,
       });
       ensureSocket(token, () => send({ t: 'queue', action: 'join', variant }));
     },
@@ -628,7 +631,7 @@ export const useOnlineStore = create<OnlineState>((set, get) => {
       set({
         status: 'idle', game: null, pendingResult: null, opponent: null,
         searchStartedAt: null, error: null, gameRated: null, clock: null, cutDeadline: null,
-        opponentDisconnected: false, opponentDeadline: null, reconnecting: false, forfeit: null,
+        opponentDisconnected: false, opponentDeadline: null, reconnecting: false, forfeit: null, cancelled: false,
       });
       // Le socket reste ouvert (présence) ; s'il était tombé, on le relance.
       if (lastToken) ensureSocket(lastToken, () => {});
