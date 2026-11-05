@@ -6,9 +6,12 @@
   justify-content: center;
   gap: 8px;
   border-radius: 12px;
-  padding: 11px 18px;
+  // Zone tactile d'au moins 44 × 44 px, y compris pour la variante --sm (#252).
+  min-width: 44px;
+  min-height: 44px;
+  padding: 10px 18px;
   font-weight: 700;
-  font-size: 15px;
+  font-size: var(--fs-body);
   transition: transform 0.12s, box-shadow 0.2s, background 0.2s;
   white-space: nowrap;
   cursor: pointer;
@@ -32,16 +35,20 @@
     background: linear-gradient(135deg, $wine-2, $wine-deep);
     color: var(--cream);
   }
-  &--sm { padding: 8px 13px; font-size: 13.5px; border-radius: 10px; }
+  &--sm { padding: 8px 13px; font-size: 0.9375rem; border-radius: 10px; }
   &--full { width: 100%; }
-  // Zone tactile d'au moins 44 px (#253).
-  &--tap { min-height: 44px; }
   &--lg {
     min-height: 56px;
     padding: 14px 28px;
     font-size: 18px;
     border-radius: 14px;
     @media (max-width: 560px) { width: 100%; }
+  }
+
+  // Sur écran étroit, un libellé long passe à la ligne plutôt que de déborder.
+  @media (max-width: 520px) {
+    white-space: normal;
+    text-align: center;
   }
 }
 
@@ -53,7 +60,8 @@
 
   button {
     flex: 1;
-    padding: 12px;
+    min-height: 44px;
+    padding: 10px 8px;
     border-radius: 11px;
     border: 1px solid var(--line);
     font-weight: 700;

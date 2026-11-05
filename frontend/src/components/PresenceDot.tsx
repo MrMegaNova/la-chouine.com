@@ -6,7 +6,7 @@ export function PresenceDot({ online, inGame }: { online: boolean; inGame: boole
     <span
       title={label}
       aria-label={label}
-      style={{ fontSize: 11, marginRight: 6, verticalAlign: 'middle' }}
+      style={{ fontSize: 'var(--fs-small)', marginRight: 6, verticalAlign: 'middle' }}
     >
       {inGame ? '🎴' : online ? '🟢' : '⚪'}
     </span>

@@ -1,5 +1,12 @@
 @use '@/styles/variables' as *;
 
+@mixin pinned-to-felt-bottom($offset) {
+  position: sticky;
+  bottom: $offset;
+  z-index: 2;
+  background: rgba(8, 23, 16, 0.92);
+}
+
 .table {
   position: fixed;
   inset: 0;
@@ -13,7 +20,7 @@
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 12px 18px;
+  padding: 10px 18px;
   border-bottom: 1px solid var(--line);
   background: rgba(8, 18, 13, 0.5);
   flex-wrap: wrap;
@@ -32,6 +39,8 @@
     gap: 10px;
     b { font-size: 26px; line-height: 1; }
   }
+  // Encart cliquable (profil) : zone tactile de 44 px.
+  a:global(.score-pill) { min-height: 44px; }
 }
 .scoreMe {
   border-color: var(--gold) !important;
@@ -46,6 +55,8 @@
   justify-content: space-between;
   padding: 10px 14px;
   overflow: hidden;
+  // Aucune zone ne rétrécit : sur petit écran, le tapis défile au lieu de superposer.
+  > * { flex-shrink: 0; }
 }
 
 .toast {
@@ -59,12 +70,14 @@
   padding: 9px 16px;
   border-radius: 30px;
   font-weight: 700;
-  font-size: 14px;
+  font-size: var(--fs-body);
   opacity: 0;
   transition: opacity 0.3s;
   pointer-events: none;
   z-index: 5;
-  white-space: nowrap;
+  width: max-content;
+  max-width: calc(100% - 16px);
+  text-align: center;
 }
 .toastVisible { opacity: 1; }
 
@@ -82,13 +95,23 @@
   flex-direction: column;
   align-items: center;
   gap: 4px;
+  min-width: 0;
 }
 .oppActive .oppName { color: var(--gold-soft); opacity: 1 !important; }
 .oppName {
-  font-size: 11px;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  opacity: 0.65;
+  max-width: 100%;
+  overflow: hidden;
+  font-size: var(--fs-small);
+  opacity: 0.85;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  // Pseudo cliquable (profil) : zone tactile de 44 px sans agrandir la ligne.
+  a {
+    display: inline-block;
+    min-height: 44px;
+    line-height: 44px;
+    margin-block: -13px;
+  }
 }
 .oppCards {
   display: flex;
@@ -103,7 +126,8 @@
   align-items: center;
   justify-content: center;
   gap: 40px;
-  flex: 1;
+  // Pas de rétrécissement : les zones ne se chevauchent pas quand la hauteur manque.
+  flex: 1 0 auto;
   position: relative;
   flex-wrap: wrap;
 }
@@ -135,15 +159,15 @@
   transform-origin: left center;
 }
 .talonCount {
-  font-size: 12px;
+  font-size: var(--fs-small);
   letter-spacing: 1px;
-  opacity: 0.75;
+  opacity: 0.85;
   text-transform: uppercase;
 }
 
 .trickZone {
   display: flex;
-  gap: 14px;
+  gap: 26px 18px;
   min-width: 200px;
   justify-content: center;
   min-height: calc(var(--card-w) * 1.46 + 22px);
@@ -152,6 +176,10 @@
 }
 .trickSlot {
   position: relative;
+  // Laisse la place au nom du joueur, plus large que les petites cartes.
+  min-width: 72px;
+  display: flex;
+  justify-content: center;
 }
 // Glisse directionnelle (#97) : ma carte arrive du bas (ma main), celle de
 // l'adversaire du haut (son côté de la table).
@@ -165,14 +193,15 @@
 }
 .trickLabel {
   position: absolute;
-  top: -20px;
-  left: 0;
-  right: 0;
+  top: -22px;
+  left: -8px;
+  right: -8px;
+  overflow: hidden;
   text-align: center;
-  font-size: 11px;
-  opacity: 0.6;
-  letter-spacing: 1px;
-  text-transform: uppercase;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-small);
+  opacity: 0.85;
 }
 
 .captureInfo {
@@ -184,8 +213,8 @@
   align-items: flex-end;
   gap: 2px;
 }
-.captLine { font-size: 11px; opacity: 0.65; letter-spacing: 0.5px; }
-.captMe { opacity: 0.9; }
+.captLine { font-size: var(--fs-small); opacity: 0.85; text-align: right; }
+.captMe { opacity: 1; }
 
 .actBar {
   display: flex;
@@ -194,6 +223,7 @@
   flex-wrap: wrap;
   padding: 8px 0 4px;
   min-height: 42px;
+  :global(.note) { font-size: var(--fs-body); text-align: center; }
 }
 
 .myHand {
@@ -252,14 +282,37 @@
   .trickZone { gap: 8px; min-width: 0; }
   .oppArea { gap: 14px; min-height: 64px; }
   .myHand { gap: 4px; padding: 4px; }
+  // « Quitter » et l'atout sur la 1ʳᵉ ligne, les scores dessous sur toute la largeur.
+  .topBar { justify-content: space-between; }
   .scoreRow {
-    gap: 6px;
+    order: 3;
+    flex: 0 0 100%;
+    gap: 4px;
     :global(.score-pill) {
-      padding: 5px 11px;
+      padding: 4px 10px;
+      gap: 6px;
       b { font-size: 19px; }
     }
   }
-  .captureInfo { position: static; align-items: center; margin-top: 4px; }
+  .captureInfo {
+    position: static;
+    flex: 0 0 100%;
+    align-items: center;
+  }
+  .captLine { text-align: center; }
+  .actBar { padding: 4px 0; min-height: 0; :global(.note) { font-size: var(--fs-small); } }
+  // Trois adversaires doivent tenir sur une ligne : cartes en éventail.
+  .oppSlot { flex: 0 1 auto; }
+  .oppCards :global(.playing-card) + :global(.playing-card) { margin-left: calc(var(--card-w-opp) * -0.55); }
+  .oppArea { padding: 2px; }
+  // Si le tapis reste trop haut (4 joueurs, annonces), il défile au lieu de couper.
+  .felt { overflow-y: auto; }
+}
+
+// Petit téléphone : la main et les annonces restent à l'écran, le reste passe dessous.
+@media (max-width: 520px) and (max-height: 720px) {
+  .myHand { @include pinned-to-felt-bottom(0px); }
+  .actBar { @include pinned-to-felt-bottom(calc(var(--card-w) * 1.46 + 8px)); }
 }
 
 // Paysage court (mobile/tablette couchés) : la hauteur est la ressource rare —
@@ -268,10 +321,11 @@
 // par la hauteur via `min(…, 13vh)`.
 @media (orientation: landscape) and (max-height: 600px) {
   .topBar { padding: 6px 12px; gap: 8px; }
-  .felt { padding: 6px 14px; }
+  .felt { padding: 6px 14px; overflow-y: auto; }
+  .myHand { @include pinned-to-felt-bottom(0px); }
+  .actBar { @include pinned-to-felt-bottom(calc(var(--card-w) * 1.46 + 4px)); }
   .oppArea { min-height: 0; padding: 2px; gap: 16px; }
-  .oppName { font-size: 10px; }
-  .actBar { min-height: 0; padding: 4px 0; }
+  .actBar { min-height: 0; padding: 4px 0; :global(.note) { font-size: var(--fs-small); } }
   .myHand { min-height: calc(var(--card-w) * 1.46); padding: 2px; }
   .scoreRow :global(.score-pill) b { font-size: 18px; }
 }

@@ -14,12 +14,15 @@
   align-items: center;
   gap: 16px;
   height: 66px;
+  min-width: 0;
 }
 
 .brand {
   display: flex;
   align-items: center;
   gap: 11px;
+  flex: 0 0 auto;
+  min-height: 44px;
   cursor: pointer;
   user-select: none;
   text-decoration: none;
@@ -36,12 +39,13 @@
   i { font-style: italic; color: var(--gold-soft); font-weight: 500; }
 }
 .brandSub {
-  font-size: 10px;
-  letter-spacing: 3px;
+  font-size: var(--fs-small);
+  letter-spacing: 0.5px;
   text-transform: uppercase;
   color: var(--gold);
   opacity: 0.85;
   margin-top: 2px;
+  line-height: 1.15;
   display: block;
 }
 
@@ -52,10 +56,14 @@
   gap: 2px;
 }
 .navLink {
-  padding: 9px 13px;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 9px 11px;
   border-radius: 10px;
   font-weight: 600;
-  font-size: 14px;
+  font-size: var(--fs-body);
+  white-space: nowrap;
   opacity: 0.82;
   transition: 0.18s;
   cursor: pointer;
@@ -70,7 +78,7 @@
   margin-left: 5px;
   padding: 1px 7px;
   border-radius: 999px;
-  font-size: 11.5px;
+  font-size: var(--fs-small);
   font-weight: 700;
   vertical-align: middle;
   background: var(--gold);
@@ -79,11 +87,11 @@
 
 // ─── Menu mobile ──────────────────────────────────────────────────────────────
 .menuBtn {
-  display: none; // visible sous 860px uniquement
+  display: none; // visible sous 1020px uniquement
   position: relative;
-  margin-left: 10px;
-  width: 40px;
-  height: 40px;
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
   align-items: center;
   justify-content: center;
   font-size: 20px;
@@ -112,20 +120,21 @@
 
   :global(.wrap) { display: flex; flex-direction: column; gap: 2px; }
   .navLink {
-    display: block;
+    display: flex;
     padding: 13px 12px;
-    font-size: 16px;
     border-radius: 12px;
     &:not(:last-child) { border-bottom: 1px solid rgba(201, 161, 74, 0.08); }
   }
 }
 
-.authArea { margin-left: 8px; }
+.authArea { margin-left: 8px; min-width: 0; }
 .userChip {
   display: flex;
   align-items: center;
   gap: 9px;
-  padding: 6px 8px 6px 6px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 5px 10px 5px 5px;
   border: 1px solid var(--line);
   border-radius: 30px;
   cursor: pointer;
@@ -133,27 +142,42 @@
   &:hover { border-color: var(--gold); }
 }
 .avatar {
-  width: 28px; height: 28px;
+  width: 32px; height: 32px;
+  flex: 0 0 auto;
   border-radius: 50%;
   display: grid;
   place-items: center;
   font-weight: 800;
-  font-size: 13px;
+  font-size: var(--fs-small);
   color: #0c2018;
   background: linear-gradient(135deg, var(--gold-soft), var(--gold-deep));
 }
 .userName {
   font-weight: 700;
-  font-size: 14px;
+  font-size: var(--fs-small);
+  min-width: 0;
   max-width: 120px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-@media (max-width: 860px) {
+// Seuil relevé (#252) : les liens en 16 px ne tiennent plus en barre sous 1020 px.
+@media (max-width: 1020px) {
   .nav { display: none; }          // liens en barre cachés
   .authArea { margin-left: auto; } // pousse le chip/CTA à droite
   .menuBtn { display: inline-flex; }
   .brandSub { display: none; }     // gagne un peu de hauteur
+}
+
+// Écran étroit : logo, connexion et menu tiennent sur une ligne (#292).
+@media (max-width: 520px) {
+  .inner { gap: 8px; }
+  .brand { gap: 7px; }
+  .owl { width: 28px; height: 28px; }
+  .brandName { font-size: 20px; }
+  .authArea :global(.btn) { padding-inline: 10px; white-space: nowrap; }
+}
+@media (max-width: 340px) {
+  .owl { display: none; }
 }

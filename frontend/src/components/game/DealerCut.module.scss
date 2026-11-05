@@ -7,8 +7,10 @@
   inset: 0;
   z-index: 65;
   display: flex;
-  align-items: center;
+  // Plus haut que l'écran (petit téléphone) : le panneau défile, rien n'est coupé.
+  align-items: flex-start;
   justify-content: center;
+  overflow-y: auto;
   padding: 18px;
   background: radial-gradient(120% 80% at 50% 22%, #1a4233 0%, $felt-1 60%, $felt-edge 100%);
 }
@@ -17,6 +19,7 @@
   text-align: center;
   max-width: 560px;
   width: 100%;
+  margin: auto;
   padding: 28px 24px;
   border: 1px solid var(--gold);
   border-radius: 20px;
@@ -30,13 +33,14 @@
 }
 
 .sub {
+  font-size: var(--fs-body);
   margin-bottom: 14px;
 }
 
 .timer {
   margin: 0 0 16px;
-  font-size: 13px;
-  color: var(--wine-2);
+  font-size: var(--fs-small);
+  color: #f3a3a3;
 }
 
 .seats {
@@ -55,8 +59,8 @@
 }
 
 .seatName {
-  font-size: 13px;
-  opacity: 0.85;
+  font-size: var(--fs-small);
+  opacity: 0.9;
 }
 .seatMe {
   color: var(--gold);
@@ -85,7 +89,7 @@
 }
 
 .pickLabel {
-  font-size: 14px;
+  font-size: var(--fs-small);
   font-weight: 600;
 }
 
@@ -100,7 +104,8 @@
   // Compense le décalage négatif de la 1ʳᵉ carte de chaque ligne (cf. poolCard).
   padding-left: 14px;
   max-width: 480px;
-  margin: 0 auto 22px;
+  // 24 px de plus pour compenser le recouvrement de la dernière ligne.
+  margin: 0 auto 46px;
 }
 
 .poolCard {
@@ -110,9 +115,9 @@
   padding: 0;
   line-height: 0;
   border-radius: 6px;
-  // Recouvre la carte précédente (paquet étalé). Légère marge verticale pour
-  // que les lignes qui s'enroulent ne se collent pas.
-  margin: 4px 0 4px -14px;
+  // Recouvre la carte précédente (paquet étalé) et le bas de la ligne du dessus,
+  // en gardant au moins 44 × 44 px visibles pour le doigt (#252).
+  margin: 0 0 -24px -14px;
   transition: transform 0.1s ease, filter 0.1s ease;
 }
 button.poolCard {
@@ -123,4 +128,11 @@ button.poolCard {
     filter: drop-shadow(0 6px 9px rgba(0, 0, 0, 0.45));
   }
   &:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; z-index: 2; }
+}
+
+@media (max-width: 520px) {
+  .cut { padding: 10px; }
+  .panel { padding: 18px 14px; }
+  .title { font-size: 24px; }
+  .seats { gap: 10px; }
 }

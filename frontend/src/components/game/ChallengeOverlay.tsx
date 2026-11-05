@@ -50,7 +50,7 @@ export function ChallengeOverlay() {
           <h2 style={{ fontFamily: 'var(--serif)', fontSize: 26, margin: '0 0 8px' }}>
             {incoming.from} vous défie&nbsp;!
           </h2>
-          <p className="note" style={{ marginBottom: 6 }}>{typeLabel(incoming.rated, incoming.variant)}</p>
+          <p className="dialog-text" style={{ marginBottom: 6 }}>{typeLabel(incoming.rated, incoming.variant)}</p>
           {leftIn !== null && <p className="note" style={{ marginBottom: 18 }}>Expire dans {leftIn}s</p>}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <button className="btn btn--gold btn--full" onClick={() => o.acceptChallenge()}>Accepter</button>
@@ -73,7 +73,7 @@ export function ChallengeOverlay() {
         <h2 style={{ fontFamily: 'var(--serif)', fontSize: 24, margin: '0 0 8px' }}>
           Défi envoyé à {outgoing!.to}
         </h2>
-        <p className="note" style={{ marginBottom: 6 }}>{typeLabel(outgoing!.rated, outgoing!.variant)}</p>
+        <p className="dialog-text" style={{ marginBottom: 6 }}>{typeLabel(outgoing!.rated, outgoing!.variant)}</p>
         <p className="note" style={{ marginBottom: 18 }}>
           En attente de sa réponse{leftOut !== null ? ` — ${leftOut}s` : '…'}
         </p>

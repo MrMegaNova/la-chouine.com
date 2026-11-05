@@ -41,11 +41,11 @@ export function TurnTimer({ me, names }: { me: number; names: string[] }) {
         padding: '4px 12px', borderRadius: 20,
         border: `1px solid ${low ? 'var(--wine-2, #c0392b)' : 'var(--line)'}`,
         background: mine ? 'rgba(201,161,74,.14)' : 'rgba(247,240,223,.04)',
-        fontSize: 13, color: 'var(--cream)',
+        fontSize: 'var(--fs-small)', color: 'var(--cream)',
       }}
     >
       {clock.paused ? (
-        <span className="note" style={{ fontSize: 12.5 }}>⏸ En pause (adversaire déconnecté)</span>
+        <span className="note">⏸ En pause (adversaire déconnecté)</span>
       ) : (
         <>
           <span aria-hidden="true">⏱</span>
@@ -54,7 +54,7 @@ export function TurnTimer({ me, names }: { me: number; names: string[] }) {
             color: low ? 'var(--wine-2, #e74c3c)' : 'var(--gold-soft)',
             minWidth: 28, textAlign: 'right',
           }}>{secs}s</b>
-          <span className="note" style={{ fontSize: 12 }}>
+          <span className="note">
             {mine ? 'à vous' : `${names[clock.seat] ?? 'adversaire'}`}
             {reserve > 0 ? ` · réserve ${reserve}s` : ''}
           </span>
