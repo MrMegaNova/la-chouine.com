@@ -8,6 +8,7 @@ const { deleteAccountLimiter } = require('../middleware/rateLimiter');
 const accountRemoval = require('../realtime/accountRemoval');
 const { validatePassword } = require('../services/passwordPolicy');
 const { listAchievements } = require('../services/achievements');
+const { ensureInviteCode, inviteUrl } = require('../services/invitations');
 const { isUuid } = require('../services/uuid');
 const config = require('../config');
 
@@ -57,6 +58,24 @@ router.get('/me', requireAuth, async (req, res) => {
     });
   } catch (err) {
     req.log.error({ err }, 'GET /users/me');
+    res.status(500).json({ error: 'Erreur interne.' });
+  }
+});
+
+// ─── GET /api/users/me/invitation ─────────────────────────────────────────────
+
+// Lien d'invitation personnel (#295) et nombre d'invités au compte vérifié.
+router.get('/me/invitation', requireAuth, async (req, res) => {
+  try {
+    const code = await ensureInviteCode(query, req.user.id);
+    if (!code) return res.status(404).json({ error: 'Utilisateur introuvable.' });
+    const { rows } = await query(
+      `SELECT COUNT(*) AS invited FROM users WHERE invited_by = $1 AND email_verified = TRUE`,
+      [req.user.id]
+    );
+    res.json({ url: inviteUrl(code), invitedCount: Number(rows[0].invited) });
+  } catch (err) {
+    req.log.error({ err }, 'GET /users/me/invitation');
     res.status(500).json({ error: 'Erreur interne.' });
   }
 });

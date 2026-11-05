@@ -46,6 +46,8 @@ export interface RegisterPayload {
   password: string;
   // Champ-piège anti-bot (#86) : caché aux humains, vide en usage normal.
   website?: string;
+  // Code du lien d'invitation (#295), ignoré par le serveur s'il est invalide.
+  invitationCode?: string;
 }
 export interface LoginResponse {
   token: string;
@@ -117,7 +119,15 @@ export interface PublicProfile {
   achievements: Achievement[]; // badges débloqués (#217)
 }
 
+export const invitationsApi = {
+  resolve: (code: string) =>
+    apiCall<{ username: string }>('GET', `/invitations/${encodeURIComponent(code)}`),
+};
+
 export const usersApi = {
+  invitation: (token: string) =>
+    apiCall<{ url: string; invitedCount: number }>('GET', '/users/me/invitation', undefined, token),
+
   me: (token: string) => apiCall<MeResponse>('GET', '/users/me', undefined, token),
 
   publicProfile: (id: string, token: string) =>
@@ -172,6 +182,9 @@ export const friendsApi = {
 
   sendRequest: (targetId: string, token: string) =>
     apiCall<{ message: string }>('POST', '/friends/request', { targetId }, token),
+
+  sendInvitationRequest: (inviteCode: string, token: string) =>
+    apiCall<{ message: string }>('POST', '/friends/request', { inviteCode }, token),
 
   accept: (requesterId: string, token: string) =>
     apiCall<{ message: string }>('POST', '/friends/accept', { requesterId }, token),

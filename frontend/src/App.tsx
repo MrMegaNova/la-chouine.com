@@ -15,6 +15,7 @@ import Play from '@/pages/Play';
 import Login from '@/pages/Login';
 import ResetPassword from '@/pages/ResetPassword';
 import VerifyEmail from '@/pages/VerifyEmail';
+import Invitation from '@/pages/Invitation';
 import Friends from '@/pages/Friends';
 import Profile from '@/pages/Profile';
 import PlayerProfile from '@/pages/PlayerProfile';
@@ -55,7 +56,7 @@ export default function App() {
   // via la présence) se réhydrate dans le nouvel onglet et masque la page.
   const location = useLocation();
   usePageMeta(location.pathname);
-  const standalonePage = location.pathname.startsWith('/joueur/');
+  const standalonePage = location.pathname.startsWith('/joueur/') || location.pathname.startsWith('/invitation/');
 
   // Le header est masqué dès qu'une table (locale ou en ligne) occupe l'écran.
   const tableActive = !standalonePage && (!!game || onlineStatus !== 'idle');
@@ -77,6 +78,7 @@ export default function App() {
           <Route path="/a-propos" element={<About />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/verify-email" element={<VerifyEmail />} />
+          <Route path="/invitation/:code" element={<Invitation />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

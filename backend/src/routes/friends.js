@@ -6,6 +6,7 @@ const { requireAuth } = require('../middleware/auth');
 const { notifyUser } = require('../realtime/notifier');
 const { userPresence } = require('../realtime/presenceStore');
 const { isUuid, normalizeUuid } = require('../services/uuid');
+const { findInviter } = require('../services/invitations');
 
 const router = express.Router();
 
@@ -72,17 +73,30 @@ router.get('/requests', requireAuth, async (req, res) => {
 // ─── POST /api/friends/request ────────────────────────────────────────────────
 
 router.post('/request', requireAuth, async (req, res) => {
-  const { targetId: rawTargetId } = req.body || {};
-  if (!rawTargetId || typeof rawTargetId !== 'string') {
-    return res.status(422).json({ error: 'targetId requis.' });
-  }
-  if (!isUuid(rawTargetId)) return res.status(422).json({ error: 'targetId invalide.' });
-  const targetId = normalizeUuid(rawTargetId);
-  if (targetId === req.user.id) {
-    return res.status(422).json({ error: 'Impossible de s\'ajouter soi-même.' });
+  const { targetId: rawTargetId, inviteCode } = req.body || {};
+  const fromInvitation = inviteCode !== undefined;
+  if (!fromInvitation) {
+    if (!rawTargetId || typeof rawTargetId !== 'string') {
+      return res.status(422).json({ error: 'targetId requis.' });
+    }
+    if (!isUuid(rawTargetId)) return res.status(422).json({ error: 'targetId invalide.' });
   }
 
   try {
+    // Depuis un lien d'invitation (#295), la cible vient du code : la page publique
+    // ne connaît que le pseudo. Cette demande n'accorde pas de badge.
+    let targetId;
+    if (fromInvitation) {
+      const inviter = await findInviter(query, inviteCode);
+      if (!inviter) return res.status(404).json({ error: 'Invitation introuvable.' });
+      targetId = inviter.id;
+    } else {
+      targetId = normalizeUuid(rawTargetId);
+    }
+    if (targetId === req.user.id) {
+      return res.status(422).json({ error: 'Impossible de s\'ajouter soi-même.' });
+    }
+
     const target = await query(
       `SELECT id FROM users WHERE id = $1 AND email_verified = TRUE`,
       [targetId]

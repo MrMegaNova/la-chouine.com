@@ -7,6 +7,7 @@ import { PresenceDot } from '@/components/PresenceDot';
 import { ChallengeButtons } from '@/components/game/ChallengeButtons';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { AvatarContent } from '@/components/Avatar';
+import { InviteFriend } from '@/components/InviteFriend';
 
 export default function Friends() {
   const { token } = useAuthStore();
@@ -95,6 +96,8 @@ export default function Friends() {
 
       <h2 className="section-title">Amis &amp; joueurs</h2>
       <p className="section-sub">Recherchez des joueurs par pseudo, envoyez des invitations.</p>
+
+      <InviteFriend />
 
       <div className="grid2">
         <div className="panel">
