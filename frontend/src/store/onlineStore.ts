@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { useAuthStore } from '@/store/authStore';
 import { useNotificationStore } from '@/store/notificationStore';
 import { onlineApi } from '@/api/client';
 import type { Card, GameState, HandResult, Variant, Suit, TrickEntry } from '@/game/types';
@@ -8,6 +9,9 @@ import type { Card, GameState, HandResult, Variant, Suit, TrickEntry } from '@/g
 // snapshots *filtrés* (notre main visible, l'adverse en décompte) qu'il mappe
 // vers la forme `GameState` attendue par GameTable. Les coups sont envoyés au
 // serveur (autoritatif) ; aucun moteur ne tourne ici.
+
+// Code de fermeture du serveur quand le compte est supprimé (#238).
+const WS_CLOSE_ACCOUNT_DELETED = 4003;
 
 export type OnlineStatus = 'idle' | 'searching' | 'found' | 'playing' | 'over' | 'error';
 
@@ -127,6 +131,7 @@ interface OnlineState {
 
   connectPresence: (token: string) => void;
   disconnectPresence: () => void;
+  forgetSession: () => void;
   challengeFriend: (friendId: string, friendName: string, variant: Variant, rated: boolean, token: string) => void;
   cancelChallenge: () => void;
   acceptChallenge: () => void;
@@ -458,9 +463,16 @@ export const useOnlineStore = create<OnlineState>((set, get) => {
       ws.onopen = onOpen;
       ws.onmessage = (e) => handleMessage(typeof e.data === 'string' ? e.data : '');
       // onclose est l'unique point de décision (onerror est toujours suivi de onclose).
-      ws.onclose = () => {
+      ws.onclose = (e) => {
         ws = null;
         set({ presence: null }); // chiffres périmés dès qu'on est déconnecté
+        // Compte supprimé (#238), éventuellement depuis un autre onglet : pas de
+        // reconnexion, la session n'existe plus.
+        if (e.code === WS_CLOSE_ACCOUNT_DELETED) {
+          get().forgetSession();
+          useAuthStore.getState().logout();
+          return;
+        }
         const st = get().status;
         if (st === 'playing' || st === 'found') {
           tryReconnect(); // partie en cours : le délai de grâce nous couvre
@@ -547,6 +559,20 @@ export const useOnlineStore = create<OnlineState>((set, get) => {
       lastToken = null;
       closeSocket();
       set({ presence: null });
+    },
+
+    // Compte supprimé (#238) : contrairement à disconnectPresence, ferme le socket
+    // et remet tout à zéro quel que soit l'état, la partie étant déjà perdue.
+    forgetSession: () => {
+      lastToken = null;
+      closeSocket();
+      clearTrickHold();
+      set({
+        status: 'idle', game: null, pendingResult: null, opponent: null,
+        searchStartedAt: null, error: null, gameRated: null, clock: null, cutDeadline: null,
+        opponentDisconnected: false, opponentDeadline: null, reconnecting: false, forfeit: null,
+        presence: null, incomingChallenge: null, outgoingChallenge: null,
+      });
     },
 
     findOpponent: (variant, token) => {

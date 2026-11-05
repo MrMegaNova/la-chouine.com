@@ -136,6 +136,10 @@ export const usersApi = {
     apiCall<{ message: string; token?: string; error?: string }>(
       'POST', '/users/me/password', { currentPassword, newPassword }, token),
 
+  // Suppression définitive du compte (#238).
+  deleteAccount: (currentPassword: string, token: string) =>
+    apiCall<{ message?: string; error?: string }>('DELETE', '/users/me', { currentPassword }, token),
+
   // Avatar (#87) : data URL (base64) d'une image redimensionnée côté client.
   setAvatar: (avatar: string, token: string) =>
     apiCall<{ avatar: string; error?: string }>('POST', '/users/me/avatar', { avatar }, token),

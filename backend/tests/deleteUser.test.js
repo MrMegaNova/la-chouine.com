@@ -22,7 +22,7 @@ async function cleanup() {
 before(cleanup);
 after(async () => { await cleanup(); await pool.end(); });
 
-test('supprimer un utilisateur ayant des parties pseudonymise ses sièges (#134)', async () => {
+test('supprimer un utilisateur ayant des parties anonymise ses sièges (#134, #238)', async () => {
   const hash = await bcrypt.hash('Motdepasse123!', 12);
   const { rows: u } = await pool.query(
     `INSERT INTO users (username, email, password_hash, email_verified)
@@ -46,13 +46,13 @@ test('supprimer un utilisateur ayant des parties pseudonymise ses sièges (#134)
   // La suppression ne doit PAS violer must_have_identity (le bug de #134).
   await pool.query(`DELETE FROM users WHERE id = $1`, [userId]);
 
-  // Le siège du joueur supprimé est conservé comme invité portant son pseudo.
+  // Le siège du joueur supprimé est conservé comme invité, sans son pseudo.
   const { rows } = await pool.query(
     `SELECT user_id, guest_name FROM game_players WHERE game_id = $1 AND seat = 0`,
     [gameId]
   );
   assert.equal(rows[0].user_id, null, 'le lien utilisateur est dénoué');
-  assert.equal(rows[0].guest_name, 'DelUser', 'le pseudo est conservé en invité (pseudonymisation)');
+  assert.equal(rows[0].guest_name, 'Ancien joueur', 'le pseudo ne reste pas dans la partie');
 
   // L'historique de l'adversaire reste lisible (la partie existe toujours).
   const { rows: still } = await pool.query(`SELECT 1 FROM games WHERE id = $1`, [gameId]);

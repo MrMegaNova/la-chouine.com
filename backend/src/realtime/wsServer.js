@@ -33,6 +33,7 @@ const matchmakingStore = require('./matchmakingStore');
 const presenceStore = require('./presenceStore');
 const bus = require('./bus');
 const notifier = require('./notifier');
+const accountRemoval = require('./accountRemoval');
 const turnClock = require('../game/turnClock');
 const { getClient } = require('../redis/client');
 const { logger } = require('../logger');
@@ -45,7 +46,9 @@ function send(ws, obj) {
 // jour l'Elo. Injectable dans les tests pour éviter la DB.
 function defaultOnMatchComplete(outcome) {
   const { recordMatch } = require('../services/matchRecorder');
-  Promise.resolve()
+  // Promesse renvoyée : la suppression de compte (#238) doit attendre
+  // l'enregistrement, les autres appelants l'ignorent.
+  return Promise.resolve()
     .then(() => recordMatch(outcome))
     .catch(err => logger.error({ err, sessionId: outcome.sessionId }, 'ws: enregistrement du match échoué'));
 }
@@ -86,6 +89,18 @@ const CK = {
   from: (uid) => `chal:from:${uid}`,
   ids: 'chal:ids',
 };
+
+// Compte en cours de suppression (#238) : marqueur partagé entre instances qui
+// bloque toute nouvelle entrée temps-réel (connexion, file, défi). Le TTL couvre
+// la suppression et la fermeture des sockets ; ensuite, le compte n'existant
+// plus, validateUser refuse les connexions.
+const DELETING = (uid) => `acct:deleting:${uid}`;
+const DELETING_TTL_MS = 60_000;
+const isBeingDeleted = async (uid) => (await getClient().exists(DELETING(uid))) === 1;
+
+// Fermeture WebSocket : le compte n'existe plus, le client ne doit pas se
+// reconnecter (4001 = non authentifié, 4002 = flood).
+const WS_CLOSE_ACCOUNT_DELETED = 4003;
 
 /**
  * @param {http.Server} httpServer
@@ -151,6 +166,9 @@ async function attachWebSocketServer(httpServer, opts = {}) {
   // ── Bus pub/sub : livraison cross-instance ──
   const offBus = bus.onMessage((m) => {
     if (m.kind === 'user') deliverLocal(m.userId, m.obj);
+    else if (m.kind === 'closeUser') {
+      for (const ws of sockets.get(m.userId) || []) ws.close(WS_CLOSE_ACCOUNT_DELETED, 'account-deleted');
+    }
     else if (m.kind === 'presence') {
       const msg = { t: 'presence', ...m.counts };
       for (const set of sockets.values()) for (const ws of set) send(ws, msg);
@@ -234,11 +252,58 @@ async function attachWebSocketServer(httpServer, opts = {}) {
   async function finishSession(session) {
     for (const p of session.players) await presenceStore.clearGrace(p.userId);
     const outcome = { sessionId: session.id, ...session.getMatchOutcome() };
-    try { onMatchComplete(outcome); }
+    let recording = null;
+    try { recording = onMatchComplete(outcome); }
     catch (err) { logger.error({ err, sessionId: session.id }, 'ws: onMatchComplete a échoué'); }
     await sessionStore.endSession(session.id);
     schedulePresence();
+    return { recording };
   }
+
+  // ── Suppression de compte (#238) ──
+  // Forfait de la partie en cours, sous verrou comme tout forfait. Attend
+  // l'enregistrement du match, hors verrou.
+  async function forfeitForDeletion(userId) {
+    const sid = await sessionStore.sessionIdForUser(userId);
+    if (!sid) return;
+    let recording = null;
+    await sessionStore.withLock(sid, async () => {
+      const s = await sessionStore.getSession(sid);
+      if (!s || s.finished) return;
+      if (!s.forfeit(s.seatOf(userId), 'abandon').ok) return;
+      await sessionStore.save(s);
+      broadcastSession(s);
+      ({ recording } = await finishSession(s));
+    });
+    await recording;
+  }
+
+  // Sort le joueur du temps réel puis exécute `deleteAccount`. L'ordre compte :
+  //   1. le marqueur empêche de rentrer en file ou d'ouvrir un défi entre-temps ;
+  //   2. le match est enregistré AVANT la suppression : il faut les deux comptes
+  //      pour calculer l'Elo de l'adversaire et inscrire la défaite, que le
+  //      trigger anonymise ensuite ;
+  //   3. les sockets ne sont fermés qu'une fois le compte supprimé : si la
+  //      suppression échoue, le joueur n'est pas déconnecté.
+  // En cas d'échec, le forfait éventuel reste acquis : l'utilisateur peut réessayer.
+  async function removeAccount(userId, deleteAccount) {
+    const r = getClient();
+    await r.set(DELETING(userId), '1', 'PX', DELETING_TTL_MS);
+    try {
+      await matchmakingStore.leave(userId);
+      await dropChallengesOf(userId);
+      await forfeitForDeletion(userId);
+      schedulePresence();
+      await deleteAccount();
+    } catch (err) {
+      await r.del(DELETING(userId)).catch(() => {});
+      throw err;
+    }
+    // Compte déjà supprimé : une panne Redis ici ne doit pas faire échouer la requête.
+    await bus.publish({ kind: 'closeUser', userId })
+      .catch(err => logger.error({ err, userId }, 'ws: fermeture des sockets du compte supprimé échouée'));
+  }
+  accountRemoval.setHandler(removeAccount);
 
   // ── Démarrage d'une partie (appariement ou défi) ──
   async function startMatch(a, b, { variant, rated = true } = {}) {
@@ -366,6 +431,7 @@ async function attachWebSocketServer(httpServer, opts = {}) {
       return send(ws, { t: 'queue', status: 'left' });
     }
     if (msg.action === 'join') {
+      if (await isBeingDeleted(user.id)) return send(ws, { t: 'error', error: 'Compte en cours de suppression.' });
       if (await sessionStore.sessionIdForUser(user.id)) {
         return send(ws, { t: 'error', error: 'Une partie est déjà en cours.' });
       }
@@ -402,6 +468,9 @@ async function attachWebSocketServer(httpServer, opts = {}) {
   }
 
   async function handleChallenge(ws, user, msg) {
+    if ((msg.action === 'invite' || msg.action === 'accept') && await isBeingDeleted(user.id)) {
+      return send(ws, { t: 'error', error: 'Compte en cours de suppression.' });
+    }
     if (msg.action === 'invite') {
       const to = typeof msg.to === 'string' ? msg.to : null;
       if (!to || to === user.id) return send(ws, { t: 'error', error: 'Destinataire invalide.' });
@@ -500,7 +569,7 @@ async function attachWebSocketServer(httpServer, opts = {}) {
       else if (!config.isProd) user = verifyToken(url.searchParams.get('token'));
     } catch { user = null; }
     if (user) {
-      try { if (!(await validateUser(user))) user = null; } catch { user = null; }
+      try { if (!(await validateUser(user)) || await isBeingDeleted(user.id)) user = null; } catch { user = null; }
     }
     if (!user) {
       send(ws, { t: 'error', error: 'Authentification requise.' });
@@ -606,6 +675,7 @@ async function attachWebSocketServer(httpServer, opts = {}) {
     clearInterval(tickTimer);
     clearInterval(sweepTimer);
     if (heartbeat) clearInterval(heartbeat);
+    accountRemoval.setHandler(null);
     if (presenceTimer) { clearTimeout(presenceTimer); presenceTimer = null; }
     offBus();
     for (const ws of wss.clients) ws.terminate();

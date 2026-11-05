@@ -20,4 +20,16 @@ const apiLimiter = rateLimit({
   skip: () => process.env.NODE_ENV === 'test',
 });
 
-module.exports = { authLimiter, apiLimiter };
+// Suppression de compte (#238) : action irréversible protégée par le mot de
+// passe. Seuls les échecs comptent, pour freiner les essais avec un JWT volé.
+const deleteAccountLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  skipSuccessfulRequests: true,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Trop de tentatives. Réessayez dans 15 minutes.' },
+  skip: () => process.env.NODE_ENV === 'test',
+});
+
+module.exports = { authLimiter, apiLimiter, deleteAccountLimiter };
