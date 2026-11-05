@@ -4,7 +4,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const { query } = require('../db');
 const { requireAuth, signToken } = require('../middleware/auth');
-const { deleteAccountLimiter } = require('../middleware/rateLimiter');
+const { deleteAccountLimiter, changePasswordLimiter } = require('../middleware/rateLimiter');
 const accountRemoval = require('../realtime/accountRemoval');
 const { validatePassword } = require('../services/passwordPolicy');
 const { listAchievements } = require('../services/achievements');
@@ -217,7 +217,7 @@ router.get('/:id', requireAuth, async (req, res) => {
 // Changement de mot de passe par un utilisateur connecté (#108) : exige le mot
 // de passe actuel, applique la politique, et refuse un nouveau identique.
 
-router.post('/me/password', requireAuth, async (req, res) => {
+router.post('/me/password', changePasswordLimiter, requireAuth, async (req, res) => {
   const { currentPassword, newPassword } = req.body || {};
   if (!currentPassword || !newPassword) {
     return res.status(422).json({ error: 'Mot de passe actuel et nouveau requis.' });
