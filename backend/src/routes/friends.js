@@ -5,7 +5,7 @@ const { query } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { notifyUser } = require('../realtime/notifier');
 const { userPresence } = require('../realtime/presenceStore');
-const { isUuid } = require('../services/uuid');
+const { isUuid, normalizeUuid } = require('../services/uuid');
 
 const router = express.Router();
 
@@ -72,11 +72,12 @@ router.get('/requests', requireAuth, async (req, res) => {
 // ─── POST /api/friends/request ────────────────────────────────────────────────
 
 router.post('/request', requireAuth, async (req, res) => {
-  const { targetId } = req.body || {};
-  if (!targetId || typeof targetId !== 'string') {
+  const { targetId: rawTargetId } = req.body || {};
+  if (!rawTargetId || typeof rawTargetId !== 'string') {
     return res.status(422).json({ error: 'targetId requis.' });
   }
-  if (!isUuid(targetId)) return res.status(422).json({ error: 'targetId invalide.' });
+  if (!isUuid(rawTargetId)) return res.status(422).json({ error: 'targetId invalide.' });
+  const targetId = normalizeUuid(rawTargetId);
   if (targetId === req.user.id) {
     return res.status(422).json({ error: 'Impossible de s\'ajouter soi-même.' });
   }
@@ -131,9 +132,10 @@ router.post('/request', requireAuth, async (req, res) => {
 // ─── POST /api/friends/accept ─────────────────────────────────────────────────
 
 router.post('/accept', requireAuth, async (req, res) => {
-  const { requesterId } = req.body || {};
-  if (!requesterId) return res.status(422).json({ error: 'requesterId requis.' });
-  if (!isUuid(requesterId)) return res.status(422).json({ error: 'requesterId invalide.' });
+  const { requesterId: rawRequesterId } = req.body || {};
+  if (!rawRequesterId) return res.status(422).json({ error: 'requesterId requis.' });
+  if (!isUuid(rawRequesterId)) return res.status(422).json({ error: 'requesterId invalide.' });
+  const requesterId = normalizeUuid(rawRequesterId);
 
   try {
     const { rows } = await query(
@@ -153,9 +155,10 @@ router.post('/accept', requireAuth, async (req, res) => {
 // ─── POST /api/friends/decline ────────────────────────────────────────────────
 
 router.post('/decline', requireAuth, async (req, res) => {
-  const { requesterId } = req.body || {};
-  if (!requesterId) return res.status(422).json({ error: 'requesterId requis.' });
-  if (!isUuid(requesterId)) return res.status(422).json({ error: 'requesterId invalide.' });
+  const { requesterId: rawRequesterId } = req.body || {};
+  if (!rawRequesterId) return res.status(422).json({ error: 'requesterId requis.' });
+  if (!isUuid(rawRequesterId)) return res.status(422).json({ error: 'requesterId invalide.' });
+  const requesterId = normalizeUuid(rawRequesterId);
 
   try {
     await query(
@@ -180,7 +183,7 @@ router.delete('/:id', requireAuth, async (req, res) => {
        WHERE ((requester_id = $1 AND addressee_id = $2)
            OR (requester_id = $2 AND addressee_id = $1))
          AND status = 'accepted'`,
-      [req.user.id, req.params.id]
+      [req.user.id, normalizeUuid(req.params.id)]
     );
     res.json({ message: 'Ami retiré.' });
   } catch (err) {
