@@ -87,7 +87,12 @@ async function tryLock(key, ttlMs) {
 const CK = {
   chal: (id) => `chal:${id}`,
   from: (uid) => `chal:from:${uid}`,
-  ids: 'chal:ids',
+  // Défis reçus par joueur, et tous les défis par échéance (#235) : la
+  // déconnexion et l'expiration ne parcourent que les défis concernés.
+  to: (uid) => `chal:to:${uid}`,
+  byExpiry: 'chal:exp',
+  // Ancien index (avant #235), vidé par le sweep après un déploiement.
+  legacyIds: 'chal:ids',
 };
 
 // Compte en cours de suppression (#238) : marqueur partagé entre instances qui
@@ -358,6 +363,45 @@ async function attachWebSocketServer(httpServer, opts = {}) {
   const sweepTimer = setInterval(() => { sweepOnce().catch(err => logger.error({ err }, 'sweep échoué')); }, sweepMs);
   if (sweepTimer.unref) sweepTimer.unref();
 
+  // Coupe (#201) : un siège qui ne pioche pas avant l'échéance perd par
+  // forfait ; si aucun des deux n'a pioché, le match est annulé (#228). La
+  // phase `cut` précède toute donne ; l'horloge de coup n'y tourne pas encore.
+  async function sweepCut(s) {
+    if (s.cutDeadline === null || Date.now() < s.cutDeadline) return;
+    if (!s.cutTimeout().ok) return;
+    await sessionStore.save(s);
+    broadcastSession(s);
+    await finishSession(s);
+  }
+
+  // Révélation de la coupe (#201) : une fois l'échéance d'affichage atteinte,
+  // on distribue la 1ʳᵉ main (`cutReveal` → `draw`) ; l'horloge démarre alors.
+  async function sweepReveal(s) {
+    if (s.revealDeadline === null || Date.now() < s.revealDeadline) return;
+    if (!s.finishReveal().ok) return;
+    syncClock(s, await disconnectedSeat(s));
+    await sessionStore.save(s);
+    broadcastSession(s);
+  }
+
+  // Horloge de coup : pause/reprise selon la présence, puis expiration.
+  async function sweepClock(s) {
+    if (!s.clock || s.state.handOver || s.clock.seat === null) return;
+    const now = Date.now();
+    const dseat = await disconnectedSeat(s);
+    let changed = false;
+    if (dseat >= 0 && !s.clock.paused) { if (turnClock.pause(s.clock, dseat, now)) changed = true; }
+    else if (dseat < 0 && s.clock.paused) { turnClock.resume(s.clock, now); changed = true; }
+    if (turnClock.isExpired(s.clock, now)) {
+      const res = s.clockTimeout(now);
+      if (res.ok) {
+        if (s.finished) { await sessionStore.save(s); broadcastSession(s); await finishSession(s); return; }
+        syncClock(s, dseat); await sessionStore.save(s); broadcastSession(s); return;
+      }
+    }
+    if (changed) await sessionStore.save(s);
+  }
+
   async function sweepOnce() {
     if (stopped) return;
     const release = await tryLock('sweep:lock', sweepMs).catch(() => null);
@@ -386,63 +430,30 @@ async function attachWebSocketServer(httpServer, opts = {}) {
           await finishSession(s);
         });
       }
-      // Coupe (#201) : un siège qui ne pioche pas avant l'échéance perd par
-      // forfait ; si aucun des deux n'a pioché, le match est annulé (#228). La
-      // phase `cut` précède toute donne ; l'horloge de coup n'y tourne pas
-      // encore, d'où ce balayage dédié.
+      // Sessions actives (#235) : un seul passage, un seul verrou par session ;
+      // le traitement dépend de la phase.
       for (const sid of await sessionStore.listActiveSessionIds()) {
         await sessionStore.withLock(sid, async () => {
           const s = await sessionStore.getSession(sid);
-          if (!s || s.finished || s.state.phase !== 'cut' || s.cutDeadline === null) return;
-          if (Date.now() < s.cutDeadline) return;
-          const res = s.cutTimeout();
-          if (!res.ok) return;
-          await sessionStore.save(s);
-          broadcastSession(s);
-          await finishSession(s);
+          if (!s || s.finished) return;
+          if (s.state.phase === 'cut') return sweepCut(s);
+          if (s.state.phase === 'cutReveal') return sweepReveal(s);
+          return sweepClock(s);
         });
       }
-      // Révélation de la coupe (#201) : une fois l'échéance d'affichage atteinte,
-      // on distribue la 1ʳᵉ main (transition `cutReveal` → `draw`) et on diffuse
-      // le nouvel état. L'horloge de coup démarre alors via syncClock.
-      for (const sid of await sessionStore.listActiveSessionIds()) {
-        await sessionStore.withLock(sid, async () => {
-          const s = await sessionStore.getSession(sid);
-          if (!s || s.finished || s.state.phase !== 'cutReveal' || s.revealDeadline === null) return;
-          if (Date.now() < s.revealDeadline) return;
-          if (!s.finishReveal().ok) return;
-          const dseat = await disconnectedSeat(s);
-          syncClock(s, dseat); // l'horloge de coup démarre à la 1ʳᵉ donne
-          await sessionStore.save(s);
-          broadcastSession(s);
-        });
-      }
-      // Horloges : pause/reprise selon présence, puis expiration.
-      for (const sid of await sessionStore.listActiveSessionIds()) {
-        await sessionStore.withLock(sid, async () => {
-          const s = await sessionStore.getSession(sid);
-          if (!s || !s.clock || s.finished || s.state.handOver || s.clock.seat === null) return;
-          const now = Date.now();
-          const dseat = await disconnectedSeat(s);
-          let changed = false;
-          if (dseat >= 0 && !s.clock.paused) { if (turnClock.pause(s.clock, dseat, now)) changed = true; }
-          else if (dseat < 0 && s.clock.paused) { turnClock.resume(s.clock, now); changed = true; }
-          if (turnClock.isExpired(s.clock, now)) {
-            const res = s.clockTimeout(now);
-            if (res.ok) {
-              if (s.finished) { await sessionStore.save(s); broadcastSession(s); await finishSession(s); return; }
-              syncClock(s, dseat); await sessionStore.save(s); broadcastSession(s); return;
-            }
-          }
-          if (changed) await sessionStore.save(s);
-        });
-      }
-      // Défis expirés (#45) : préviens le défieur et le destinataire, puis purge.
-      for (const id of await getClient().smembers(CK.ids)) {
+      // Défis expirés (#45) : seuls ceux dont l'échéance est passée (#235).
+      // Préviens le défieur et le destinataire, puis purge.
+      const expired = await getClient().zrangebyscore(CK.byExpiry, '-inf', Date.now());
+      const legacy = await getClient().smembers(CK.legacyIds);
+      for (const id of new Set([...expired, ...legacy])) {
         const c = await getClient().hgetall(CK.chal(id));
-        if (!c || !c.from) { await getClient().srem(CK.ids, id); continue; }
-        if (Number(c.expiresAt) > Date.now()) continue;
-        await dropChallenge(id, c.from);
+        if (!c || !c.from) { await dropChallenge(id, null, null); continue; }
+        if (Number(c.expiresAt) > Date.now()) {
+          // Défi d'avant #235, encore valide : passe dans le nouvel index.
+          await getClient().multi().zadd(CK.byExpiry, Number(c.expiresAt), id).sadd(CK.to(c.to), id).srem(CK.legacyIds, id).exec();
+          continue;
+        }
+        await dropChallenge(id, c.from, c.to);
         notify(c.from, { t: 'challenge', status: 'expired', challengeId: id });
         notifier.notifyUser(c.to, { kind: 'challengeCancelled', challengeId: id });
       }
@@ -478,18 +489,22 @@ async function attachWebSocketServer(httpServer, opts = {}) {
     const id = await getClient().get(CK.from(userId));
     return id ? { id, ...(await getClient().hgetall(CK.chal(id))) } : null;
   }
-  async function dropChallenge(id, from) {
-    const r = getClient();
-    await r.del(CK.chal(id));
-    if (from) await r.del(CK.from(from));
-    await r.srem(CK.ids, id);
+  async function dropChallenge(id, from, to) {
+    const pipe = getClient().multi().del(CK.chal(id)).zrem(CK.byExpiry, id).srem(CK.legacyIds, id);
+    if (from) pipe.del(CK.from(from));
+    if (to) pipe.srem(CK.to(to), id);
+    await pipe.exec();
   }
+  // Défis émis et reçus par un joueur qui part : retrouvés par les index.
   async function dropChallengesOf(userId) {
-    for (const id of await getClient().smembers(CK.ids)) {
-      const c = await getClient().hgetall(CK.chal(id));
-      if (!c || !c.from) { await getClient().srem(CK.ids, id); continue; }
-      if (c.from === userId) { await dropChallenge(id, c.from); notifier.notifyUser(c.to, { kind: 'challengeCancelled', challengeId: id }); }
-      else if (c.to === userId) { await dropChallenge(id, c.from); notify(c.from, { t: 'challenge', status: 'cancelled', challengeId: id }); }
+    const r = getClient();
+    const outgoing = await r.get(CK.from(userId));
+    const ids = [...new Set([...(outgoing ? [outgoing] : []), ...(await r.smembers(CK.to(userId)))])];
+    for (const id of ids) {
+      const c = await r.hgetall(CK.chal(id));
+      if (!c || !c.from) { await r.srem(CK.to(userId), id); continue; }
+      if (c.from === userId) { await dropChallenge(id, c.from, c.to); notifier.notifyUser(c.to, { kind: 'challengeCancelled', challengeId: id }); }
+      else if (c.to === userId) { await dropChallenge(id, c.from, c.to); notify(c.from, { t: 'challenge', status: 'cancelled', challengeId: id }); }
     }
   }
 
@@ -517,9 +532,12 @@ async function attachWebSocketServer(httpServer, opts = {}) {
         const id = randomUUID();
         const expiresAt = Date.now() + challengeTtlMs;
         const r = getClient();
-        await r.hset(CK.chal(id), { id, from: user.id, fromName: user.username || 'Joueur', to, variant, rated: rated ? '1' : '', expiresAt });
-        await r.set(CK.from(user.id), id);
-        await r.sadd(CK.ids, id);
+        await r.multi()
+          .hset(CK.chal(id), { id, from: user.id, fromName: user.username || 'Joueur', to, variant, rated: rated ? '1' : '', expiresAt })
+          .set(CK.from(user.id), id)
+          .sadd(CK.to(to), id)
+          .zadd(CK.byExpiry, expiresAt, id)
+          .exec();
         send(ws, { t: 'challenge', status: 'sent', challengeId: id, expiresAt, variant, rated });
         notifier.notifyUser(to, { kind: 'challenge', challengeId: id, from: user.username || 'Joueur', variant, rated, expiresAt });
       } catch { send(ws, { t: 'error', error: 'Défi indisponible.' }); }
@@ -534,25 +552,25 @@ async function attachWebSocketServer(httpServer, opts = {}) {
     if (msg.action === 'accept') {
       if (c.to !== user.id) return send(ws, { t: 'error', error: 'Ce défi ne vous est pas destiné.' });
       if (await sessionStore.sessionIdForUser(c.from) || await sessionStore.sessionIdForUser(c.to)) {
-        await dropChallenge(id, c.from);
+        await dropChallenge(id, c.from, c.to);
         return send(ws, { t: 'error', error: 'Un des joueurs est déjà en partie.' });
       }
       if (!(await presenceStore.isOnline(c.from))) {
-        await dropChallenge(id, c.from);
+        await dropChallenge(id, c.from, c.to);
         return send(ws, { t: 'error', error: 'Votre ami s’est déconnecté.' });
       }
-      await dropChallenge(id, c.from);
+      await dropChallenge(id, c.from, c.to);
       await startMatch({ userId: c.from, name: c.fromName }, { userId: c.to, name: user.username || 'Joueur' }, { variant: c.variant, rated: c.rated });
       return;
     }
     if (msg.action === 'decline') {
       if (c.to !== user.id) return send(ws, { t: 'error', error: 'Ce défi ne vous est pas destiné.' });
-      await dropChallenge(id, c.from);
+      await dropChallenge(id, c.from, c.to);
       return notify(c.from, { t: 'challenge', status: 'declined', challengeId: id });
     }
     if (msg.action === 'cancel') {
       if (c.from !== user.id) return send(ws, { t: 'error', error: 'Ce défi n’est pas le vôtre.' });
-      await dropChallenge(id, c.from);
+      await dropChallenge(id, c.from, c.to);
       return notifier.notifyUser(c.to, { kind: 'challengeCancelled', challengeId: id });
     }
     send(ws, { t: 'error', error: 'Action de défi inconnue.' });

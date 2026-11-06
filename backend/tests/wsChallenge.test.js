@@ -18,6 +18,7 @@ const http = require('http');
 const { WebSocket } = require('ws');
 
 const { useMockRedis, flush, closeRedis } = require('./helpers/redis');
+const { getClient } = require('../src/redis/client');
 const bus = require('../src/realtime/bus');
 const sessionStore = require('../src/realtime/sessionStore');
 const { attachWebSocketServer } = require('../src/realtime/wsServer');
@@ -221,4 +222,40 @@ test('défi : refus notifié, annulation notifiée, expiration automatique', asy
   c2.send({ t: 'challenge', action: 'accept', challengeId: notif.challengeId });
   assert.match((await err).error, /introuvable|expiré/i);
   assert.equal(await sessionStore.sessionForUser('u1'), null);
+});
+
+test('défi (#235) : la déconnexion du destinataire annule le défi reçu', async (t) => {
+  const { connect } = await setup(t);
+  const c1 = await connect('u1', 'Alice');
+  const c2 = await connect('u2', 'Bob');
+
+  const notifP = nextNotif(c2, 'challenge');
+  c1.send({ t: 'challenge', action: 'invite', to: 'u2', variant: 'classic' });
+  const notif = await notifP;
+
+  const cancelled = next(c1, m => m.t === 'challenge' && m.status === 'cancelled', 'annulation');
+  c2.ws.close();
+  assert.equal((await cancelled).challengeId, notif.challengeId);
+  const r = getClient();
+  assert.equal(await r.exists(`chal:${notif.challengeId}`), 0);
+  assert.equal(await r.zcard('chal:exp'), 0);
+  assert.equal(await r.scard('chal:to:u2'), 0);
+  assert.equal(await r.exists('chal:from:u1'), 0);
+});
+
+test('défi (#235) : un défi de l’ancien index expire toujours, un défi valide y est repris', async (t) => {
+  const { connect } = await setup(t);
+  const c1 = await connect('u1', 'Alice');
+  const r = getClient();
+  // Défis créés avant le déploiement : seulement dans l'ancien ensemble `chal:ids`.
+  await r.hset('chal:vieux', { id: 'vieux', from: 'u1', fromName: 'Alice', to: 'u2', variant: 'classic', rated: '', expiresAt: Date.now() - 1000 });
+  await r.set('chal:from:u1', 'vieux');
+  await r.hset('chal:valide', { id: 'valide', from: 'u9', fromName: 'Z', to: 'u2', variant: 'classic', rated: '', expiresAt: Date.now() + 60_000 });
+  await r.sadd('chal:ids', 'vieux', 'valide');
+
+  await next(c1, m => m.t === 'challenge' && m.status === 'expired' && m.challengeId === 'vieux', 'expiration de l’ancien défi');
+  await waitFor(async () => (await r.scard('chal:ids')) === 0, 'ancien index vidé');
+  assert.equal(await r.exists('chal:vieux'), 0);
+  assert.equal(await r.zscore('chal:exp', 'valide') !== null, true, 'défi valide repris');
+  assert.deepEqual(await r.smembers('chal:to:u2'), ['valide']);
 });

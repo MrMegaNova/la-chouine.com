@@ -70,6 +70,12 @@ router.get('/me/invitation', requireAuth, async (req, res) => {
 
 // ─── GET /api/users/search?q=pseudo ──────────────────────────────────────────
 
+// Caractères spéciaux de LIKE (#236) : « % » ou « _ » saisis sont cherchés
+// tels quels au lieu de servir de jokers.
+function escapeLike(text) {
+  return text.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
 router.get('/search', requireAuth, async (req, res) => {
   const q = (req.query.q || '').trim();
   if (q.length < 2) {
@@ -84,18 +90,23 @@ router.get('/search', requireAuth, async (req, res) => {
               stats.online_plays AS plays,
               f.status AS friendship_status,
               f.requester_id AS friendship_requester
-       FROM users u
+       -- Les 20 joueurs retenus d'abord : les statistiques ne sont calculées
+       -- que pour eux (#236).
+       FROM (
+         SELECT id, username, avatar FROM users
+         WHERE id <> $1
+           AND email_verified = TRUE
+           AND username ILIKE $2 ESCAPE '\\'
+         ORDER BY username
+         LIMIT 20
+       ) u
        ${STATS_JOIN}
        LEFT JOIN friendships f ON (
          (f.requester_id = $1 AND f.addressee_id = u.id) OR
          (f.addressee_id = $1 AND f.requester_id = u.id)
        )
-       WHERE u.id <> $1
-         AND u.email_verified = TRUE
-         AND u.username ILIKE $2
-       ORDER BY u.username
-       LIMIT 20`,
-      [req.user.id, `%${q}%`]
+       ORDER BY u.username`,
+      [req.user.id, `%${escapeLike(q)}%`]
     );
     res.json(rows.map(u => ({
       id: u.id,
