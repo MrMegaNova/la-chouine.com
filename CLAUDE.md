@@ -6,22 +6,24 @@ Jeu de cartes français (la Chouine) en ligne, jouable contre l'IA ou en PvP cla
 
 ## Stack
 
-- **Frontend** : Vite 5, React 18, TypeScript, Zustand (+ persist), React Router v6, SCSS, Vitest. Tests de composants en **React Testing Library + jsdom** (#129) : env Vitest par défaut = `node` (logique pure), un fichier de composant opte pour le DOM via `// @vitest-environment jsdom` en tête ; setup global `src/test/setup.ts` (matchers jest-dom + cleanup).
+- **Frontend** : Vite 8, React 19, TypeScript 6, Zustand 5 (+ persist pour la session), React Router 7, SCSS, Vitest 4. Tests de composants en **React Testing Library + jsdom** (#129) : env Vitest par défaut = `node` (logique pure), un fichier de composant opte pour le DOM via `// @vitest-environment jsdom` en tête ; setup global `src/test/setup.ts` (matchers jest-dom + cleanup).
   - `frontend/src/game/engine.ts` — moteur de jeu (TS).
-  - `frontend/src/store/` — stores Zustand (`gameStore`, `onlineStore`, `authStore`, `soundStore`).
-- **Backend** : Node 24, Express 4, PostgreSQL (`pg`), Redis (`ioredis`), WebSocket (`ws`), JWT, bcryptjs, nodemailer, pino.
+  - `frontend/src/store/` — stores Zustand (`gameStore`, `onlineStore`, `authStore`, `notificationStore`).
+  - `frontend/src/pages/Admin.tsx` — tableau de bord administrateur (#311) ; `frontend/src/analytics/` — mesure d'audience.
+- **Backend** : Node 24, Express 5, PostgreSQL (`pg`), Redis (`ioredis` 5), WebSocket (`ws`), JWT, bcryptjs 3, nodemailer 10, pino, `maxmind` (géolocalisation DB-IP, #311).
   - `backend/src/game/engine.js` — moteur de jeu (JS), **doit rester synchrone avec le moteur TS**.
   - `backend/src/game/session.js` — `GameSession` autoritatif ; `toJSON`/`fromJSON` pour Redis (#31).
   - `backend/src/realtime/wsServer.js` — serveur temps réel **multi-instance** (#31), modèle *stateless + sweep*.
   - `backend/src/realtime/` — `matchmakingStore` (file), `sessionStore` (sessions + verrou), `presenceStore` (présence + grâce), `bus` (pub/sub) : tout l'état temps-réel vit dans **Redis**. `matchmaking.js` garde la logique d'appariement **pure** (`pairTickets`).
   - `backend/src/redis/client.js` — client Redis injectable (`setClient` pour les tests).
-  - `backend/migrations/NNN_*.sql` — migrations, appliquées par `node src/db/migrate.js`.
+  - `backend/migrations/NNN_*.sql` — migrations, appliquées par `node src/db/migrate.js` (lancé au démarrage du conteneur par `docker-entrypoint.sh`).
+  - `backend/src/shutdown.js` — arrêt propre sur SIGTERM/SIGINT (#237).
 
 ## ⚠️ Pièges à connaître
 
 1. **Double moteur.** Toute règle de jeu modifiée dans `engine.ts` doit l'être à l'identique dans `engine.js` (et inversement). Une divergence casse silencieusement le PvP. Attention : le moteur gère **deux variantes** (`classic` et `mondoubleau`), et `mondoubleau` a des branches propres (phase sans atout) — la parité doit couvrir ces branches, pas seulement la variante classique. Des **tests de parité** (#128) verrouillent ça : des fixtures JSON communes (`shared/engine-parity/fixtures.json` + `runner.js`) sont exécutées **par les deux suites** (vitest côté front, `node:test` côté back via `engineParity.test.js`) ; chaque moteur doit produire le même `expect`. Ajouter une règle = ajouter une fixture. → agent `engine-parity`.
 2. **Tests backend en parallèle sur DB partagée.** `node --test tests/*.test.js` lance chaque fichier dans un process séparé sur la **même** base. Chaque fichier doit utiliser un **domaine email distinct** (`@<fichier>.invalid`, ex. `@gamesroute.invalid`) car le cleanup (`DELETE ... ILIKE '%@domaine'`) d'un fichier supprimerait sinon les lignes d'un autre → CI rouge intermittent. Supprimer les `games` **avant** les `users` (FK + contrainte `must_have_identity`). En prod, la suppression d'un utilisateur est gérée par le trigger `trg_pseudonymize_user_games` (migration `006`) qui pseudonymise ses sièges au lieu de violer la contrainte ; le cleanup des tests, lui, supprime explicitement dans le bon ordre. → agent `backend-test-runner`.
-3. **Tests Redis : un Redis partagé en CI (#31).** Le code temps-réel parle à un vrai Redis (`REDIS_URL`, obligatoire). Les tests : **mock par défaut** (`ioredis-mock`, via `tests/helpers/redis.js` → `useMockRedis(db)`), **vrai Redis si `REDIS_TEST_REAL=1`** (la CI le fait). Comme les fichiers tournent en parallèle sur le **même** Redis, chaque fichier prend un **index de DB distinct** (1-15) — l'analogue Redis des domaines email — et les canaux pub/sub sont préfixés par `RT_NS` (les canaux sont globaux, pas cloisonnés par DB). Toujours appeler `closeRedis()` dans un `after()` : une connexion ioredis ouverte empêche `node --test` de se terminer.
+3. **Tests Redis : un Redis partagé en CI (#31).** Le code temps-réel parle à un vrai Redis (`REDIS_URL`, obligatoire). Les tests : **mock par défaut** (`ioredis-mock`, via `tests/helpers/redis.js` → `useMockRedis(db)`), **vrai Redis si `REDIS_TEST_REAL=1`** (la CI le fait). Comme les fichiers tournent en parallèle sur le **même** Redis, chaque fichier prend un **index de DB distinct** (1-15). **Les 15 index sont tous pris** : un nouveau fichier doit partager un index avec un fichier qui, comme lui, ne fait que lire (voir `invitations.test.js` et `adminDashboard.test.js` sur l'index 15) ; l'index 0 est réservé au test d'arrêt de bout en bout (`shutdown.test.js`) — l'analogue Redis des domaines email — et les canaux pub/sub sont préfixés par `RT_NS` (les canaux sont globaux, pas cloisonnés par DB). Toujours appeler `closeRedis()` dans un `after()` : une connexion ioredis ouverte empêche `node --test` de se terminer.
 
 4. **Routes React et nginx (#271).** `frontend/nginx.conf` liste explicitement les routes de l'application : une URL inconnue répond 404 (référencement). **Toute nouvelle route React doit être ajoutée dans `nginx.conf`**, sinon elle répond 404 au chargement direct. Une page publique s'ajoute aussi à `PUBLIC_PAGES` (`frontend/src/seo/pages.ts`), qui alimente le pré-rendu (`scripts/prerender.mjs`), les balises et le sitemap ; un test vérifie la synchronisation des pages publiques avec nginx. Le pré-rendu tourne sans navigateur : le code exécuté au rendu d'une page publique ne doit pas accéder à `window` ou `document` hors d'un `useEffect`, sinon `npm run build` échoue.
 
@@ -46,14 +48,14 @@ ESLint (#127) : un job **Lint** bloquant tourne dans les jobs Backend et Fronten
 
 1. **Issue** en français (contexte, repro/attendu, critères d'acceptation). → agent `issue-author`.
 2. **Branche** dédiée (`fix/...`, `feat/...`) — jamais de commit direct sur `main`.
-3. **Commits** en français, terminés par `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`.
+3. **Commits** en français, terminés par la ligne `Co-Authored-By:` du modèle utilisé.
 4. **PR** : corps en français + `Closes #NN` + footer `🤖 Generated with [Claude Code](https://claude.com/claude-code)`. Pour une épopée à checklist : référencer l'issue sans la fermer.
 5. **Merge** `--delete-branch`, puis `gh run watch` jusqu'au vert.
-6. **Release** : tag prerelease via `gh release create vX.Y.Z --target main --prerelease` (changelog FR). La version dans `package.json` reste `1.0.0` — le versioning vit dans les tags Git (dernier : v0.5.15). → agent `release-shepherd`.
+6. **Release** : tag prerelease via `gh release create vX.Y.Z --target main --prerelease` (changelog FR). La publication déclenche `release.yml`, qui construit et pousse les images GHCR (`vX.Y.Z` et `latest`). Le déploiement reste manuel (`docker compose pull backend frontend && docker compose up -d backend frontend`). La version dans `package.json` reste `1.0.0` — le versioning vit dans les tags Git. → agent `release-shepherd`.
 
 ## CI (GitHub Actions)
 
-Sur push `main` ET pull_request : jobs **Backend** (lint + Postgres + tests, `NODE_ENV=test`), **Frontend** (type-check + lint + vitest + build), **npm-audit**.
+Sur push `main` ET pull_request : jobs **Backend** (lint + Postgres + vrai Redis + tests, `NODE_ENV=test`), **Frontend** (type-check + lint + vitest + build), **npm-audit**.
 
 ## Sous-agents (`.claude/agents/`)
 
@@ -75,11 +77,13 @@ Invariants déjà en place — **à ne pas régresser** :
 - **Données personnelles (#311)** : toute nouvelle collecte doit figurer sur la page `/confidentialite` (`frontend/src/pages/Privacy.tsx`). Les IP des visites sont effacées après 30 jours (`purgeOldIps`, horaire) ; le tableau de bord `/api/admin/*` exige `users.is_admin`, relu en base à chaque requête.
 - **Redaction des secrets dans les logs** (`backend/src/logger.js`, pino) : ne jamais logger token, mot de passe ou en-tête d'auth.
 
-Dette connue (tracée, **ne pas réintroduire / penser à traiter**) : pas d'en-têtes de sécurité/CSP sur le HTML nginx (#118), JWT en `localStorage` exposé au XSS (#119), JWT passé dans l'URL WebSocket → fuite dans les logs proxys (#120), sonde de présence via les défis (#123), captcha d'inscription/login optionnel (#104).
+Acquis à ne pas casser : en-têtes de sécurité et CSP sur le HTML nginx (`frontend/security-headers.conf`, #118, à réinclure dans chaque `location` qui pose un `add_header`), ticket éphémère pour ouvrir le WebSocket au lieu du JWT dans l'URL (#120 ; `?token=` n'est accepté que hors production), amitié vérifiée avant de révéler un statut via les défis (#123).
+
+Risques connus et acceptés : le JWT reste en `localStorage` (#119, atténué par la CSP et la révocation) ; pas de captcha (#104, non retenu). Différés : TLS PostgreSQL sans vérification du certificat (#230, base sur le même hôte), garde-fous anti-abus en mémoire du processus (#229, sans effet tant qu'il n'y a qu'une instance).
 
 ## Dépendances
 
-Dependabot est actif (npm ×2, docker ×3, github-actions). Les **bumps majeurs sont volontairement différés** et regroupés dans l'épopée #33 : React 19 (#40), Express 5 + helmet 8 + rate-limit 8 + bcryptjs 3 (#41), Vite 8 + vitest 4 (#39), TypeScript 6 (#42), Node 26 (#53). **Ne pas merger ces PR Dependabot majeures** isolément — elles attendent le traitement de l'épopée. Les minors/patches passent normalement.
+Dependabot est actif (npm ×2, docker ×3, github-actions). Les minors/patches passent normalement (PR groupées « minors-patches »). Les **majeures se traitent une par une**, avec lecture des notes de version : ne pas merger une majeure Dependabot sans vérification. `eslint-plugin-react-hooks` reste **volontairement en v5** (voir plus haut) ; `@eslint/js` doit suivre la majeure d'ESLint.
 
 ## Prod
 

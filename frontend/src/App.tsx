@@ -56,8 +56,8 @@ export default function App() {
 
   // Pages « pleine page » qui ne doivent JAMAIS être recouvertes par l'overlay de
   // partie. Le profil public ouvert dans un nouvel onglet pendant une partie en
-  // est le cas type (#211) : sans ça, la table (locale persistée, ou PvP repris
-  // via la présence) se réhydrate dans le nouvel onglet et masque la page.
+  // est le cas type (#211) : sans ça, la table (PvP repris via la présence)
+  // s'afficherait dans le nouvel onglet et masquerait la page.
   const location = useLocation();
   usePageMeta(location.pathname);
   useVisitTracking(); // mesure d'audience (#311)
