@@ -321,3 +321,35 @@
   :root { --card-w: 52px; }
   .wrap { padding: 0 12px; }
 }
+
+// ─── Tableau de bord administrateur (#311) ───────────────────────────────────
+.admin-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+  gap: 16px;
+  margin-top: 16px;
+  &--tiles { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin-top: 24px; }
+}
+.admin-tile {
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 14px 16px;
+  background: rgba(247, 240, 223, 0.03);
+  &__label { font-size: 14px; color: var(--cream-2); }
+  &__value { font-family: var(--serif); font-size: 32px; color: var(--cream); line-height: 1.2; }
+  &__hint { font-size: 14px; color: var(--cream-2); opacity: 0.8; }
+}
+.admin-chart-title {
+  font-family: var(--serif);
+  font-size: 19px;
+  margin: 0 0 8px;
+  color: var(--cream);
+}
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--cream-2); font-weight: 600; }
+  td:not(:first-child), th:not(:first-child) { font-variant-numeric: tabular-nums; }
+}

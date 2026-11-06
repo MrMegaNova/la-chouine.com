@@ -20,7 +20,7 @@ const router = express.Router();
 router.get('/me', requireAuth, async (req, res) => {
   try {
     const { rows } = await query(
-      `SELECT u.id, u.username, u.email, u.created_at, u.avatar,
+      `SELECT u.id, u.username, u.email, u.created_at, u.avatar, u.is_admin,
               u.rating_classic, u.rating_mondoubleau,
               ${STATS_COLUMNS}
        FROM users u
@@ -36,6 +36,7 @@ router.get('/me', requireAuth, async (req, res) => {
       email: u.email,
       joined: u.created_at,
       avatar: u.avatar || null,
+      isAdmin: u.is_admin, // tableau de bord (#311)
       stats: formatStats(u),
       ratings: {
         classic: Number(u.rating_classic),

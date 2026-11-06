@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { useOnlineStore } from '@/store/onlineStore';
 import { usersApi, type HistoryEntry } from '@/api/client';
@@ -36,7 +36,10 @@ export default function Profile() {
           <h2 className="section-title" style={{ margin: 0 }}>{user.username}</h2>
           <p className="section-sub" style={{ margin: 0 }}>Membre depuis {joined}</p>
         </div>
-        <button className="btn btn--ghost btn--sm" style={{ marginLeft: 'auto' }} onClick={handleLogout}>Se déconnecter</button>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {user.isAdmin && <Link to="/admin" className="btn btn--gold btn--sm">Tableau de bord</Link>}
+          <button className="btn btn--ghost btn--sm" onClick={handleLogout}>Se déconnecter</button>
+        </div>
       </div>
 
       <GameStats stats={user.stats} />

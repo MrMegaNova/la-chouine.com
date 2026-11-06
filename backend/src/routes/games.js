@@ -45,9 +45,18 @@ function seatError(player, seat, target) {
 // l'appelant peut y être rattaché comme vrai utilisateur — les autres sièges
 // sont des invités. Aucune mise à jour d'Elo ici (réservée au serveur PvP).
 
+// Durée déclarée par le client (#311), pour les statistiques de temps de jeu
+// uniquement : bornée à 3 h, ignorée si invalide. Sans effet sur Elo ou badges.
+const MAX_DURATION_SEC = 3 * 60 * 60;
+function clampDuration(raw) {
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.min(Math.round(n), MAX_DURATION_SEC);
+}
+
 router.post('/', requireAuth, async (req, res) => {
   // Sans corps JSON (Content-Type absent), Express 5 laisse req.body indéfini.
-  const { mode, variant, playerCount, targetScore, difficulty, players } = req.body ?? {};
+  const { mode, variant, playerCount, targetScore, difficulty, players, durationSec } = req.body ?? {};
   const variantSafe = variant || 'classic';
 
   if (!VALID_MODES.includes(mode))
@@ -76,10 +85,10 @@ router.post('/', requireAuth, async (req, res) => {
   try {
     const result = await withTransaction(async (client) => {
       const { rows } = await client.query(
-        `INSERT INTO games (mode, variant, player_count, target_score, difficulty, ended_at)
-         VALUES ($1, $2, $3, $4, $5, NOW())
+        `INSERT INTO games (mode, variant, player_count, target_score, difficulty, created_at, ended_at)
+         VALUES ($1, $2, $3, $4, $5, NOW() - make_interval(secs => $6), NOW())
          RETURNING id`,
-        [mode, variantSafe, Number(playerCount), Number(targetScore), difficulty ?? null]
+        [mode, variantSafe, Number(playerCount), Number(targetScore), difficulty ?? null, clampDuration(durationSec)]
       );
       const gid = rows[0].id;
 

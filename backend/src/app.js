@@ -6,7 +6,7 @@ const cors = require('cors');
 const pinoHttp = require('pino-http');
 const config = require('./config');
 const { logger, redact } = require('./logger');
-const { authLimiter, apiLimiter, invitationLimiter } = require('./middleware/rateLimiter');
+const { authLimiter, apiLimiter, invitationLimiter, visitLimiter } = require('./middleware/rateLimiter');
 
 const authRoutes    = require('./routes/auth');
 const usersRoutes   = require('./routes/users');
@@ -14,6 +14,8 @@ const friendsRoutes = require('./routes/friends');
 const gamesRoutes   = require('./routes/games');
 const onlineRoutes  = require('./routes/online');
 const invitationsRoutes = require('./routes/invitations');
+const visitsRoutes  = require('./routes/visits');
+const adminRoutes   = require('./routes/admin');
 
 const app = express();
 
@@ -60,6 +62,8 @@ app.use('/api/friends', apiLimiter,  friendsRoutes);
 app.use('/api/games',   apiLimiter,  gamesRoutes);
 app.use('/api/online',  apiLimiter,  onlineRoutes);
 app.use('/api/invitations', invitationLimiter, invitationsRoutes);
+app.use('/api/visits',  visitLimiter, visitsRoutes);
+app.use('/api/admin',   apiLimiter,  adminRoutes);
 
 // ─── 404 / erreur globale ─────────────────────────────────────────────────────
 

@@ -23,6 +23,7 @@ export function Footer() {
         <span>◑ La Chouine — jeu historique de la Vallée du Loir · <b>la-chouine.com</b></span>
         <span style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
           <Link to="/a-propos" className="footer-link">À propos</Link>
+          <Link to="/confidentialite" className="footer-link">Confidentialité</Link>
           <a href={GITHUB_URL} target="_blank" rel="noreferrer noopener" className="footer-link">GitHub</a>
           <a href={`mailto:${CONTACT_EMAIL}`} className="footer-link">{CONTACT_EMAIL}</a>
           <span className="note" style={{ opacity: 0.8 }}>Projet en cours de développement</span>
