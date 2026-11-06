@@ -82,3 +82,30 @@ test('findMatches : variantes cloisonnées (jamais d’appariement inter-variant
   await store.join({ userId: 'u2', name: 'B', rating: 1500, variant: 'mondoubleau' }, 0);
   assert.equal((await store.findMatches(store.DEFAULT_PARAMS, store.DEFAULT_PARAMS.fallbackMs + 1)).length, 0);
 });
+
+test('file (#234) : une entrée sans ticket est retirée par leave()', async () => {
+  await redis.zadd('mm:z:classic', 1500, 'orphelin');
+  await redis.zadd('mm:z:mondoubleau', 1500, 'orphelin');
+  assert.equal(await store.totalSize(), 2);
+  assert.equal(await store.leave('orphelin'), false, 'pas de ticket');
+  assert.equal(await store.totalSize(), 0);
+});
+
+test('file (#234) : une entrée sans ticket est purgée à l’appariement, les tickets restent', async () => {
+  await store.join({ userId: 'u1', name: 'A', rating: 1500, variant: 'classic' });
+  await redis.zadd('mm:z:classic', 1500, 'orphelin');
+  assert.equal(await store.totalSize(), 2);
+
+  const tickets = await store.listTickets('classic');
+  assert.deepEqual(tickets.map(t => t.userId), ['u1']);
+  assert.equal(await store.totalSize(), 1);
+  assert.equal(await store.has('u1'), true);
+});
+
+test('file (#234) : join écrit l’entrée et le ticket ensemble', async () => {
+  await store.join({ userId: 'u1', name: 'A', rating: 1500, variant: 'classic' });
+  await store.join({ userId: 'u1', name: 'A', rating: 1500, variant: 'mondoubleau' });
+  assert.equal(await store.size('classic'), 0);
+  assert.equal(await store.size('mondoubleau'), 1);
+  assert.equal(await redis.hget('mm:t:u1', 'variant'), 'mondoubleau');
+});

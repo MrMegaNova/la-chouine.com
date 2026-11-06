@@ -145,3 +145,18 @@ test('présence : Redis vide → compteurs à zéro', async () => {
   assert.deepEqual(await presenceStore.counts(), { online: 0, inQueue: 0, inGame: 0 });
   assert.deepEqual(await presenceStore.userPresence('u1'), { online: false, inGame: false });
 });
+
+test('présence (#234) : le sweep retire un joueur dont l’instance a disparu', async (t) => {
+  const server = http.createServer();
+  const rt = await attachWebSocketServer(server, {
+    heartbeatMs: 0, tickMs: 30, sweepMs: 20, presencePurgeMs: 0,
+    getRating: async () => 1500, onMatchComplete: () => {},
+  });
+  t.after(async () => { rt.stop(); server.close(); await closeRedis(); });
+  const r = useMockRedis(11);
+  // Joueur laissé « en ligne » par une instance arrêtée brutalement.
+  await r.zadd(presenceStore.K.online('fantome'), Date.now() - 1000, 'instance-morte');
+  await r.sadd(presenceStore.K.onlineSet, 'fantome');
+
+  await waitForState(() => presenceStore.onlineCount(), 0);
+});
