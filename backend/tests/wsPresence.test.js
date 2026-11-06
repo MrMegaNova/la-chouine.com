@@ -76,45 +76,45 @@ const waitForPresence = (userId, expected) => waitForState(() => presenceStore.u
 const waitForHello = (client) => waitForState(() => client.msgs.some(m => m.t === 'hello'), true);
 
 test('présence : dédupliquée par joueur, poussée à la connexion et à la déconnexion', async (t) => {
-  const { connect } = await setup(t);
+  const { connect, rt } = await setup(t);
+  const online = async () => (await presenceStore.counts()).online;
+  const pushed = (c) => () => lastPresence(c.msgs)?.online;
 
   // (1) u1 sur DEUX onglets + u2 → online = 2 (pas 3).
   const tab1 = await connect('u1', 'Alice');
   const tab2 = await connect('u1', 'Alice');
   const c2 = await connect('u2', 'Bob');
-  await delay(350); // > debounce (250 ms)
-
+  await Promise.all([tab1, tab2, c2].map(waitForHello));
   assert.deepEqual(await presenceStore.counts(), { online: 2, inQueue: 0, inGame: 0 });
-  const seen = lastPresence(c2.msgs);
-  assert.ok(seen, 'les connectés reçoivent la présence');
-  assert.equal(seen.online, 2, 'multi-onglets compte pour 1');
+  await waitForState(pushed(c2), 2); // multi-onglets compte pour 1, diffusé aux connectés
 
-  // (2) Fermer UN onglet de u1 ne change rien ; fermer le dernier → online = 1.
+  // (2) Fermer UN onglet de u1 ne change rien : une fois le socket retiré par le
+  // serveur, u1 reste compté.
   tab1.ws.close();
-  await delay(350);
-  assert.equal((await presenceStore.counts()).online, 2);
+  await waitForState(() => rt.sockets.get('u1')?.size ?? 0, 1);
+  assert.equal(await online(), 2);
+
+  // (3) Fermer le dernier → online = 1, et la déconnexion est diffusée.
   tab2.ws.close();
-  await delay(350);
-  assert.equal((await presenceStore.counts()).online, 1);
-  assert.equal(lastPresence(c2.msgs).online, 1, 'la déconnexion est diffusée');
+  await waitForState(online, 1);
+  await waitForState(pushed(c2), 1);
 });
 
 test('présence : file d’attente puis partie reflétées dans les compteurs', async (t) => {
   const { connect } = await setup(t);
   const c1 = await connect('u1', 'Alice');
   const c2 = await connect('u2', 'Bob');
+  await Promise.all([c1, c2].map(waitForHello));
 
   // (1) u1 rejoint la file → inQueue = 1.
   c1.ws.send(JSON.stringify({ t: 'queue', action: 'join', variant: 'classic' }));
-  await delay(350);
-  assert.equal((await presenceStore.counts()).inQueue, 1);
-  assert.equal(lastPresence(c2.msgs).inQueue, 1);
+  await waitForState(async () => (await presenceStore.counts()).inQueue, 1);
+  await waitForState(() => lastPresence(c2.msgs)?.inQueue, 1);
 
   // (2) u2 rejoint → appariement → inGame = 2, file vide.
   c2.ws.send(JSON.stringify({ t: 'queue', action: 'join', variant: 'classic' }));
-  await delay(400);
-  assert.deepEqual(await presenceStore.counts(), { online: 2, inQueue: 0, inGame: 2 });
-  assert.equal(lastPresence(c1.msgs).inGame, 2);
+  await waitForState(() => presenceStore.counts(), { online: 2, inQueue: 0, inGame: 2 });
+  await waitForState(() => lastPresence(c1.msgs)?.inGame, 2);
 });
 
 test('présence individuelle (#46) : en ligne, en partie, hors ligne', async (t) => {
@@ -129,7 +129,7 @@ test('présence individuelle (#46) : en ligne, en partie, hors ligne', async (t)
 
   // (2) En partie après appariement.
   c1.ws.send(JSON.stringify({ t: 'queue', action: 'join', variant: 'classic' }));
-  await delay(60);
+  await waitForState(async () => (await presenceStore.counts()).inQueue, 1);
   const c2bis = await connect('u2', 'Bob'); // déjà compté, juste pour envoyer
   await waitForHello(c2bis);
   c2bis.ws.send(JSON.stringify({ t: 'queue', action: 'join', variant: 'classic' }));
