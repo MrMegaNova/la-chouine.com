@@ -14,6 +14,7 @@ export function useGameSounds(game: GameState | null, pendingResult: HandResult 
     phase: game.phase,
     trickLength: game.trick.length,
     stock: game.talon.length + (game.turnUp ? 1 : 0),
+    cutPicks: game.cut?.picks.filter(p => p !== null).length ?? 0,
     announceKey: game.lastAnnounce ? `${game.handNo}|${game.lastAnnounce.seat}|${game.lastAnnounce.sig}` : null,
     matchWinner: pendingResult?.matchWinner ?? null,
   };
