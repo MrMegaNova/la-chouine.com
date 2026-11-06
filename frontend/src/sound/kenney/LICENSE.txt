@@ -1,0 +1,8 @@
+Casino Audio (1.1) by Kenney Vleugels (www.kenney.nl)
+https://kenney.nl/assets/casino-audio
+
+License: Creative Commons Zero (CC0)
+http://creativecommons.org/publicdomain/zero/1.0/
+
+Fichiers d'origine en OGG, convertis en MP3 mono 80 kb/s pour la lecture sur
+tous les navigateurs (iPhone compris). Contenu sonore inchangé.

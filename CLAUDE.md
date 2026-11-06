@@ -8,7 +8,8 @@ Jeu de cartes français (la Chouine) en ligne, jouable contre l'IA ou en PvP cla
 
 - **Frontend** : Vite 8, React 19, TypeScript 6, Zustand 5 (+ persist pour la session), React Router 7, SCSS, Vitest 4. Tests de composants en **React Testing Library + jsdom** (#129) : env Vitest par défaut = `node` (logique pure), un fichier de composant opte pour le DOM via `// @vitest-environment jsdom` en tête ; setup global `src/test/setup.ts` (matchers jest-dom + cleanup).
   - `frontend/src/game/engine.ts` — moteur de jeu (TS).
-  - `frontend/src/store/` — stores Zustand (`gameStore`, `onlineStore`, `authStore`, `notificationStore`).
+  - `frontend/src/store/` — stores Zustand (`gameStore`, `onlineStore`, `authStore`, `notificationStore`, `soundStore`).
+  - `frontend/src/sound/` — effets sonores (#155) : bruitages Kenney (CC0) et sons générés ; déclenchés par `useGameSounds` dans `GameTable` (local et en ligne), coupables via `SoundToggle`.
   - `frontend/src/pages/Admin.tsx` — tableau de bord administrateur (#311) ; `frontend/src/analytics/` — mesure d'audience.
 - **Backend** : Node 24, Express 5, PostgreSQL (`pg`), Redis (`ioredis` 5), WebSocket (`ws`), JWT, bcryptjs 3, nodemailer 10, pino, `maxmind` (géolocalisation DB-IP, #311).
   - `backend/src/game/engine.js` — moteur de jeu (JS), **doit rester synchrone avec le moteur TS**.

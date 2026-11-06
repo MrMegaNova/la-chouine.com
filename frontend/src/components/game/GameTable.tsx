@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { useGameSounds } from '@/sound/useGameSounds';
+import { SoundToggle } from './SoundToggle';
 import { useGameStore } from '@/store/gameStore';
 import { useAuthStore } from '@/store/authStore';
 import { getLegalMoves, getAvailableCombos, isBrisque, comboCards } from '@/game/engine';
@@ -43,6 +45,7 @@ export function GameTable({ controller }: { controller?: GameController } = {}) 
   const { game, pendingResult, toast, playCard, declareCombo, exchangeSeven,
     drawCutCard, revealForPlayer, quitGame, clearPendingResult } = ctrl;
   const { user, token } = useAuthStore();
+  useGameSounds(game, pendingResult); // effets sonores (#155)
   const toastRef = useRef<HTMLDivElement>(null);
   // Consultation des plis (#74/#95) : 'mine' = ses propres plis, 'opp' = le
   // dernier pli ramassé par l'adversaire (seul pli adverse que la règle
@@ -148,6 +151,7 @@ export function GameTable({ controller }: { controller?: GameController } = {}) 
       {/* Header */}
       <div className={styles.topBar}>
         <button className="btn btn--ghost btn--sm" onClick={() => quitGame()}>← Quitter</button>
+        <SoundToggle />
         <div className={styles.scoreRow}>
           {game.names.map((name, i) => {
             // L'encart (nom + score) ouvre le profil dans un NOUVEL onglet (#85) :

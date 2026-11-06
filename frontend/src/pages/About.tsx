@@ -48,6 +48,9 @@ export default function About() {
           Les règles s'appuient sur la « Règle du jeu de la Chouine » de Jacques
           Proust, éditée par l'association de sauvegarde du château de Lavardin —
           détaillées sur la page <Link to="/regles" style={{ color: 'var(--gold-soft)' }}>Règles</Link>.
+          Les bruitages de cartes viennent du pack « Casino Audio » de{' '}
+          <a href="https://kenney.nl/assets/casino-audio" target="_blank" rel="noreferrer noopener" style={{ color: 'var(--gold-soft)' }}>Kenney</a>{' '}
+          (domaine public, CC0).
         </p>
 
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 22 }}>
