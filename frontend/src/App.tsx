@@ -25,6 +25,7 @@ import Admin from '@/pages/Admin';
 import { usePageMeta } from '@/seo/usePageMeta';
 import { useVisitTracking } from '@/analytics/trackVisit';
 import { applyPendingUpdate } from '@/pwa/serviceWorker';
+import { unlockAudio } from '@/sound/sounds';
 import '@/styles/main.scss';
 
 export default function App() {
@@ -34,6 +35,14 @@ export default function App() {
   const { connectPresence, disconnectPresence } = useOnlineStore();
 
   useEffect(() => { restoreSession(); }, []);
+
+  // Effets sonores (#155) : les navigateurs bloquent le son jusqu'à un geste du
+  // joueur. Le premier toucher ou clic réveille l'audio.
+  useEffect(() => {
+    const unlock = () => unlockAudio();
+    window.addEventListener('pointerdown', unlock, { capture: true });
+    return () => window.removeEventListener('pointerdown', unlock, { capture: true });
+  }, []);
 
   // Présence (#43) : socket ouvert tant que l'utilisateur est connecté — il
   // alimente le compteur de joueurs en ligne et sert de canal de reprise si

@@ -26,6 +26,9 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
+    // Les sons (#155) restent des fichiers : une adresse data: intégrée au code
+    // serait bloquée par la CSP (connect-src 'self') au moment du fetch.
+    assetsInlineLimit: (file) => (file.endsWith('.mp3') ? false : undefined),
   },
   test: {
     // Env par défaut = node (logique pure : moteur, stores). Les tests de

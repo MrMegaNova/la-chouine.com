@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { useOnlineStore } from '@/store/onlineStore';
 import { GameTable, type GameController } from './GameTable';
+import { playSound } from '@/sound/sounds';
 
 // Pilote l'expérience PvP en ligne, rendue en overlay plein écran :
 //   - recherche d'adversaire (file d'attente) → écran d'attente,
@@ -14,6 +15,12 @@ export function OnlinePvP() {
   const navigate = useNavigate();
   const { token } = useAuthStore();
   const o = useOnlineStore();
+
+  // Fin par forfait (#155) : fanfare ou trombone, une seule fois par match.
+  const forfeitResult = o.status === 'over' && o.forfeit ? (o.forfeit.youWin ? 'win' : 'lose') : null;
+  useEffect(() => {
+    if (forfeitResult) playSound(forfeitResult);
+  }, [forfeitResult]);
 
   if (o.status === 'idle') return null;
 
