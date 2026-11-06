@@ -51,46 +51,67 @@ async function setup(t, { challengeTtlMs = 60000 } = {}) {
     const msgs = [];
     ws.on('message', d => msgs.push(JSON.parse(d.toString())));
     await once(ws, 'open');
-    return { ws, msgs, send: (o) => ws.send(JSON.stringify(o)) };
+    const client = { ws, msgs, send: (o) => ws.send(JSON.stringify(o)) };
+    // `hello` conclut la mise en ligne côté serveur : le joueur est alors visible.
+    await next(client, m => m.t === 'hello', 'hello', 0);
+    return client;
   };
 
   t.after(async () => { rt.stop(); server.close(); await closeRedis(); });
   return { connect, recorded };
 }
 
-const lastOf = (msgs, type) => msgs.filter(m => m.t === type).pop();
+// Attend un état observable ; l'échéance ne sert qu'à faire échouer le test.
+async function waitFor(pred, what, timeoutMs = 3000) {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const value = await pred();
+    if (value) return value;
+    if (Date.now() > deadline) assert.fail(`état non atteint : ${what}`);
+    await delay(5);
+  }
+}
+
+// Prochain message du client vérifiant `pred`, reçu à partir de l'indice `from`
+// (par défaut : à partir de maintenant, donc à appeler AVANT l'envoi).
+function next(client, pred, what, from = client.msgs.length) {
+  return waitFor(() => client.msgs.slice(from).find(pred), what);
+}
+const nextOf = (client, type, what = type) => next(client, m => m.t === type, what);
+const nextNotif = (client, kind) => next(client, m => m.t === 'notification' && m.kind === kind, `notification ${kind}`);
+
 
 test('défi : invitation notifiée, acceptation → partie directe (amicale, sans Elo)', async (t) => {
   const { connect, recorded } = await setup(t);
   const c1 = await connect('u1', 'Alice');
   const c2 = await connect('u2', 'Bob');
-  await delay(40);
 
   // (1) Invitation amicale (rated absent → false par défaut).
+  const sentP = next(c1, m => m.t === 'challenge' && m.status === 'sent', 'accusé d’envoi');
+  const notifP = nextNotif(c2, 'challenge');
   c1.send({ t: 'challenge', action: 'invite', to: 'u2', variant: 'classic' });
-  await delay(50);
-  const sent = lastOf(c1.msgs, 'challenge');
-  assert.equal(sent.status, 'sent');
+  const sent = await sentP;
   assert.equal(sent.rated, false, 'défaut = amicale');
-  const notif = c2.msgs.find(m => m.t === 'notification' && m.kind === 'challenge');
-  assert.ok(notif, 'le destinataire est notifié');
+  const notif = await notifP;
   assert.equal(notif.from, 'Alice');
   assert.equal(notif.rated, false);
 
   // (2) Acceptation → session pour les deux, sans passer par la file.
+  const found1 = nextOf(c1, 'matchFound');
+  const found2 = nextOf(c2, 'matchFound');
+  const state2 = nextOf(c2, 'state');
   c2.send({ t: 'challenge', action: 'accept', challengeId: notif.challengeId });
-  await delay(60);
+  await found1;
+  assert.equal((await found2).opponent, 'Alice');
+  assert.equal((await state2).state.rated, false, 'le snapshot porte le type de partie');
   const session = await sessionStore.sessionForUser('u1');
   assert.ok(session, 'session créée');
   assert.equal(session.rated, false);
   assert.equal((await sessionStore.sessionForUser('u2')).id, session.id);
-  assert.ok(lastOf(c1.msgs, 'matchFound'), 'matchFound chez le défieur');
-  assert.equal(lastOf(c2.msgs, 'matchFound').opponent, 'Alice');
-  assert.equal(lastOf(c2.msgs, 'state').state.rated, false, 'le snapshot porte le type de partie');
 
   // (3) Fin par forfait : l'outcome est enregistré avec rated:false (pas d'Elo).
   c2.send({ t: 'action', action: { type: 'forfeit' } });
-  await delay(50);
+  await waitFor(() => recorded.length > 0, 'enregistrement du match');
   assert.equal(recorded.length, 1);
   assert.equal(recorded[0].rated, false, 'amicale → recordMatch saura ne pas toucher l’Elo');
 });
@@ -99,38 +120,37 @@ test('défi classé : rated:true propagé jusqu’à l’outcome', async (t) => 
   const { connect, recorded } = await setup(t);
   const c1 = await connect('u1', 'Alice');
   const c2 = await connect('u2', 'Bob');
-  await delay(40);
 
+  const notifP = nextNotif(c2, 'challenge');
   c1.send({ t: 'challenge', action: 'invite', to: 'u2', variant: 'mondoubleau', rated: true });
-  await delay(50);
-  const notif = c2.msgs.find(m => m.t === 'notification' && m.kind === 'challenge');
+  const notif = await notifP;
   assert.equal(notif.rated, true);
   assert.equal(notif.variant, 'mondoubleau');
 
+  const found = nextOf(c1, 'matchFound');
   c2.send({ t: 'challenge', action: 'accept', challengeId: notif.challengeId });
-  await delay(60);
+  await found;
   assert.equal((await sessionStore.sessionForUser('u1')).rated, true);
 
   c1.send({ t: 'action', action: { type: 'forfeit' } });
-  await delay(50);
+  await waitFor(() => recorded.length > 0, 'enregistrement du match');
   assert.equal(recorded[0].rated, true);
 });
 
 test('défi : refusé hors amitié, hors ligne, ou déjà en partie', async (t) => {
   const { connect } = await setup(t);
   const c1 = await connect('u1', 'Alice');
-  const c3 = await connect('u3', 'Zoé');
-  await delay(40);
+  await connect('u3', 'Zoé');
 
   // (1) u1 et u3 ne sont pas amis.
+  let err = nextOf(c1, 'error');
   c1.send({ t: 'challenge', action: 'invite', to: 'u3', variant: 'classic' });
-  await delay(50);
-  assert.match(lastOf(c1.msgs, 'error').error, /amis/i);
+  assert.match((await err).error, /amis/i);
 
   // (2) u2 est hors ligne.
+  err = nextOf(c1, 'error');
   c1.send({ t: 'challenge', action: 'invite', to: 'u2', variant: 'classic' });
-  await delay(50);
-  assert.match(lastOf(c1.msgs, 'error').error, /en ligne/i);
+  assert.match((await err).error, /en ligne/i);
 
   // (3) Un joueur déjà en partie ne peut ni défier ni être défié.
   await sessionStore.createSession({
@@ -138,23 +158,20 @@ test('défi : refusé hors amitié, hors ligne, ou déjà en partie', async (t) 
     variant: 'classic', target: 3,
   });
   const c2 = await connect('u2', 'Bob');
-  await delay(40);
+  err = nextOf(c2, 'error');
   c2.send({ t: 'challenge', action: 'invite', to: 'u1', variant: 'classic' });
-  await delay(50);
-  assert.match(lastOf(c2.msgs, 'error').error, /déjà en partie/i);
-  void c3;
+  assert.match((await err).error, /déjà en partie/i);
 });
 
 test('défi : un non-ami renvoie toujours « amis », sans fuiter son statut (#123)', async (t) => {
   const { connect } = await setup(t);
   const c1 = await connect('u1', 'Alice');
   await connect('u3', 'Zoé'); // non-ami, EN LIGNE
-  await delay(40);
 
   // (1) Non-ami en ligne → « amis » (pas « en partie » ni « pas en ligne »).
+  let err = nextOf(c1, 'error');
   c1.send({ t: 'challenge', action: 'invite', to: 'u3', variant: 'classic' });
-  await delay(50);
-  assert.match(lastOf(c1.msgs, 'error').error, /amis/i);
+  assert.match((await err).error, /amis/i);
 
   // (2) Non-ami MIS EN PARTIE → toujours « amis », jamais « déjà en partie »
   // (sinon on sonderait le statut de n'importe quel userId).
@@ -162,51 +179,46 @@ test('défi : un non-ami renvoie toujours « amis », sans fuiter son statut (#1
     players: [{ userId: 'u3', name: 'Zoé' }, { userId: 'uY', name: 'Y' }],
     variant: 'classic', target: 3,
   });
-  c1.msgs.length = 0;
+  err = nextOf(c1, 'error');
   c1.send({ t: 'challenge', action: 'invite', to: 'u3', variant: 'classic' });
-  await delay(50);
-  assert.match(lastOf(c1.msgs, 'error').error, /amis/i, 'aucune fuite du statut « en partie » d’un non-ami');
+  assert.match((await err).error, /amis/i, 'aucune fuite du statut « en partie » d’un non-ami');
 
   // (3) Non-ami HORS LIGNE → même réponse « amis ».
-  c1.msgs.length = 0;
+  err = nextOf(c1, 'error');
   c1.send({ t: 'challenge', action: 'invite', to: 'u-inconnu', variant: 'classic' });
-  await delay(50);
-  assert.match(lastOf(c1.msgs, 'error').error, /amis/i);
+  assert.match((await err).error, /amis/i);
 });
 
 test('défi : refus notifié, annulation notifiée, expiration automatique', async (t) => {
   const { connect } = await setup(t, { challengeTtlMs: 120 });
   const c1 = await connect('u1', 'Alice');
   const c2 = await connect('u2', 'Bob');
-  await delay(40);
 
   // (1) Refus.
+  let notifP = nextNotif(c2, 'challenge');
   c1.send({ t: 'challenge', action: 'invite', to: 'u2', variant: 'classic' });
-  await delay(50);
-  let notif = c2.msgs.find(m => m.t === 'notification' && m.kind === 'challenge');
+  let notif = await notifP;
+  const declined = next(c1, m => m.t === 'challenge' && m.status === 'declined', 'refus');
   c2.send({ t: 'challenge', action: 'decline', challengeId: notif.challengeId });
-  await delay(50);
-  assert.equal(lastOf(c1.msgs, 'challenge').status, 'declined');
+  await declined;
   assert.equal(await sessionStore.sessionForUser('u1'), null);
 
   // (2) Annulation par le défieur.
-  c2.msgs.length = 0;
+  notifP = nextNotif(c2, 'challenge');
   c1.send({ t: 'challenge', action: 'invite', to: 'u2', variant: 'classic' });
-  await delay(50);
-  notif = c2.msgs.find(m => m.t === 'notification' && m.kind === 'challenge');
+  notif = await notifP;
+  const cancelled = nextNotif(c2, 'challengeCancelled');
   c1.send({ t: 'challenge', action: 'cancel', challengeId: notif.challengeId });
-  await delay(50);
-  assert.ok(c2.msgs.some(m => m.t === 'notification' && m.kind === 'challengeCancelled'));
+  await cancelled;
 
   // (3) Expiration (TTL 120 ms) : défieur prévenu, défi accepté trop tard → erreur.
-  c1.msgs.length = 0; c2.msgs.length = 0;
+  notifP = nextNotif(c2, 'challenge');
+  const expired = next(c1, m => m.t === 'challenge' && m.status === 'expired', 'expiration');
   c1.send({ t: 'challenge', action: 'invite', to: 'u2', variant: 'classic' });
-  await delay(50);
-  notif = c2.msgs.find(m => m.t === 'notification' && m.kind === 'challenge');
-  await delay(150);
-  assert.equal(lastOf(c1.msgs, 'challenge').status, 'expired');
+  notif = await notifP;
+  await expired;
+  const err = nextOf(c2, 'error');
   c2.send({ t: 'challenge', action: 'accept', challengeId: notif.challengeId });
-  await delay(50);
-  assert.match(lastOf(c2.msgs, 'error').error, /introuvable|expiré/i);
+  assert.match((await err).error, /introuvable|expiré/i);
   assert.equal(await sessionStore.sessionForUser('u1'), null);
 });
