@@ -185,6 +185,7 @@ test('le tableau de bord agrège joueurs, temps de jeu et visites', async () => 
   const d = res.body;
   assert.equal(d.days, 7);
   assert.equal(d.ipRetentionDays, 30);
+  assert.equal(d.geoSource, 'test', 'base de géolocalisation utilisée');
   // Version déployée : « dev » hors image Docker, date de démarrage du serveur.
   assert.equal(d.server.version, 'dev');
   assert.ok(!Number.isNaN(Date.parse(d.server.startedAt)));
@@ -213,4 +214,28 @@ test('la période est bornée entre 7 et 365 jours', async () => {
   assert.equal((await get('?days=9999')).body.days, 365);
   assert.equal((await get('?days=abc')).body.days, 30);
   assert.equal((await get('')).body.daily.length, 30);
+});
+
+// ─── Géolocalisation (MaxMind puis DB-IP) ─────────────────────────────────────
+
+test('la base MaxMind passe avant DB-IP, DB-IP sert de secours', () => {
+  const [maxmind, dbip] = geo.SOURCES;
+  assert.equal(geo.pickSource(p => p === maxmind.path || p === dbip.path), maxmind);
+  assert.equal(geo.pickSource(p => p === dbip.path), dbip);
+  assert.equal(geo.pickSource(() => false), null);
+});
+
+test('les noms de lieux sont en français quand la base les fournit', async () => {
+  geo.setReader({
+    get: () => ({
+      country: { iso_code: 'FR' },
+      subdivisions: [{ names: { en: 'Pays de the Loire', fr: 'Pays de la Loire' } }],
+      city: { names: { en: 'Le Mans', fr: 'Le Mans' } },
+    }),
+  });
+  try {
+    assert.deepEqual(await geo.locate('90.104.126.56'), { country: 'FR', region: 'Pays de la Loire', city: 'Le Mans' });
+  } finally {
+    geo.setReader(FAKE_GEO);
+  }
 });
