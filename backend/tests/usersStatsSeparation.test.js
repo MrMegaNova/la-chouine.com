@@ -154,3 +154,14 @@ test('POST /api/games : une partie locale reste visible sans changer les résult
   const history = await auth(request.get('/api/users/history'), target);
   assert.ok(history.body.some(g => g.id === save.body.id), 'la partie figure dans l’historique');
 });
+
+test('GET /api/users/search : « % » et « _ » sont cherchés tels quels (#236)', async () => {
+  // Sans échappement, « %% » ou « __ » trouvaient tous les joueurs.
+  for (const q of ['%%', '__', 'Stats%', 'Stats_arget']) {
+    const res = await auth(request.get(`/api/users/search?q=${encodeURIComponent(q)}`));
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body.map(u => u.username), [], `q=${q}`);
+  }
+  const res = await auth(request.get('/api/users/search?q=atsTar'));
+  assert.deepEqual(res.body.map(u => u.username), ['StatsTarget']);
+});
