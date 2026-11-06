@@ -8,6 +8,8 @@ const { verifyTransport } = require('./services/email');
 const { checkTokenVersion, currentTokenVersions } = require('./middleware/auth');
 const { attachWebSocketServer } = require('./realtime/wsServer');
 const redis = require('./redis/client');
+const { query } = require('./db');
+const { purgeOldIps } = require('./services/visits');
 
 const server = http.createServer(app);
 
@@ -34,6 +36,14 @@ const server = http.createServer(app);
     // immédiatement visible dans les logs (non bloquant pour le serveur HTTP).
     verifyTransport();
   });
+
+  // Durée de conservation des IP des visites (#311) : purge au démarrage puis
+  // toutes les heures. Requête idempotente, sans risque si plusieurs instances.
+  const purgeIps = () => purgeOldIps(query)
+    .then(n => { if (n) logger.info({ n }, 'visites : IP anciennes effacées'); })
+    .catch(err => logger.error({ err }, 'visites : purge des IP échouée'));
+  purgeIps();
+  setInterval(purgeIps, 60 * 60 * 1000).unref();
 })();
 
 server.on('error', (err) => {

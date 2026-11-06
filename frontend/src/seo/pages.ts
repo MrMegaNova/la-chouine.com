@@ -42,6 +42,11 @@ export const PUBLIC_PAGES: PublicPage[] = [
     title: 'À propos — La Chouine, un jeu traditionnel de la Vallée du Loir',
     description: 'Le projet la-chouine.com : une adaptation en ligne du jeu de cartes traditionnel de la Vallée du Loir.',
   },
+  {
+    path: '/confidentialite',
+    title: 'Confidentialité — données personnelles sur la-chouine.com',
+    description: 'Les données collectées par la-chouine.com (compte, parties, mesure d’audience), leur durée de conservation et vos droits.',
+  },
 ];
 
 // Titres d'onglet des pages exclues de l'index.
@@ -54,6 +59,7 @@ const PRIVATE_TITLES: Array<[prefix: string, title: string]> = [
   ['/jeu', 'Partie en cours'],
   ['/invitation/', 'Invitation'],
   ['/i/', 'Invitation'],
+  ['/admin', 'Tableau de bord'],
 ];
 
 function normalize(pathname: string): string {

@@ -20,7 +20,10 @@ import Friends from '@/pages/Friends';
 import Profile from '@/pages/Profile';
 import PlayerProfile from '@/pages/PlayerProfile';
 import Rules from '@/pages/Rules';
+import Privacy from '@/pages/Privacy';
+import Admin from '@/pages/Admin';
 import { usePageMeta } from '@/seo/usePageMeta';
+import { useVisitTracking } from '@/analytics/trackVisit';
 import { applyPendingUpdate } from '@/pwa/serviceWorker';
 import '@/styles/main.scss';
 
@@ -57,6 +60,7 @@ export default function App() {
   // via la présence) se réhydrate dans le nouvel onglet et masque la page.
   const location = useLocation();
   usePageMeta(location.pathname);
+  useVisitTracking(); // mesure d'audience (#311)
   const standalonePage = location.pathname.startsWith('/joueur/') || location.pathname.startsWith('/invitation/')
     || location.pathname.startsWith('/i/');
 
@@ -84,6 +88,8 @@ export default function App() {
           <Route path="/joueur/:id" element={<PlayerProfile />} />
           <Route path="/regles" element={<Rules />} />
           <Route path="/a-propos" element={<About />} />
+          <Route path="/confidentialite" element={<Privacy />} />
+          <Route path="/admin" element={<Admin />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/verify-email" element={<VerifyEmail />} />
           <Route path="/i/:code" element={<Invitation />} />

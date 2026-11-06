@@ -78,6 +78,7 @@ export interface MeResponse {
   stats: PlayerStats;
   ratings: { classic: number; mondoubleau: number };
   achievements: Achievement[]; // badges débloqués (#217)
+  isAdmin?: boolean;           // accès au tableau de bord (#311)
 }
 
 export const authApi = {
@@ -215,6 +216,7 @@ export interface SaveGamePayload {
   playerCount: number;
   targetScore: number;
   difficulty?: string;
+  durationSec?: number; // temps de jeu, pour les statistiques (#311)
   players: Array<{
     userId: string | null;
     guestName: string | null;
@@ -240,4 +242,59 @@ export const onlineApi = {
   // (#120). À redemander à chaque (re)connexion.
   wsTicket: (token: string) =>
     apiCall<{ ticket: string }>('POST', '/online/ws-ticket', undefined, token),
+};
+
+// ─── Mesure d'audience et tableau de bord (#311) ─────────────────────────────
+
+export const visitsApi = {
+  track: (payload: { path: string; referrer?: string }, token?: string | null) =>
+    apiCall<Record<string, never>>('POST', '/visits', payload, token),
+};
+
+export interface Ranked { label: string; visits: number; visitors: number }
+
+export interface DashboardDay {
+  day: string;
+  signups: number;
+  totalUsers: number;
+  activePlayers: number;
+  games: { online: number; ai: number; other: number };
+  playMinutes: number;
+}
+
+export interface RecentVisit {
+  at: string;
+  path: string;
+  device: 'mobile' | 'tablet' | 'desktop';
+  ip: string | null;
+  country: string | null;
+  region: string | null;
+  city: string | null;
+  referrer: string | null;
+  username: string | null;
+}
+
+export interface Dashboard {
+  days: number;
+  generatedAt: string;
+  ipRetentionDays: number;
+  live: { online: number; inQueue: number; inGame: number } | null;
+  players: { total: number; verified: number; active1d: number; active7d: number; active30d: number };
+  daily: DashboardDay[];
+  playTime: { timedGames: number; totalMinutes: number; averageMinutes: number | null };
+  visits: {
+    totals: { visits: number; visitor_days: number };
+    byDay: Array<{ day: string; visits: number; visitors: number }>;
+    countries: Ranked[];
+    cities: Ranked[];
+    pages: Ranked[];
+    referrers: Ranked[];
+    devices: Ranked[];
+    recent: RecentVisit[];
+  };
+}
+
+export const adminApi = {
+  dashboard: (days: number, token: string) =>
+    apiCall<Dashboard & { error?: string }>('GET', `/admin/dashboard?days=${days}`, undefined, token),
 };

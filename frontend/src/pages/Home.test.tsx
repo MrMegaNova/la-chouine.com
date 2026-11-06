@@ -7,6 +7,7 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 vi.mock('@/api/client', () => ({
   onlineApi: { get: vi.fn(() => new Promise(() => {})) },
   gamesApi: {},
+  visitsApi: { track: vi.fn(() => Promise.resolve({ ok: true, status: 204, data: {} })) },
 }));
 
 import Home from './Home';

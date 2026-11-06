@@ -30,10 +30,16 @@ async function recordMatch(outcome) {
 
   return withTransaction(async (client) => {
     const { rows } = await client.query(
-      `INSERT INTO games (mode, variant, player_count, target_score, ended_at)
-       VALUES ('online', $1, 2, $2, NOW())
+      // Début réel du match (#311), mesuré par le serveur ; à défaut (session
+      // d'avant #311, valeur aberrante), durée nulle.
+      `INSERT INTO games (mode, variant, player_count, target_score, created_at, ended_at)
+       VALUES ('online', $1, 2, $2,
+               CASE WHEN $3::bigint IS NOT NULL
+                         AND to_timestamp($3::bigint / 1000.0) BETWEEN NOW() - INTERVAL '1 day' AND NOW()
+                    THEN to_timestamp($3::bigint / 1000.0) ELSE NOW() END,
+               NOW())
        RETURNING id`,
-      [variant, outcome.target || 3]
+      [variant, outcome.target || 3, Number.isFinite(outcome.startedAt) ? Math.round(outcome.startedAt) : null]
     );
     const gameId = rows[0].id;
 

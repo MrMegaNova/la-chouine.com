@@ -75,6 +75,8 @@ class GameSession {
     // distribuée. Posée par le driver temps réel (wsServer) ; balayée par le
     // sweep. null hors phase cutReveal.
     this.revealDeadline = null;
+    // Début du match (#311) : durée de jeu enregistrée à la fin.
+    this.startedAt = Date.now();
     // Horloge de coup (#141) — parties classées uniquement ; pilotée par le
     // driver temps réel (wsServer), qui arme l'échéance et gère la pause.
     this.clock = this.rated ? turnClock.createClock(clockOptions) : null;
@@ -366,6 +368,7 @@ class GameSession {
       variant: this.variant,
       target: this.target,
       rated: this.rated,
+      startedAt: this.startedAt,
       players: this.players.map((p, seat) => ({
         userId: p.userId,
         name: p.name,
@@ -469,6 +472,7 @@ class GameSession {
       clock: this.clock,
       cutDeadline: this.cutDeadline,
       revealDeadline: this.revealDeadline,
+      startedAt: this.startedAt,
       state: serializeState(this.state),
     };
   }
@@ -492,6 +496,7 @@ class GameSession {
     s.clock = data.clock;
     s.cutDeadline = data.cutDeadline ?? null;
     s.revealDeadline = data.revealDeadline ?? null;
+    s.startedAt = data.startedAt ?? null; // absent des sessions d'avant #311
     s.state = deserializeState(data.state);
     return s;
   }

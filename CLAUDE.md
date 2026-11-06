@@ -72,6 +72,7 @@ Invariants déjà en place — **à ne pas régresser** :
 - **Tokens verify/reset stockés hashés**, jamais en clair (#122).
 - **`POST /api/games` ne fait pas confiance au client** pour l'Elo ni l'historique : le serveur recalcule (#116). Ne jamais réintroduire de score fourni par le client.
 - **Rate-limit des messages WebSocket** (anti-flood, #124) et **taille maximale d'un message** (`maxPayload` 16 Kio, #305) et **anti-brute-force login + honeypot inscription + cooldown forgot-password** (#86, #121).
+- **Données personnelles (#311)** : toute nouvelle collecte doit figurer sur la page `/confidentialite` (`frontend/src/pages/Privacy.tsx`). Les IP des visites sont effacées après 30 jours (`purgeOldIps`, horaire) ; le tableau de bord `/api/admin/*` exige `users.is_admin`, relu en base à chaque requête.
 - **Redaction des secrets dans les logs** (`backend/src/logger.js`, pino) : ne jamais logger token, mot de passe ou en-tête d'auth.
 
 Dette connue (tracée, **ne pas réintroduire / penser à traiter**) : pas d'en-têtes de sécurité/CSP sur le HTML nginx (#118), JWT en `localStorage` exposé au XSS (#119), JWT passé dans l'URL WebSocket → fuite dans les logs proxys (#120), sonde de présence via les défis (#123), captcha d'inscription/login optionnel (#104).

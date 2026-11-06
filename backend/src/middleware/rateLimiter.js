@@ -49,4 +49,16 @@ const invitationLimiter = rateLimit({
   skip: () => process.env.NODE_ENV === 'test',
 });
 
-module.exports = { authLimiter, apiLimiter, deleteAccountLimiter, changePasswordLimiter, invitationLimiter };
+// Pages vues (#311) : au-delà, les visites ne sont plus enregistrées.
+const visitLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Trop de requêtes. Ralentissez.' },
+  skip: () => process.env.NODE_ENV === 'test',
+});
+
+module.exports = {
+  authLimiter, apiLimiter, deleteAccountLimiter, changePasswordLimiter, invitationLimiter, visitLimiter,
+};

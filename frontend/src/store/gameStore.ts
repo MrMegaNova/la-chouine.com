@@ -56,6 +56,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     // La partie démarre par la coupe (#201) : la 1ʳᵉ main n'est PAS distribuée,
     // chaque joueur pioche d'abord pour désigner le donneur.
     const game = createGame(opts);
+    matchStartedAt = Date.now();
     set({ game, pendingResult: null, toast: 'Tirez une carte pour désigner le donneur.' });
     scheduleCutIfNeeded(game);
   },
@@ -206,11 +207,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
       targetScore: game.target,
       difficulty: game.diff,
       players,
+      durationSec: matchStartedAt ? Math.round((Date.now() - matchStartedAt) / 1000) : undefined,
     }, token);
   },
 }));
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+// Début du match en cours (#311), pour le temps de jeu enregistré. 0 si inconnu
+// (partie restaurée après un rechargement : durée non transmise).
+let matchStartedAt = 0;
 
 function isAuto(game: GameState, seat: number): boolean {
   return (game.mode === 'ai' || game.mode === 'friend') && seat > 0;
