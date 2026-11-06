@@ -16,6 +16,9 @@ const channel = () => `${process.env.RT_NS || ''}rt`;
 
 let started = false;
 const handlers = new Set();
+// Connexion sur laquelle `dispatch` est posé (#233) : retiré à l'arrêt, pour
+// qu'un cycle stop() → start() ne double pas chaque message reçu.
+let listeningOn = null;
 
 /** Publie un message à toutes les instances (y compris l'émettrice). */
 async function publish(msg) {
@@ -28,23 +31,33 @@ function onMessage(fn) {
   return () => handlers.delete(fn);
 }
 
+function dispatch(ch, raw) {
+  if (ch !== channel()) return;
+  let msg;
+  try { msg = JSON.parse(raw); } catch { return; }
+  for (const h of handlers) { try { h(msg); } catch { /* un handler ne bloque pas les autres */ } }
+}
+
 /** Démarre l'abonnement (idempotent). */
 async function start() {
   if (started) return;
   started = true;
   const sub = getSubscriber();
+  if (listeningOn !== sub) {
+    if (listeningOn) listeningOn.removeListener('message', dispatch);
+    sub.on('message', dispatch);
+    listeningOn = sub;
+  }
   await sub.subscribe(channel());
-  sub.on('message', (ch, raw) => {
-    if (ch !== channel()) return;
-    let msg;
-    try { msg = JSON.parse(raw); } catch { return; }
-    for (const h of handlers) { try { h(msg); } catch { /* un handler ne bloque pas les autres */ } }
-  });
 }
 
 async function stop() {
   started = false;
   handlers.clear();
+  if (listeningOn) {
+    listeningOn.removeListener('message', dispatch);
+    listeningOn = null;
+  }
   try { await getSubscriber().unsubscribe(channel()); } catch { /* déjà fermé */ }
 }
 

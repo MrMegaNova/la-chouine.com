@@ -43,3 +43,22 @@ test('un handler retiré ne reçoit plus', async () => {
   await wait(30);
   assert.equal(got.length, 0);
 });
+
+test('stop() puis start() : un message n’est traité qu’une fois (#233)', async () => {
+  await bus.start();
+  await bus.stop();
+  await bus.start();
+  await bus.stop();
+  const got = [];
+  bus.onMessage((m) => got.push(m.n));
+  await bus.start();
+
+  await bus.publish({ kind: 'state', n: 1 });
+  await bus.publish({ kind: 'state', n: 2 });
+  // Les messages arrivent dans l'ordre : une fois le second reçu, le premier
+  // aurait déjà été livré en double s'il devait l'être.
+  const deadline = Date.now() + 2000;
+  while (!got.includes(2) && Date.now() < deadline) await wait(5);
+  await wait(20);
+  assert.deepEqual(got, [1, 2]);
+});
