@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { cuesBetween, type TableSnapshot } from './transitions';
 
-const base: TableSnapshot = { handNo: 1, phase: 'draw', trickLength: 0, stock: 21, announceKey: null, matchWinner: null };
+const base: TableSnapshot = { handNo: 1, phase: 'draw', trickLength: 0, stock: 21, cutPicks: 2, announceKey: null, matchWinner: null };
 const at = (patch: Partial<TableSnapshot>): TableSnapshot => ({ ...base, ...patch });
 const sounds = (prev: TableSnapshot | null, next: TableSnapshot, me = 0, humans = false) =>
   cuesBetween(prev, next, me, humans).map(c => c.sound);
@@ -9,6 +9,17 @@ const sounds = (prev: TableSnapshot | null, next: TableSnapshot, me = 0, humans 
 describe('sons de la table (#155)', () => {
   it('rien au premier affichage (table ouverte ou rechargée)', () => {
     expect(sounds(null, base)).toEqual([]);
+  });
+
+  it('coupe : une pioche par carte tirée, la sienne comme celle de l’adversaire', () => {
+    const cut = at({ phase: 'cut', cutPicks: 0 });
+    expect(sounds(cut, at({ phase: 'cut', cutPicks: 1 }))).toEqual(['draw']);
+    // Le dernier tirage fait passer à la révélation.
+    expect(sounds(at({ phase: 'cut', cutPicks: 1 }), at({ phase: 'cutReveal', cutPicks: 2 }))).toEqual(['draw']);
+    // L'ordinateur tire juste après : deux tirages dans le même état.
+    expect(sounds(cut, at({ phase: 'cutReveal', cutPicks: 2 }))).toEqual(['draw', 'draw']);
+    // Ouverture de la table pendant la coupe : rien.
+    expect(sounds(null, cut)).toEqual([]);
   });
 
   it('donne : à la fin de la coupe et à chaque nouvelle main', () => {

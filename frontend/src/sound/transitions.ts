@@ -10,6 +10,8 @@ export interface TableSnapshot {
   trickLength: number;
   /** Cartes restant à piocher : talon + retourne. */
   stock: number;
+  /** Cartes déjà tirées pour désigner le donneur (coupe). */
+  cutPicks: number;
   /** Annonce visible, identifiée (main + siège + annonce), ou null. */
   announceKey: string | null;
   /** Siège du vainqueur du match quand il est connu, sinon null. */
@@ -24,6 +26,12 @@ export function cuesBetween(prev: TableSnapshot | null, next: TableSnapshot, me:
   // Premier affichage (table ouverte ou rechargée) : rien à rejouer.
   if (!prev) return [];
   const cues: Cue[] = [];
+
+  // Coupe : une pioche par carte tirée pour désigner le donneur.
+  if (next.handNo === prev.handNo && !DEALT(next.phase)) {
+    const picked = Math.min(next.cutPicks - prev.cutPicks, 4);
+    for (let i = 0; i < picked; i++) cues.push({ sound: 'draw', delay: i * 180 });
+  }
 
   const newHand = DEALT(next.phase) && (!DEALT(prev.phase) || prev.handNo !== next.handNo);
   if (newHand) {
