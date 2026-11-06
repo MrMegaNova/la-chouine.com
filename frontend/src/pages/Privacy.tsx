@@ -61,9 +61,12 @@ export default function Privacy() {
 
         <h2 style={H}>Crédits</h2>
         <p style={P}>
-          La localisation utilise la base{' '}
+          La localisation est calculée sur notre serveur, sans envoyer votre adresse à
+          personne. Ce site utilise les données GeoLite2 créées par MaxMind, disponibles
+          sur <a href="https://www.maxmind.com" target="_blank" rel="noreferrer noopener" style={LINK}>maxmind.com</a>,
+          et, en secours, la base{' '}
           <a href="https://db-ip.com" target="_blank" rel="noreferrer noopener" style={LINK}>IP Geolocation by DB-IP</a>{' '}
-          (licence CC BY 4.0), consultée sur notre serveur.
+          (licence CC BY 4.0).
         </p>
       </div>
     </div>

@@ -142,8 +142,10 @@ export default function Admin() {
           <section className="panel" style={{ marginTop: 16 }}>
             <h2 className="admin-chart-title">Dernières visites</h2>
             <p style={{ fontSize: 14, opacity: 0.75, marginBottom: 8 }}>
-              Adresses IP effacées après {data.ipRetentionDays} jours. Localisation : IP Geolocation by{' '}
-              <a href="https://db-ip.com" target="_blank" rel="noreferrer noopener" style={{ color: 'var(--gold-soft)' }}>DB-IP</a>.
+              Adresses IP effacées après {data.ipRetentionDays} jours. Localisation approximative :{' '}
+              {data.geoSource === 'MaxMind GeoLite2'
+                ? <>données GeoLite2 de <a href="https://www.maxmind.com" target="_blank" rel="noreferrer noopener" style={{ color: 'var(--gold-soft)' }}>MaxMind</a>.</>
+                : <>IP Geolocation by <a href="https://db-ip.com" target="_blank" rel="noreferrer noopener" style={{ color: 'var(--gold-soft)' }}>DB-IP</a>.</>}
             </p>
             <div style={{ overflow: 'auto', maxHeight: 520 }}>
               <table className="admin-table">

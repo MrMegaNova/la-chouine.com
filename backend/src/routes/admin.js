@@ -6,6 +6,7 @@ const express = require('express');
 const { query } = require('../db');
 const { requireAdmin } = require('../middleware/admin');
 const presenceStore = require('../realtime/presenceStore');
+const geo = require('../services/geo');
 const { IP_RETENTION_DAYS } = require('../services/visits');
 const config = require('../config');
 
@@ -155,18 +156,20 @@ async function recentVisits() {
 router.get('/dashboard', async (req, res) => {
   const days = parseDays(req.query.days);
   try {
-    const [live, playerCounts, perDay, time, visitData, recent] = await Promise.all([
+    const [live, playerCounts, perDay, time, visitData, recent, geoSource] = await Promise.all([
       presenceStore.counts().catch(() => null),
       players(),
       daily(days),
       playTime(days),
       visitStats(days),
       recentVisits(),
+      geo.sourceName().catch(() => null),
     ]);
     res.json({
       days,
       generatedAt: new Date().toISOString(),
       ipRetentionDays: IP_RETENTION_DAYS,
+      geoSource,
       server: { ...config.release, startedAt: STARTED_AT },
       live,
       players: playerCounts,
