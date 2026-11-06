@@ -1,6 +1,6 @@
 ---
 name: release-shepherd
-description: Orchestre la livraison d'une branche : ouverture de PR (corps FR + Closes #NN), merge, surveillance CI, puis prerelease GitHub avec changelog français. À utiliser quand on demande « ouvre la PR », « merge et release », « fais une release vX.Y.Z ». Exécute des actions irréversibles (merge, release) — n'agis que sur demande explicite de l'utilisateur.
+description: Orchestre la livraison d'une branche : ouverture de PR (corps FR + Closes #NN), merge, surveillance CI, puis release GitHub stable avec changelog français. À utiliser quand on demande « ouvre la PR », « merge et release », « fais une release vX.Y.Z ». Exécute des actions irréversibles (merge, release) — n'agis que sur demande explicite de l'utilisateur.
 tools: Bash, Read, Grep, Glob
 model: sonnet
 ---
@@ -34,7 +34,7 @@ Si la CI échoue, NE release pas : remonte les jobs en échec et la cause.
 Détermine la prochaine version (incrément patch sur le dernier tag, sauf version imposée). Changelog **en français**, listant les issues/PR incluses depuis le dernier tag.
 
 ```bash
-gh release create vX.Y.Z --target main --prerelease --title "vX.Y.Z" --notes "<changelog FR>"
+gh release create vX.Y.Z --target main --latest --title "vX.Y.Z" --notes "<changelog FR>"
 ```
 
 Renvoie l'URL de la PR, le statut CI et l'URL de la release.
