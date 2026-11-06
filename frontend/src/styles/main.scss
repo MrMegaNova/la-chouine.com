@@ -353,3 +353,84 @@
   th { color: var(--cream-2); font-weight: 600; }
   td:not(:first-child), th:not(:first-child) { font-variant-numeric: tabular-nums; }
 }
+
+// ─── Démonstrations de la page Règles (#70) ──────────────────────────────────
+.rule-demo {
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: rgba(8, 23, 16, 0.45);
+  padding: 14px;
+  margin: 14px 0 18px;
+  break-inside: avoid;
+
+  // Tailles de cartes propres aux démos, réduites sur téléphone pour garder
+  // une main de 5 cartes sur une ligne.
+  .playing-card { --w: 52px; }
+  .rule-demo__back { --w: 32px; }
+  .rule-demo__small { --w: 40px; }
+
+  &__title { font-family: var(--serif); font-size: 19px; color: var(--cream); margin: 0 0 10px; }
+  &__table {
+    background: radial-gradient(ellipse at center, var(--felt-2), var(--felt-1));
+    border-radius: 12px;
+    padding: 10px;
+    display: grid;
+    gap: 10px;
+  }
+  &__row { display: flex; align-items: center; gap: 10px; min-height: 52px; }
+  &__name { font-size: var(--fs-small); color: var(--cream-2); width: 40px; flex-shrink: 0; }
+  &__cards { display: flex; gap: 6px; }
+  &__middle {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 12px;
+    min-height: 96px;
+  }
+  &__stock { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  &__talon { position: relative; }
+  &__count {
+    position: absolute; right: -6px; bottom: -6px;
+    background: var(--gold); color: var(--ink); border-radius: 999px;
+    font-size: var(--fs-small); font-weight: 700; padding: 0 7px; line-height: 1.5;
+  }
+  &__empty { font-size: var(--fs-small); color: var(--cream-2); font-style: italic; }
+  &__trump { font-size: var(--fs-small); color: var(--gold-soft); }
+  &__trick { display: flex; gap: 10px; justify-content: center; min-width: 120px; }
+  &__played {
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    animation: rule-demo-in 0.35s ease-out;
+  }
+  &__played--opp { --from: -18px; }
+  &__played--me { --from: 18px; }
+  &__who { font-size: var(--fs-small); color: var(--cream-2); }
+  &__legal { box-shadow: 0 0 0 3px var(--gold-soft); }
+  &__caption {
+    margin: 12px 0 10px;
+    font-size: var(--fs-body);
+    line-height: 1.6;
+    color: var(--cream);
+    min-height: 5em;
+    b { color: var(--gold-soft); }
+  }
+  &__step { display: block; font-size: var(--fs-small); color: var(--cream-2); margin-bottom: 2px; }
+  &__controls { display: flex; gap: 10px; flex-wrap: wrap; }
+
+  @media (max-width: 520px) {
+    padding: 10px;
+    .playing-card { --w: 42px; }
+    .rule-demo__back { --w: 26px; }
+    .rule-demo__small { --w: 34px; }
+    &__row { flex-direction: column; align-items: flex-start; gap: 4px; }
+    &__middle { grid-template-columns: 1fr; justify-items: center; }
+  }
+}
+
+@keyframes rule-demo-in {
+  from { opacity: 0; transform: translateY(var(--from)); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rule-demo__played { animation: none; }
+}

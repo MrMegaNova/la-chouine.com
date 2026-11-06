@@ -3,6 +3,8 @@
 // (regles_chouine.pdf à la racine du dépôt).
 
 import { Link } from 'react-router-dom';
+import { RuleDemo } from '@/components/rules/RuleDemo';
+import { DEMO_OBLIGATIONS, DEMO_PIOCHE, DEMO_SEPT } from '@/components/rules/demos';
 
 function Ex({ title, children }: { title?: string; children: React.ReactNode }) {
   return (
@@ -94,6 +96,7 @@ export default function Rules() {
             Marc remporte le pli (11 points dans sa pile), pioche en premier, et rejoue.
           </p>
         </Ex>
+        <RuleDemo demo={DEMO_PIOCHE} />
         <Ex title="Exemples — talon épuisé">
           <p>
             Le talon est vide, l'atout est cœur. Marc joue le <b>R♥</b> (atout). Léa a
@@ -104,6 +107,7 @@ export default function Rules() {
             mais elle a le <b>7♥</b> (atout). Elle coupe et remporte le pli.
           </p>
         </Ex>
+        <RuleDemo demo={DEMO_OBLIGATIONS} />
 
         <h3>La retourne et le 7 d'atout</h3>
         <p>
@@ -124,6 +128,7 @@ export default function Rules() {
             prend : trois points de plus dans sa main !
           </p>
         </Ex>
+        <RuleDemo demo={DEMO_SEPT} />
 
         <h3>Les brisques</h3>
         <p>
