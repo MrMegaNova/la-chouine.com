@@ -51,7 +51,7 @@ ESLint (#127) : un job **Lint** bloquant tourne dans les jobs Backend et Fronten
 3. **Commits** en français, terminés par la ligne `Co-Authored-By:` du modèle utilisé.
 4. **PR** : corps en français + `Closes #NN` + footer `🤖 Generated with [Claude Code](https://claude.com/claude-code)`. Pour une épopée à checklist : référencer l'issue sans la fermer.
 5. **Merge** `--delete-branch`, puis `gh run watch` jusqu'au vert.
-6. **Release** : tag prerelease via `gh release create vX.Y.Z --target main --prerelease` (changelog FR). La publication déclenche `release.yml`, qui construit et pousse les images GHCR (`vX.Y.Z` et `latest`). Le déploiement reste manuel (`docker compose pull backend frontend && docker compose up -d backend frontend`). La version dans `package.json` reste `1.0.0` — le versioning vit dans les tags Git. → agent `release-shepherd`.
+6. **Release** : version stable (plus de prerelease depuis v0.13.0) via `gh release create vX.Y.Z --target main --latest` (changelog FR). La publication déclenche `release.yml`, qui construit et pousse les images GHCR (`vX.Y.Z` et `latest`). Le déploiement reste manuel (`docker compose pull backend frontend && docker compose up -d backend frontend`). La version dans `package.json` reste `1.0.0` — le versioning vit dans les tags Git. → agent `release-shepherd`.
 
 ## CI (GitHub Actions)
 
@@ -64,7 +64,7 @@ Sur push `main` ET pull_request : jobs **Backend** (lint + Postgres + vrai Redis
 - `engine-parity` — vérifie la synchro `engine.ts` ↔ `engine.js`.
 - `backend-test-runner` — lance/diagnostique `node --test` (isolation DB).
 - `issue-author` — rédige une issue FR au style du repo.
-- `release-shepherd` — PR → merge → CI → prerelease.
+- `release-shepherd` — PR → merge → CI → release.
 
 ## Sécurité
 
