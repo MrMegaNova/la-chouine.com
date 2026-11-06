@@ -369,6 +369,13 @@
   .rule-demo__back { --w: 32px; }
   .rule-demo__small { --w: 40px; }
 
+  // Cartes des démos : petites, et les coins gardent 14 px minimum (#252). Le
+  // coin bas-droit, inutile à l'écran, écrasait le symbole central : il est
+  // retiré ici, et le symbole descend en bas de la carte. La table de jeu,
+  // qui a des cartes plus grandes, n'est pas concernée.
+  .playing-card__corner--br { display: none; }
+  .playing-card__pip { place-items: end center; padding-bottom: 12%; font-size: calc(var(--w) * 0.5); }
+
   &__title { font-family: var(--serif); font-size: 19px; color: var(--cream); margin: 0 0 10px; }
   &__table {
     background: radial-gradient(ellipse at center, var(--felt-2), var(--felt-1));
