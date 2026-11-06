@@ -31,7 +31,9 @@ export default tseslint.config(
       'react-refresh': reactRefresh,
     },
     rules: {
-      // react-hooks v5 : règles canoniques (ordre des hooks + dépendances).
+      // Règles canoniques seulement (ordre des hooks + dépendances) : les règles
+      // expérimentales de la v7 (set-state-in-effect, immutability…) ne sont pas
+      // activées.
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'warn',
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
