@@ -42,7 +42,7 @@ cd frontend && npm test       # vitest run
 cd frontend && npm run dev
 ```
 
-ESLint (#127) : un job **Lint** bloquant tourne dans les jobs Backend et Frontend de la CI. `react-hooks` est **épinglé en v5** (règles canoniques `rules-of-hooks` + `exhaustive-deps`) ; les règles expérimentales de la v7 (`set-state-in-effect`, `immutability`) ne sont pas adoptées. `no-explicit-any` est en `warn` (échappatoires assumées : composant générique `BtnGroup`, payloads WS non typés).
+ESLint (#127) : un job **Lint** bloquant tourne dans les jobs Backend et Frontend de la CI. ESLint 10 des deux côtés. `react-hooks` est en v7 (seule version compatible ESLint 10) mais **seules les règles canoniques** `rules-of-hooks` + `exhaustive-deps` sont activées ; les règles expérimentales de la v7 (`set-state-in-effect`, `immutability`) ne sont pas adoptées. `no-explicit-any` est en `warn` (échappatoires assumées : composant générique `BtnGroup`, payloads WS non typés).
 
 ## Workflow (issue → PR → release)
 
@@ -83,7 +83,7 @@ Risques connus et acceptés : le JWT reste en `localStorage` (#119, atténué pa
 
 ## Dépendances
 
-Dependabot est actif (npm ×2, docker ×3, github-actions). Les minors/patches passent normalement (PR groupées « minors-patches »). Les **majeures se traitent une par une**, avec lecture des notes de version : ne pas merger une majeure Dependabot sans vérification. `eslint-plugin-react-hooks` reste **volontairement en v5** (voir plus haut) ; `@eslint/js` doit suivre la majeure d'ESLint.
+Dependabot est actif (npm ×2, docker ×3, github-actions). Les minors/patches passent normalement (PR groupées « minors-patches »). Les **majeures se traitent une par une**, avec lecture des notes de version : ne pas merger une majeure Dependabot sans vérification. `eslint-plugin-react-hooks` : ne jamais activer son preset `recommended` (règles expérimentales, voir plus haut) ; `@eslint/js` doit suivre la majeure d'ESLint. TypeScript 7 attend que `typescript-eslint` le prenne en charge (#248).
 
 ## Prod
 
