@@ -441,3 +441,14 @@
 @media (prefers-reduced-motion: reduce) {
   .rule-demo__played { animation: none; }
 }
+
+.admin-versions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin-top: 12px;
+  font-size: 14px;
+  color: var(--cream-2);
+  b { color: var(--cream); font-variant-numeric: tabular-nums; }
+  &__warn { flex-basis: 100%; color: var(--gold-soft); }
+}

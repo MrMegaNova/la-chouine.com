@@ -7,6 +7,10 @@ const { query } = require('../db');
 const { requireAdmin } = require('../middleware/admin');
 const presenceStore = require('../realtime/presenceStore');
 const { IP_RETENTION_DAYS } = require('../services/visits');
+const config = require('../config');
+
+// Démarrage du processus : date du dernier déploiement du serveur.
+const STARTED_AT = new Date().toISOString();
 
 const router = express.Router();
 router.use(requireAdmin);
@@ -163,6 +167,7 @@ router.get('/dashboard', async (req, res) => {
       days,
       generatedAt: new Date().toISOString(),
       ipRetentionDays: IP_RETENTION_DAYS,
+      server: { ...config.release, startedAt: STARTED_AT },
       live,
       players: playerCounts,
       daily: perDay,

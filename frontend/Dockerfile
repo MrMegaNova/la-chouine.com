@@ -7,6 +7,10 @@ RUN npm ci && npm cache clean --force
 # ─── Build production ─────────────────────────────────────────────────────────
 FROM deps AS build
 COPY . .
+# Version de la release (passée par release.yml), affichée sur le tableau de
+# bord administrateur.
+ARG APP_VERSION=dev
+ENV VITE_APP_VERSION=$APP_VERSION
 RUN npm run build
 
 # ─── Serve (production) ───────────────────────────────────────────────────────

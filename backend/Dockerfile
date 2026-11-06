@@ -33,6 +33,12 @@ COPY --from=geo /geo/ ./geo/
 COPY docker-entrypoint.sh ./
 RUN chmod +x docker-entrypoint.sh
 
+# Version de la release (passée par release.yml), affichée sur le tableau de
+# bord administrateur. Placée en fin d'image pour ne pas invalider le cache.
+ARG APP_VERSION=dev
+ARG APP_COMMIT=
+ENV APP_VERSION=$APP_VERSION APP_COMMIT=$APP_COMMIT
+
 EXPOSE 3000
 USER node
 

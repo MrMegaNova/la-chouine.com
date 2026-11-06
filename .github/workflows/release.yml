@@ -65,3 +65,7 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to:   type=gha,scope=${{ matrix.service }},mode=max
           provenance: false
+          # Version affichée sur le tableau de bord administrateur.
+          build-args: |
+            APP_VERSION=${{ github.event.release.tag_name }}
+            APP_COMMIT=${{ github.sha }}
