@@ -129,6 +129,9 @@ async function attachWebSocketServer(httpServer, opts = {}) {
   // commence ») avant que la 1ʳᵉ main soit distribuée.
   const revealMs = opts.revealMs ?? 2000;
   const heartbeatMs = opts.heartbeatMs ?? 30000;
+  // Purge des joueurs « en ligne » sans marqueur vivant (#234), par le sweep.
+  const presencePurgeMs = opts.presencePurgeMs ?? 30000;
+  let lastPresencePurge = 0;
   const challengeTtlMs = opts.challengeTtlMs ?? 60000;
   const msgRatePerSec = opts.msgRatePerSec ?? 20;
   const msgBurst = opts.msgBurst ?? 40;
@@ -360,6 +363,12 @@ async function attachWebSocketServer(httpServer, opts = {}) {
     const release = await tryLock('sweep:lock', sweepMs).catch(() => null);
     if (!release) return;
     try {
+      // Joueurs comptés en ligne sans marqueur vivant (instance arrêtée
+      // brutalement) : retirés du compteur (#234).
+      if (Date.now() - lastPresencePurge >= presencePurgeMs) {
+        lastPresencePurge = Date.now();
+        if ((await presenceStore.purgeOnlineSet()) > 0) schedulePresence();
+      }
       // Grâces expirées → forfait.
       for (const uid of await presenceStore.listGraces()) {
         const g = await presenceStore.getGrace(uid);

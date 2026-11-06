@@ -13,9 +13,10 @@
 //   grace:{uid}   → deadline (ms epoch) avant forfait
 //   grace:set     → set des userId en grâce (parcouru par le sweep)
 //
-// Limite assumée (v1) : un crash d'instance laisse ses marqueurs online jusqu'à
-// expiration logique au prochain nettoyage — léger sur-comptage temporaire, sans
-// incidence sur le jeu.
+// Un crash d'instance laisse ses marqueurs online : ils expirent (TTL logique)
+// et le sweep retire périodiquement de `onl:set` les joueurs sans marqueur
+// vivant (`purgeOnlineSet`, #234). Le sur-comptage dure donc au plus un TTL
+// plus une période de purge.
 
 const { getClient, instanceId } = require('../redis/client');
 const matchmakingStore = require('./matchmakingStore');
@@ -40,20 +41,44 @@ const K = {
 // joueur a un socket vivant sur cette instance.
 const ONLINE_TTL_MS = 90_000;
 
+// Purge + comptage en un seul script (#299) : exécuté d'un bloc par Redis, il
+// ne peut pas s'intercaler avec un `addOnline`. En plusieurs commandes, un
+// marqueur écrit entre le comptage et le nettoyage était effacé, et un joueur
+// connecté apparaissait hors ligne.
+const LIVE_MARKERS_SCRIPT = `
+redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', ARGV[1])
+local n = redis.call('ZCARD', KEYS[1])
+if n == 0 then
+  redis.call('DEL', KEYS[1])
+  redis.call('SREM', KEYS[2], ARGV[2])
+end
+return n`;
+
 /** Retire les marqueurs expirés ; renvoie le nombre de marqueurs vivants. */
 async function liveMarkers(userId) {
-  const r = getClient();
-  await r.zremrangebyscore(K.online(userId), '-inf', Date.now());
-  const n = await r.zcard(K.online(userId));
-  if (n === 0) { await r.del(K.online(userId)); await r.srem(K.onlineSet, userId); }
-  return n;
+  return Number(await getClient().eval(
+    LIVE_MARKERS_SCRIPT, 2, K.online(userId), K.onlineSet, Date.now(), userId
+  ));
 }
 
 /** Marque le joueur connecté sur cette instance (marqueur à durée limitée). */
 async function addOnline(userId) {
-  const r = getClient();
-  await r.zadd(K.online(userId), Date.now() + ONLINE_TTL_MS, instanceId);
-  await r.sadd(K.onlineSet, userId);
+  await getClient().multi()
+    .zadd(K.online(userId), Date.now() + ONLINE_TTL_MS, instanceId)
+    .sadd(K.onlineSet, userId)
+    .exec();
+}
+
+/**
+ * Retire de `onl:set` les joueurs sans marqueur vivant (#234), par exemple
+ * ceux d'une instance arrêtée brutalement. Renvoie le nombre de joueurs retirés.
+ */
+async function purgeOnlineSet() {
+  let removed = 0;
+  for (const uid of await getClient().smembers(K.onlineSet)) {
+    if ((await liveMarkers(uid)) === 0) removed += 1;
+  }
+  return removed;
 }
 
 /**
@@ -119,5 +144,5 @@ async function listGraces() {
 
 module.exports = {
   K, ONLINE_TTL_MS, addOnline, refreshOnline, removeOnline, isOnline,
-  onlineCount, counts, userPresence, setGrace, getGrace, clearGrace, listGraces,
+  onlineCount, purgeOnlineSet, counts, userPresence, setGrace, getGrace, clearGrace, listGraces,
 };

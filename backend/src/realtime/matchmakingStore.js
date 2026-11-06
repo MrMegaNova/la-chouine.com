@@ -18,24 +18,35 @@ const VARIANTS = ['classic', 'mondoubleau'];
 const Z = (variant) => `mm:z:${variant}`;     // sorted set userId -> rating
 const T = (userId) => `mm:t:${userId}`;       // hash ticket
 
+const ZREM_IF_NO_TICKET = `
+if redis.call('EXISTS', KEYS[2]) == 0 then return redis.call('ZREM', KEYS[1], ARGV[1]) end
+return 0`;
+
 const DEFAULT_PARAMS = { initialWindow: 50, growthPerStep: 25, stepMs: 3000, fallbackMs: 30000 };
 
 /** Inscrit (ou réinscrit) un joueur ; un seul ticket par joueur, toutes files confondues. */
 async function join({ userId, name, rating, variant }, now = Date.now()) {
   await leave(userId);
-  const r = getClient();
-  await r.zadd(Z(variant), rating, userId);
-  await r.hset(T(userId), { userId, name, rating, variant, joinedAt: now });
+  // Entrée de file et ticket écrits ensemble (#234) : jamais l'un sans l'autre.
+  await getClient().multi()
+    .zadd(Z(variant), rating, userId)
+    .hset(T(userId), { userId, name, rating, variant, joinedAt: now })
+    .exec();
 }
 
-/** Retire un joueur de sa file. Renvoie true s'il y était. */
+/**
+ * Retire un joueur de sa file. Renvoie true s'il avait un ticket. Sans ticket,
+ * le joueur est quand même retiré de toutes les files (#234) : une entrée
+ * orpheline serait sinon comptée « en file » pour toujours.
+ */
 async function leave(userId) {
   const r = getClient();
   const variant = await r.hget(T(userId), 'variant');
-  if (!variant) return false;
-  await r.zrem(Z(variant), userId);
-  await r.del(T(userId));
-  return true;
+  const pipe = r.multi();
+  for (const v of VARIANTS) pipe.zrem(Z(v), userId);
+  pipe.del(T(userId));
+  await pipe.exec();
+  return !!variant;
 }
 
 async function has(userId) {
@@ -58,6 +69,12 @@ async function listTickets(variant) {
   const r = getClient();
   const ids = await r.zrange(Z(variant), 0, -1);
   const tickets = await Promise.all(ids.map(id => r.hgetall(T(id))));
+  // Entrées sans ticket (#234) : retirées au passage. Le script revérifie
+  // l'absence du ticket au moment du retrait, pour ne pas sortir de la file un
+  // joueur qui vient de s'y réinscrire.
+  for (const [i, id] of ids.entries()) {
+    if (!(tickets[i] && tickets[i].userId)) await r.eval(ZREM_IF_NO_TICKET, 2, Z(variant), T(id), id);
+  }
   return tickets
     .filter(t => t && t.userId)
     .map(t => ({ userId: t.userId, name: t.name, rating: Number(t.rating), variant: t.variant, joinedAt: Number(t.joinedAt) }));

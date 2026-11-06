@@ -70,3 +70,29 @@ test('grâce : deadline posée, listée, puis levée', async () => {
   assert.equal(await presence.getGrace('u1'), null);
   assert.deepEqual(await presence.listGraces(), []);
 });
+
+test('online (#299) : une vérification concurrente n’efface jamais un marqueur tout juste écrit', async () => {
+  // Chaque tour : marqueur expiré d'une instance morte, puis vérification et
+  // connexion lancées ensemble, avec un décalage variable.
+  for (let i = 0; i < 40; i++) {
+    await redis.zadd(presence.K.online('u1'), Date.now() - 1000, 'instance-morte');
+    await redis.sadd(presence.K.onlineSet, 'u1');
+    const late = async () => { for (let k = 0; k < i % 5; k++) await Promise.resolve(); return presence.addOnline('u1'); };
+    await Promise.all([presence.isOnline('u1'), late()]);
+    assert.equal(await presence.isOnline('u1'), true, `tour ${i} : marqueur effacé`);
+    assert.equal(await presence.onlineCount(), 1, `tour ${i} : joueur retiré du compteur`);
+    await presence.removeOnline('u1');
+  }
+});
+
+test('purgeOnlineSet (#234) : retire les joueurs sans marqueur vivant, garde les autres', async () => {
+  await presence.addOnline('vivant');
+  await redis.zadd(presence.K.online('fantome'), Date.now() - 1000, 'instance-morte');
+  await redis.sadd(presence.K.onlineSet, 'fantome', 'sans-marqueur');
+  assert.equal(await presence.onlineCount(), 3);
+
+  assert.equal(await presence.purgeOnlineSet(), 2);
+  assert.equal(await presence.onlineCount(), 1);
+  assert.equal(await presence.isOnline('vivant'), true);
+  assert.equal(await redis.exists(presence.K.online('fantome')), 0, 'marqueurs expirés supprimés');
+});
