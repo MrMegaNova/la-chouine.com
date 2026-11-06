@@ -14,6 +14,25 @@ const countryName = (code: string) => {
   try { return new Intl.DisplayNames(['fr'], { type: 'region' }).of(code) ?? code; } catch { return code; }
 };
 
+// Version de l'interface, posée à la construction de l'image.
+const UI_VERSION = import.meta.env.VITE_APP_VERSION || 'dev';
+
+function Versions({ server }: { server: Dashboard['server'] }) {
+  const started = new Date(server.startedAt).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
+  const mismatch = server.version !== UI_VERSION;
+  return (
+    <div className="admin-versions" aria-label="Versions déployées">
+      <span>Serveur <b>{server.version}</b>{server.commit && ` (${server.commit})`} · démarré le {started}</span>
+      <span>Interface <b>{UI_VERSION}</b></span>
+      {mismatch && (
+        <span className="admin-versions__warn" role="note">
+          ⚠ Versions différentes : redéployez le frontend, ou rechargez la page sans cache (Ctrl+Maj+R).
+        </span>
+      )}
+    </div>
+  );
+}
+
 const hours = (minutes: number) =>
   minutes >= 60 ? `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, '0')}` : `${minutes} min`;
 
@@ -62,6 +81,7 @@ export default function Admin() {
         </div>
       </div>
 
+      {data && <Versions server={data.server} />}
       {error && <p className="form-error" role="alert" style={{ marginTop: 20 }}>{error}</p>}
       {!data && !error && <p style={{ marginTop: 20 }}>Chargement…</p>}
 

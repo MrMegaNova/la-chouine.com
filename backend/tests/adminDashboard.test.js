@@ -185,6 +185,9 @@ test('le tableau de bord agrège joueurs, temps de jeu et visites', async () => 
   const d = res.body;
   assert.equal(d.days, 7);
   assert.equal(d.ipRetentionDays, 30);
+  // Version déployée : « dev » hors image Docker, date de démarrage du serveur.
+  assert.equal(d.server.version, 'dev');
+  assert.ok(!Number.isNaN(Date.parse(d.server.startedAt)));
   assert.equal(d.daily.length, 7);
   const today = d.daily[6];
   assert.ok(today.signups >= 3);

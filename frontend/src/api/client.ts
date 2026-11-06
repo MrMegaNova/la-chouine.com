@@ -278,6 +278,7 @@ export interface Dashboard {
   days: number;
   generatedAt: string;
   ipRetentionDays: number;
+  server: { version: string; commit: string | null; startedAt: string };
   live: { online: number; inQueue: number; inGame: number } | null;
   players: { total: number; verified: number; active1d: number; active7d: number; active30d: number };
   daily: DashboardDay[];

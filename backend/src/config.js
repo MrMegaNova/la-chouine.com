@@ -52,6 +52,12 @@ module.exports = {
     url: process.env.FRONTEND_URL || 'https://la-chouine.com',
   },
 
+  // Version déployée (tableau de bord administrateur), posée par l'image Docker.
+  release: {
+    version: process.env.APP_VERSION || 'dev',
+    commit: (process.env.APP_COMMIT || '').slice(0, 7) || null,
+  },
+
   auth: {
     bcryptRounds: 12,
     verifyTokenTtlMs: parseInt(process.env.VERIFY_TOKEN_TTL_MS || '86400000', 10),
