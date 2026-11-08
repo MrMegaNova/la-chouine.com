@@ -102,7 +102,7 @@ describe('<Profile> : suppression de compte (#238)', () => {
     await user.click(submitButton());
 
     expect(await screen.findByText('Page accueil')).toBeInTheDocument();
-    expect(usersApi.deleteAccount).toHaveBeenCalledWith('Motdepasse123!', 'tok');
+    expect(usersApi.deleteAccount).toHaveBeenCalledWith({ currentPassword: 'Motdepasse123!' }, 'tok');
     expect(useAuthStore.getState().token).toBeNull();
     expect(useOnlineStore.getState().status).toBe('idle');
     expect(screen.queryByText('Page connexion')).not.toBeInTheDocument();
@@ -146,5 +146,35 @@ describe('<Profile> : résultats déclarés (#279)', () => {
     const online = screen.getByText('vs Bob').parentElement;
     expect(local).toHaveTextContent('Résultat déclaré');
     expect(online).not.toHaveTextContent('Résultat déclaré');
+  });
+});
+
+describe('<Profile> : compte créé avec Google, Facebook ou Apple', () => {
+  const OAUTH_ME: MeResponse = { ...ME, hasPassword: false, providers: ['google'] };
+
+  beforeEach(() => {
+    mocked(usersApi.me).mockResolvedValue({ ok: true, status: 200, data: OAUTH_ME });
+    useAuthStore.setState({ token: 'tok', user: OAUTH_ME });
+  });
+
+  it('pas de changement de mot de passe, fournisseur indiqué', () => {
+    renderProfile();
+    expect(screen.queryByRole('button', { name: 'Changer mon mot de passe' })).not.toBeInTheDocument();
+    expect(screen.getByText('Connexion avec Google.')).toBeInTheDocument();
+    expect(screen.getByText(/Pas encore de mot de passe/)).toBeInTheDocument();
+  });
+
+  it('suppression : on recopie son pseudo au lieu du mot de passe', async () => {
+    const user = userEvent.setup();
+    mocked(usersApi.deleteAccount).mockResolvedValue({ ok: true, status: 200, data: { message: 'Compte supprimé.' } });
+    renderProfile();
+    await user.click(screen.getByRole('button', { name: 'Supprimer mon compte' }));
+    expect(screen.queryByLabelText('Mot de passe actuel')).not.toBeInTheDocument();
+    await user.type(screen.getByLabelText(/Recopiez votre pseudo/), 'alice');
+    await user.click(screen.getByRole('checkbox'));
+    await user.click(submitButton());
+
+    expect(await screen.findByText('Page accueil')).toBeInTheDocument();
+    expect(usersApi.deleteAccount).toHaveBeenCalledWith({ confirmUsername: 'alice' }, 'tok');
   });
 });

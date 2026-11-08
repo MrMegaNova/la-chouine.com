@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { useOnlineStore } from '@/store/onlineStore';
-import { usersApi, type HistoryEntry } from '@/api/client';
+import { usersApi, type HistoryEntry, type OAuthProvider } from '@/api/client';
 import { EyeToggle, PasswordChecklist, passwordValid } from '@/components/auth/password';
 import { AvatarContent } from '@/components/Avatar';
 import { Achievements } from '@/components/Achievements';
@@ -171,9 +171,11 @@ function AvatarEditor() {
   );
 }
 
+const PROVIDER_LABELS: Record<OAuthProvider, string> = { google: 'Google', facebook: 'Facebook', apple: 'Apple' };
+
 // Changement de mot de passe par l'utilisateur connecté (#108).
 function ChangePasswordSection() {
-  const { token } = useAuthStore();
+  const { token, user } = useAuthStore();
   const [open, setOpen] = useState(false);
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
@@ -204,10 +206,23 @@ function ChangePasswordSection() {
     <div className="panel" style={{ marginBottom: 30, maxWidth: 460 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <h3 style={{ fontFamily: 'var(--serif)', fontSize: 22, margin: 0, flex: 1 }}>🔒 Sécurité</h3>
-        <button className="btn btn--ghost btn--sm" onClick={() => { setOpen(o => !o); setError(''); setSuccess(''); }}>
-          {open ? 'Fermer' : 'Changer mon mot de passe'}
-        </button>
+        {user?.hasPassword !== false && (
+          <button className="btn btn--ghost btn--sm" onClick={() => { setOpen(o => !o); setError(''); setSuccess(''); }}>
+            {open ? 'Fermer' : 'Changer mon mot de passe'}
+          </button>
+        )}
       </div>
+      {user?.providers && user.providers.length > 0 && (
+        <p style={{ marginTop: 10, fontSize: 15 }}>
+          Connexion avec {user.providers.map(p => PROVIDER_LABELS[p]).join(', ')}.
+        </p>
+      )}
+      {user?.hasPassword === false && (
+        <p style={{ marginTop: 6, fontSize: 15, opacity: 0.85 }}>
+          Pas encore de mot de passe. Pour vous connecter aussi avec votre pseudo, créez-en un avec
+          « Mot de passe oublié » sur la page de connexion.
+        </p>
+      )}
 
       {open && (
         <div style={{ marginTop: 14 }}>
@@ -247,7 +262,9 @@ function ChangePasswordSection() {
 // Suppression définitive du compte (RGPD, #238) : mot de passe + confirmation
 // explicite. Après succès : déconnexion et retour à l'accueil.
 function DeleteAccountSection({ deleting }: { deleting: React.MutableRefObject<boolean> }) {
-  const { token, logout } = useAuthStore();
+  const { token, logout, user } = useAuthStore();
+  // Compte créé avec Google, Facebook ou Apple, sans mot de passe : on recopie son pseudo.
+  const byUsername = user?.hasPassword === false;
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [password, setPassword] = useState('');
@@ -264,7 +281,8 @@ function DeleteAccountSection({ deleting }: { deleting: React.MutableRefObject<b
     if (!token || !password || !confirmed || loading) return;
     setError(''); setLoading(true);
     deleting.current = true;
-    const { ok, status, data } = await usersApi.deleteAccount(password, token);
+    const { ok, status, data } = await usersApi.deleteAccount(
+      byUsername ? { confirmUsername: password } : { currentPassword: password }, token);
     // Sans réponse exploitable, un 401 ou une session déjà fermée par le serveur
     // indiquent que le compte n'existe plus : même sortie qu'un succès.
     if (ok || status === 401 || !useAuthStore.getState().token) {
@@ -295,6 +313,13 @@ function DeleteAccountSection({ deleting }: { deleting: React.MutableRefObject<b
             <li>si une partie en ligne est en cours, vous la perdez par forfait ;</li>
             <li>vos parties déjà jouées restent dans l’historique de vos adversaires, sous le nom « Ancien joueur ».</li>
           </ul>
+          {byUsername ? (
+            <div className="field">
+              <label htmlFor="delete-account-username">Recopiez votre pseudo : {user?.username}</label>
+              <input id="delete-account-username" value={password} autoComplete="off"
+                onChange={e => setPassword(e.target.value)} />
+            </div>
+          ) : (
           <div className="field">
             <label htmlFor="delete-account-password">Mot de passe actuel</label>
             <div style={{ position: 'relative' }}>
@@ -305,6 +330,7 @@ function DeleteAccountSection({ deleting }: { deleting: React.MutableRefObject<b
               <EyeToggle shown={showPassword} onToggle={() => setShowPassword(s => !s)} />
             </div>
           </div>
+          )}
           <label style={{ display: 'flex', gap: 10, alignItems: 'center', minHeight: 44, marginBottom: 12, cursor: 'pointer' }}>
             <input type="checkbox" checked={confirmed} onChange={e => setConfirmed(e.target.checked)}
               style={{ width: 22, height: 22, flex: '0 0 auto' }} />

@@ -18,6 +18,9 @@ const guardsOff = config.isTest;
 
 const router = express.Router();
 
+// Connexion avec Google, Facebook ou Apple.
+router.use('/oauth', require('./oauth'));
+
 // Hash comparé quand le pseudo est inconnu, pour que le login coûte le même
 // calcul bcrypt que le compte existe ou non (#223). Il doit être valide (60
 // caractères) : bcryptjs répond `false` sans rien calculer sur un hash mal formé.
@@ -210,10 +213,11 @@ router.post('/login', async (req, res) => {
     const user = rows[0];
 
     // Toujours appeler bcrypt pour éviter le timing oracle
-    const validHash = user ? user.password_hash : DUMMY_PASSWORD_HASH;
+    // Compte créé par Google, Facebook ou Apple sans mot de passe : échec, au même coût.
+    const validHash = user?.password_hash || DUMMY_PASSWORD_HASH;
     const match = await bcrypt.compare(password, validHash);
 
-    if (!user || !match) {
+    if (!user || !user.password_hash || !match) {
       if (!guardsOff) authGuard.loginFailed(req.ip, username);
       return res.status(401).json({ error: 'Identifiants incorrects.' });
     }

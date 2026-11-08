@@ -63,6 +63,17 @@ services:
       SMTP_PASS:      ${SMTP_PASS}
       SMTP_FROM:      ${SMTP_FROM}
       FRONTEND_URL:   ${FRONTEND_URL}
+      # Connexion avec Google, Facebook ou Apple : un fournisseur sans ses
+      # variables n'est pas proposé.
+      OAUTH_REDIRECT_BASE:  ${OAUTH_REDIRECT_BASE:-}
+      GOOGLE_CLIENT_ID:     ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      FACEBOOK_APP_ID:      ${FACEBOOK_APP_ID:-}
+      FACEBOOK_APP_SECRET:  ${FACEBOOK_APP_SECRET:-}
+      APPLE_CLIENT_ID:      ${APPLE_CLIENT_ID:-}
+      APPLE_TEAM_ID:        ${APPLE_TEAM_ID:-}
+      APPLE_KEY_ID:         ${APPLE_KEY_ID:-}
+      APPLE_PRIVATE_KEY:    ${APPLE_PRIVATE_KEY:-}
     volumes:
       # Base MaxMind tenue à jour par geoipupdate (#311), en lecture seule.
       - geoip_data:/geoip:ro

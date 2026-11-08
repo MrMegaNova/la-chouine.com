@@ -9,6 +9,8 @@ import { MemoryRouter, Routes, Route } from 'react-router-dom';
 vi.mock('@/api/client', () => ({
   authApi: { login: vi.fn(), register: vi.fn(), forgotPassword: vi.fn() },
   usersApi: { me: vi.fn() },
+  oauthApi: { providers: vi.fn().mockResolvedValue({ ok: true, status: 200, data: { providers: [] } }) },
+  oauthStartUrl: vi.fn(),
 }));
 
 import Login from './Login';

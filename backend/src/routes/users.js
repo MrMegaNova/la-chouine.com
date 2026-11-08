@@ -21,6 +21,8 @@ router.get('/me', requireAuth, async (req, res) => {
   try {
     const { rows } = await query(
       `SELECT u.id, u.username, u.email, u.created_at, u.avatar, u.is_admin,
+              u.password_hash IS NOT NULL AS has_password,
+              ARRAY(SELECT provider FROM user_identities i WHERE i.user_id = u.id ORDER BY provider) AS providers,
               u.rating_classic, u.rating_mondoubleau,
               ${STATS_COLUMNS}
        FROM users u
@@ -37,6 +39,10 @@ router.get('/me', requireAuth, async (req, res) => {
       joined: u.created_at,
       avatar: u.avatar || null,
       isAdmin: u.is_admin, // tableau de bord (#311)
+      // Connexion avec Google, Facebook ou Apple : comptes rattachés, et
+      // mot de passe défini ou non (sinon, « Mot de passe oublié » en crée un).
+      hasPassword: u.has_password,
+      providers: u.providers,
       stats: formatStats(u),
       ratings: {
         classic: Number(u.rating_classic),
@@ -236,6 +242,11 @@ router.post('/me/password', changePasswordLimiter, requireAuth, async (req, res)
     );
     if (!rows.length) return res.status(404).json({ error: 'Utilisateur introuvable.' });
 
+    if (!rows[0].password_hash) {
+      return res.status(403).json({
+        error: 'Votre compte n’a pas encore de mot de passe : créez-en un avec « Mot de passe oublié » sur la page de connexion.',
+      });
+    }
     const match = await bcrypt.compare(currentPassword, rows[0].password_hash);
     if (!match) return res.status(403).json({ error: 'Mot de passe actuel incorrect.' });
 
@@ -269,21 +280,27 @@ router.post('/me/password', changePasswordLimiter, requireAuth, async (req, res)
 // anonymise ses sièges ; amitiés et badges suivent par CASCADE. Le JWT devient
 // inutilisable : checkTokenVersion ne trouve plus le compte.
 
+// Un compte sans mot de passe (créé avec Google, Facebook ou Apple) confirme
+// en recopiant son pseudo.
 router.delete('/me', deleteAccountLimiter, requireAuth, async (req, res) => {
-  const { currentPassword } = req.body || {};
-  if (typeof currentPassword !== 'string' || !currentPassword) {
-    return res.status(422).json({ error: 'Mot de passe actuel requis.' });
-  }
+  const { currentPassword, confirmUsername } = req.body || {};
 
   try {
     const { rows } = await query(
-      `SELECT password_hash FROM users WHERE id = $1`,
+      `SELECT username, password_hash FROM users WHERE id = $1`,
       [req.user.id]
     );
     if (!rows.length) return res.status(404).json({ error: 'Utilisateur introuvable.' });
 
-    const match = await bcrypt.compare(currentPassword, rows[0].password_hash);
-    if (!match) return res.status(403).json({ error: 'Mot de passe actuel incorrect.' });
+    if (rows[0].password_hash) {
+      if (typeof currentPassword !== 'string' || !currentPassword) {
+        return res.status(422).json({ error: 'Mot de passe actuel requis.' });
+      }
+      const match = await bcrypt.compare(currentPassword, rows[0].password_hash);
+      if (!match) return res.status(403).json({ error: 'Mot de passe actuel incorrect.' });
+    } else if (confirmUsername !== rows[0].username) {
+      return res.status(422).json({ error: 'Recopiez votre pseudo pour confirmer.' });
+    }
 
     await accountRemoval.removeAccount(req.user.id, () =>
       query(`DELETE FROM users WHERE id = $1`, [req.user.id]));
