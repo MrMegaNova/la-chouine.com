@@ -79,7 +79,28 @@ export interface MeResponse {
   ratings: { classic: number; mondoubleau: number };
   achievements: Achievement[]; // badges débloqués (#217)
   isAdmin?: boolean;           // accès au tableau de bord (#311)
+  hasPassword?: boolean;       // faux pour un compte créé avec Google, Facebook ou Apple
+  providers?: OAuthProvider[]; // fournisseurs rattachés au compte
 }
+
+// ─── Connexion avec Google, Facebook ou Apple ────────────────────────────────
+
+export type OAuthProvider = 'google' | 'facebook' | 'apple';
+
+/** Lance la connexion : navigation complète vers le serveur, qui redirige. */
+export function oauthStartUrl(provider: OAuthProvider, invitation?: string): string {
+  const q = invitation ? `?invitation=${encodeURIComponent(invitation)}` : '';
+  return `${BASE}/auth/oauth/${provider}${q}`;
+}
+
+export const oauthApi = {
+  providers: () => apiCall<{ providers: OAuthProvider[] }>('GET', '/auth/oauth/providers'),
+  exchange: (code: string) => apiCall<LoginResponse & { error?: string }>('POST', '/auth/oauth/exchange', { code }),
+  signup: (code: string) =>
+    apiCall<{ provider: OAuthProvider; suggestion: string; error?: string }>('GET', `/auth/oauth/signup?code=${encodeURIComponent(code)}`),
+  complete: (code: string, username: string) =>
+    apiCall<LoginResponse & { error?: string }>('POST', '/auth/oauth/complete', { code, username }),
+};
 
 export const authApi = {
   register: (p: RegisterPayload) =>
@@ -159,8 +180,9 @@ export const usersApi = {
       'POST', '/users/me/password', { currentPassword, newPassword }, token),
 
   // Suppression définitive du compte (#238).
-  deleteAccount: (currentPassword: string, token: string) =>
-    apiCall<{ message?: string; error?: string }>('DELETE', '/users/me', { currentPassword }, token),
+  /** Mot de passe, ou pseudo recopié pour un compte sans mot de passe. */
+  deleteAccount: (confirm: { currentPassword?: string; confirmUsername?: string }, token: string) =>
+    apiCall<{ message?: string; error?: string }>('DELETE', '/users/me', confirm, token),
 
   // Avatar (#87) : data URL (base64) d'une image redimensionnée côté client.
   setAvatar: (avatar: string, token: string) =>

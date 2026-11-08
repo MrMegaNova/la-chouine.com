@@ -13,6 +13,7 @@ import Home from '@/pages/Home';
 import About from '@/pages/About';
 import Play from '@/pages/Play';
 import Login from '@/pages/Login';
+import OAuthReturn from '@/pages/OAuthReturn';
 import ResetPassword from '@/pages/ResetPassword';
 import VerifyEmail from '@/pages/VerifyEmail';
 import Invitation from '@/pages/Invitation';
@@ -106,6 +107,8 @@ export default function App() {
           <Route path="/jeu" element={game ? null : <Navigate to="/jouer" replace />} />
           {/* Déjà connecté → pas de page de connexion (#112), retour à l'accueil. */}
           <Route path="/connexion" element={token ? <Navigate to="/" replace /> : <Login />} />
+          {/* Retour de Google, Facebook ou Apple. */}
+          <Route path="/connexion/retour" element={<OAuthReturn />} />
           <Route path="/amis" element={<Friends />} />
           <Route path="/profil" element={<Profile />} />
           <Route path="/joueur/:id" element={<PlayerProfile />} />

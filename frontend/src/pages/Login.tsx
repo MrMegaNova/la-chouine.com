@@ -5,6 +5,7 @@ import { authApi } from '@/api/client';
 import { EyeToggle, PasswordChecklist } from '@/components/auth/password';
 import { invitePath, isInviteCode } from '@/invitation';
 import { pendingGuestMatches } from '@/game/guestMatches';
+import { SocialLogin } from '@/components/auth/SocialLogin';
 
 type Tab = 'login' | 'register' | 'forgot';
 
@@ -98,6 +99,8 @@ export default function Login() {
             Une fois votre email vérifié, vous deviendrez amis avec la personne qui vous invite.
           </p>
         )}
+
+        {tab !== 'forgot' && <SocialLogin invitation={invitation} />}
 
         {tab !== 'forgot' && (
           <div className="tabs">

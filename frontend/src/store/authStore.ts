@@ -8,6 +8,8 @@ interface AuthState {
   loading: boolean;
 
   login: (username: string, password: string) => Promise<string | null>;
+  /** Ouvre la session reçue d'un autre parcours (Google, Facebook, Apple). */
+  startSession: (session: { token: string; id: string; username: string }) => Promise<void>;
   register: (username: string, email: string, password: string, website?: string, invitationCode?: string) => Promise<string | null>;
   logout: () => void;
   restoreSession: () => Promise<void>;
@@ -24,9 +26,13 @@ export const useAuthStore = create<AuthState>()(
       login: async (username, password) => {
         const { ok, data } = await authApi.login(username, password);
         if (!ok) return (data as { error?: string }).error ?? 'Erreur.';
-        set({ token: data.token, user: { id: data.id, username: data.username, email: '', joined: '', avatar: null, stats: { wins: 0, losses: 0, plays: 0, local: { wins: 0, losses: 0, plays: 0 } }, ratings: { classic: 1500, mondoubleau: 1500 }, achievements: [] } });
-        await get().refreshUser();
+        await get().startSession(data);
         return null;
+      },
+
+      startSession: async ({ token, id, username }) => {
+        set({ token, user: { id, username, email: '', joined: '', avatar: null, stats: { wins: 0, losses: 0, plays: 0, local: { wins: 0, losses: 0, plays: 0 } }, ratings: { classic: 1500, mondoubleau: 1500 }, achievements: [] } });
+        await get().refreshUser();
       },
 
       register: async (username, email, password, website, invitationCode) => {

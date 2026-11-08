@@ -30,6 +30,15 @@ export default function Privacy() {
           l'historique de vos adversaires sous le nom « Ancien joueur ».
         </p>
 
+        <h2 style={H}>Connexion avec Google, Facebook ou Apple</h2>
+        <p style={P}>
+          Si vous choisissez ce mode de connexion, le service choisi nous transmet votre
+          identifiant chez lui, votre adresse email et votre prénom (proposé comme pseudo). Nous
+          ne recevons ni votre mot de passe, ni vos contacts, ni vos publications, et nous ne
+          publions rien en votre nom. Ces données suivent les règles de votre compte ci-dessus.
+          Le service choisi sait, de son côté, que vous vous êtes connecté à la-chouine.com.
+        </p>
+
         <h2 style={H}>Mesure d'audience</h2>
         <p style={P}>
           Pour savoir combien de personnes visitent le site et d'où elles viennent, chaque
