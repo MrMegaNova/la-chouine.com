@@ -7,7 +7,8 @@ import {
 } from '@/game/engine';
 import { aiChooseLead, aiChooseResponse, aiChooseCombos } from '@/game/ai';
 import { SUIT_SYMBOL, PTS, ORDER } from '@/game/constants';
-import { gamesApi } from '@/api/client';
+import { gamesApi, type SaveGamePayload } from '@/api/client';
+import { keepGuestMatch } from '@/game/guestMatches';
 import type { GameState, GameOpts, Card, HandResult } from '@/game/types';
 
 interface GameStore {
@@ -25,7 +26,11 @@ interface GameStore {
   revealForPlayer: (seat: number) => void;
   clearPendingResult: () => void;
   clearToast: () => void;
-  saveMatchResult: (token: string | null, userId: string | null) => Promise<void>;
+  /**
+   * Enregistre le match terminé, une seule fois : dans l'historique si le joueur
+   * est connecté, sinon dans le navigateur, en attendant qu'il se connecte.
+   */
+  recordMatchEnd: (token: string | null, userId: string | null) => Promise<void>;
 }
 
 let aiTimer: ReturnType<typeof setTimeout> | null = null;
@@ -57,6 +62,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     // chaque joueur pioche d'abord pour désigner le donneur.
     const game = createGame(opts);
     matchStartedAt = Date.now();
+    matchRecorded = false;
     set({ game, pendingResult: null, toast: 'Tirez une carte pour désigner le donneur.' });
     scheduleCutIfNeeded(game);
   },
@@ -191,16 +197,17 @@ export const useGameStore = create<GameStore>((set, get) => ({
   clearPendingResult: () => set({ pendingResult: null }),
   clearToast: () => set({ toast: null }),
 
-  saveMatchResult: async (token, userId) => {
+  recordMatchEnd: async (token, userId) => {
     const { game } = get();
-    if (!game || !token || !userId) return;
+    if (!game || matchRecorded || !game.scores.some(s => s >= game.target)) return;
+    matchRecorded = true;
     const players = game.names.map((name, i) => ({
       userId: i === 0 ? userId : null,
-      guestName: i === 0 ? null : name,
+      guestName: i === 0 && userId ? null : name,
       score: game.scores[i],
       won: game.scores[i] >= game.target,
     }));
-    await gamesApi.save({
+    const payload: SaveGamePayload = {
       mode: game.mode,
       variant: game.variant,
       playerCount: game.playerCount,
@@ -208,7 +215,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
       difficulty: game.diff,
       players,
       durationSec: matchStartedAt ? Math.round((Date.now() - matchStartedAt) / 1000) : undefined,
-    }, token);
+    };
+    if (token && userId) await gamesApi.save(payload, token);
+    else keepGuestMatch(payload);
   },
 }));
 
@@ -217,6 +226,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
 // Début du match en cours (#311), pour le temps de jeu enregistré. 0 si inconnu
 // (partie restaurée après un rechargement : durée non transmise).
 let matchStartedAt = 0;
+// Le match en cours a-t-il déjà été enregistré ? (« Rejouer » et « Accueil »
+// passent tous deux par la fin du match.)
+let matchRecorded = false;
 
 function isAuto(game: GameState, seat: number): boolean {
   return (game.mode === 'ai' || game.mode === 'friend') && seat > 0;
