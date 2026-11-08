@@ -26,10 +26,12 @@ import { usePageMeta } from '@/seo/usePageMeta';
 import { useVisitTracking } from '@/analytics/trackVisit';
 import { applyPendingUpdate } from '@/pwa/serviceWorker';
 import { unlockAudio } from '@/sound/sounds';
+import { flushGuestMatches } from '@/game/guestMatches';
 import '@/styles/main.scss';
 
 export default function App() {
   const { restoreSession, token } = useAuthStore();
+  const userId = useAuthStore(s => s.user?.id);
   const { game } = useGameStore();
   const onlineStatus = useOnlineStore(s => s.status);
   const { connectPresence, disconnectPresence } = useOnlineStore();
@@ -51,6 +53,18 @@ export default function App() {
     if (token) connectPresence(token);
     else disconnectPresence();
   }, [token]);
+
+  // Parties jouées sans compte (#290) : ajoutées à l'historique dès la connexion.
+  useEffect(() => {
+    if (!token || !userId) return;
+    flushGuestMatches(token, userId).then(saved => {
+      if (saved === 0) return;
+      useNotificationStore.getState().showToast(saved === 1
+        ? '🏆 Votre partie a été ajoutée à votre historique.'
+        : `🏆 Vos ${saved} parties ont été ajoutées à votre historique.`);
+      useAuthStore.getState().refreshUser();
+    });
+  }, [token, userId]);
 
   // Badge d'invitations ami (#44) : chargé à la connexion et au retour sur
   // l'onglet (les invitations reçues hors ligne n'ont pas de notification WS).

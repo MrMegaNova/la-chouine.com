@@ -4,6 +4,7 @@ import { useAuthStore } from '@/store/authStore';
 import { authApi } from '@/api/client';
 import { EyeToggle, PasswordChecklist } from '@/components/auth/password';
 import { invitePath, isInviteCode } from '@/invitation';
+import { pendingGuestMatches } from '@/game/guestMatches';
 
 type Tab = 'login' | 'register' | 'forgot';
 
@@ -84,6 +85,13 @@ export default function Login() {
         <p className="note" style={{ marginBottom: 20 }}>
           {tab === 'login' ? 'Connectez-vous pour retrouver vos amis.' : tab === 'register' ? 'Créez un compte gratuit pour jouer en ligne.' : 'Recevez par email un lien pour réinitialiser votre mot de passe — ou, si votre compte n\'est pas encore activé, un nouveau lien d\'activation.'}
         </p>
+
+        {tab !== 'forgot' && pendingGuestMatches().length > 0 && (
+          <p className="form-ok" style={{ fontSize: 14, marginBottom: 16 }}>
+            {pendingGuestMatches().length === 1 ? 'Votre partie sera ajoutée' : 'Vos parties seront ajoutées'} à votre
+            historique dès votre connexion{tab === 'register' ? ', une fois votre email vérifié' : ''}.
+          </p>
+        )}
 
         {invitation && tab === 'register' && (
           <p style={{ fontSize: 14, marginBottom: 16 }}>

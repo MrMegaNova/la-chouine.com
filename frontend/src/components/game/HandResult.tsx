@@ -1,4 +1,7 @@
+import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useGameStore } from '@/store/gameStore';
+import { EndOfMatchPrompt } from './EndOfMatchPrompt';
 import type { GameState, HandResult as HandResultType } from '@/game/types';
 
 interface Props {
@@ -21,19 +24,27 @@ function initials(n: string): string {
 }
 
 export function HandResult({ result, game, onNext, token, userId, online }: Props) {
-  const { newHand, quitGame, startGame, saveMatchResult } = useGameStore();
+  const { newHand, quitGame, startGame, recordMatchEnd } = useGameStore();
+  const navigate = useNavigate();
+  const matchOver = result.matchWinner !== null;
+
+  // Match local terminé (#290) : enregistré une seule fois, dès l'affichage du
+  // résultat, quel que soit le bouton choisi ensuite. Sans compte, la partie est
+  // gardée dans le navigateur jusqu'à la connexion.
+  useEffect(() => {
+    if (!online && matchOver) void recordMatchEnd(token, userId);
+  }, [online, matchOver, recordMatchEnd, token, userId]);
 
   // Online : l'enregistrement classé (Elo) est déjà fait côté serveur ; la main
   // suivante n'est distribuée qu'une fois les deux joueurs prêts (le serveur
   // pousse alors le nouvel état, qui efface ce résultat).
   const handleNext = online ? online.nextHand : () => { onNext(); newHand(); };
   const handleRematch = online ? online.rematch : () => { onNext(); startGame(game.opts); };
-  const handleHome = online ? online.home : async () => {
-    if (result.matchWinner !== null) {
-      await saveMatchResult(token, userId);
-    }
+  const handleHome = online ? online.home : () => { onNext(); quitGame(); };
+  const handleAccount = (tab: 'inscription' | 'connexion') => {
     onNext();
     quitGame();
+    navigate(tab === 'inscription' ? '/connexion?onglet=inscription' : '/connexion');
   };
 
   const { winner, forced, matchWinner, cp, ann, der, tot } = result;
@@ -103,6 +114,9 @@ export function HandResult({ result, game, onNext, token, userId, online }: Prop
           {scoreDisplay}
         </div>
         <div className="list" style={{ marginBottom: 18 }}>{playerRows}</div>
+        {matchOver && !online && (
+          <EndOfMatchPrompt token={token} won={matchWinner === 0} onAccount={handleAccount} />
+        )}
         {matchWinner !== null ? (
           <div style={{ display: 'flex', gap: 10 }}>
             <button className="btn btn--gold" style={{ flex: 1 }} onClick={handleRematch}>Rejouer</button>
