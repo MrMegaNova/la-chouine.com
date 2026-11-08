@@ -9,7 +9,7 @@ Application web pour jouer à **La Chouine**, le jeu de cartes historique de la 
 - Jeu à 2, 3 ou 4 joueurs
 - Variante **Classique** et **Mondoubleau** (sans retourne)
 - Trois modes : contre l'ordinateur, en local (même appareil), entre amis en ligne
-- Inscription avec vérification par email
+- Inscription avec vérification par email, ou connexion avec Google, Facebook ou Apple (voir [docs/oauth.md](docs/oauth.md))
 - Historique des parties et profil joueur
 - Système d'amis (invitations, acceptation)
 
@@ -103,6 +103,7 @@ cd frontend && npm run build   # → frontend/dist/
 | `SMTP_USER` | Adresse expéditeur |
 | `SMTP_PASS` | Mot de passe SMTP |
 | `FRONTEND_URL` | URL du frontend (pour les liens dans les emails) |
+| `OAUTH_REDIRECT_BASE`, `GOOGLE_*`, `FACEBOOK_*`, `APPLE_*` | Connexion avec Google, Facebook ou Apple, facultative : voir [docs/oauth.md](docs/oauth.md) |
 
 Générer un `JWT_SECRET` :
 ```bash
