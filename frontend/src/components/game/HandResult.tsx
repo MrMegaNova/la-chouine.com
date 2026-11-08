@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useGameStore } from '@/store/gameStore';
 import { EndOfMatchPrompt } from './EndOfMatchPrompt';
 import type { GameState, HandResult as HandResultType } from '@/game/types';
@@ -26,6 +26,8 @@ function initials(n: string): string {
 export function HandResult({ result, game, onNext, token, userId, online }: Props) {
   const { newHand, quitGame, startGame, recordMatchEnd } = useGameStore();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const [leaving, setLeaving] = useState(false);
   const matchOver = result.matchWinner !== null;
 
   // Match local terminé (#290) : enregistré une seule fois, dès l'affichage du
@@ -41,11 +43,17 @@ export function HandResult({ result, game, onNext, token, userId, online }: Prop
   const handleNext = online ? online.nextHand : () => { onNext(); newHand(); };
   const handleRematch = online ? online.rematch : () => { onNext(); startGame(game.opts); };
   const handleHome = online ? online.home : () => { onNext(); quitGame(); };
+  // Vers l'inscription : la partie n'est quittée qu'une fois la page atteinte.
+  // Quittée avant, la table disparaît pendant que la navigation (une transition
+  // React Router, moins prioritaire) est encore en attente : la route /jeu, vide,
+  // redirige alors vers /jouer.
   const handleAccount = (tab: 'inscription' | 'connexion') => {
-    onNext();
-    quitGame();
+    setLeaving(true);
     navigate(tab === 'inscription' ? '/connexion?onglet=inscription' : '/connexion');
   };
+  useEffect(() => {
+    if (leaving && pathname === '/connexion') { onNext(); quitGame(); }
+  }, [leaving, pathname, onNext, quitGame]);
 
   const { winner, forced, matchWinner, cp, ann, der, tot } = result;
 
@@ -77,7 +85,7 @@ export function HandResult({ result, game, onNext, token, userId, online }: Prop
   if (matchWinner !== null) {
     headline = (
       <>
-        <div className="endbig win">{game.names[matchWinner]} gagne&nbsp;!</div>
+        <div className="endbig win">{game.names[matchWinner] === 'Vous' ? 'Vous gagnez' : `${game.names[matchWinner]} gagne`}&nbsp;!</div>
         <p className="section-sub" style={{ textAlign: 'center' }}>Match terminé</p>
       </>
     );

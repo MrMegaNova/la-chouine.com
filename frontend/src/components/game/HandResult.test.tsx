@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { MemoryRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { HandResult } from './HandResult';
 import { useGameStore } from '@/store/gameStore';
 import { usersApi } from '@/api/client';
@@ -25,22 +25,36 @@ function Where() {
   return <p data-testid="where">{pathname + search}</p>;
 }
 
-function show(props: { matchWinner: number | null; token?: string | null }) {
-  return render(
-    <MemoryRouter initialEntries={['/jeu']}>
+// Comme dans App : la table (et son résultat) recouvre les routes tant qu'une
+// partie existe, et /jeu sans partie renvoie vers /jouer.
+function Shell(props: { matchWinner: number | null; token: string | null }) {
+  const current = useGameStore(st => st.game);
+  return (
+    <>
       <Routes>
-        <Route path="/jeu" element={(
-          <HandResult result={result(props.matchWinner)} game={game} onNext={vi.fn()}
-            token={props.token ?? null} userId={props.token ? 'u1' : null} />
-        )} />
+        <Route path="/jeu" element={current ? null : <Navigate to="/jouer" replace />} />
+        <Route path="/jouer" element={<Where />} />
         <Route path="/connexion" element={<Where />} />
       </Routes>
+      {current && (
+        <HandResult result={result(props.matchWinner)} game={game} onNext={vi.fn()}
+          token={props.token} userId={props.token ? 'u1' : null} />
+      )}
+    </>
+  );
+}
+
+function show(props: { matchWinner: number | null; token?: string | null }) {
+  useGameStore.setState({ game });
+  return render(
+    <MemoryRouter initialEntries={['/jeu']}>
+      <Shell matchWinner={props.matchWinner} token={props.token ?? null} />
     </MemoryRouter>,
   );
 }
 
 const recordMatchEnd = vi.fn().mockResolvedValue(undefined);
-const quitGame = vi.fn();
+const quitGame = vi.fn(() => useGameStore.setState({ game: null }));
 
 beforeEach(() => {
   vi.restoreAllMocks();
@@ -56,10 +70,12 @@ describe('<HandResult> — fin de match (#290)', () => {
     expect(recordMatchEnd).toHaveBeenCalledTimes(1);
     expect(recordMatchEnd).toHaveBeenCalledWith(null, null);
     expect(screen.getByText('Gardez cette victoire !')).toBeInTheDocument();
+    expect(screen.getByText(/Moi gagne/)).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Créer mon compte' }));
-    expect(quitGame).toHaveBeenCalled();
-    expect(screen.getByTestId('where')).toHaveTextContent('/connexion?onglet=inscription');
+    // Arrivé sur l'inscription, et pas renvoyé vers /jouer par la route /jeu.
+    expect(await screen.findByTestId('where')).toHaveTextContent('/connexion?onglet=inscription');
+    expect(quitGame).toHaveBeenCalledTimes(1);
   });
 
   it('défaite sans compte : propose quand même de garder le score', () => {
