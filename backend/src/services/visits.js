@@ -54,15 +54,25 @@ function referrerHost(raw) {
   }
 }
 
-async function recordVisit(query, { ip, userAgent, path, referrer, userId }, now = new Date()) {
+/**
+ * Campagne d'arrivée (`?src=affiche`) : minuscules, lettres, chiffres, « - »
+ * et « _ » seulement, 40 caractères au plus. Sinon, rien.
+ */
+function cleanSource(raw) {
+  if (typeof raw !== 'string') return null;
+  const source = raw.trim().toLowerCase();
+  return /^[a-z0-9_-]{1,40}$/.test(source) ? source : null;
+}
+
+async function recordVisit(query, { ip, userAgent, path, referrer, source, userId }, now = new Date()) {
   const day = now.toISOString().slice(0, 10);
   const where = await geo.locate(ip);
   await query(
-    `INSERT INTO visits (created_at, path, referrer_host, device, ip, country, region, city, visitor_key, user_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9,
-             (SELECT id FROM users WHERE id = $10::uuid))`,
+    `INSERT INTO visits (created_at, path, referrer_host, device, ip, country, region, city, visitor_key, source, user_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+             (SELECT id FROM users WHERE id = $11::uuid))`,
     [now, path, referrerHost(referrer), deviceOf(userAgent), ip || null,
-      where.country, where.region, where.city, visitorKey(ip, userAgent, day), userId ?? null]
+      where.country, where.region, where.city, visitorKey(ip, userAgent, day), cleanSource(source), userId ?? null]
   );
 }
 
@@ -77,5 +87,5 @@ async function purgeOldIps(query) {
 }
 
 module.exports = {
-  IP_RETENTION_DAYS, isBot, deviceOf, visitorKey, cleanPath, referrerHost, recordVisit, purgeOldIps,
+  IP_RETENTION_DAYS, isBot, deviceOf, visitorKey, cleanPath, cleanSource, referrerHost, recordVisit, purgeOldIps,
 };

@@ -129,13 +129,34 @@ async function visitStats(days) {
     pages: await top('path'),
     referrers: await top(`COALESCE(referrer_host, '(direct)')`),
     devices: await top('device', 3),
+    campaigns: await campaigns(days),
   };
+}
+
+/**
+ * Campagnes (#290) : arrivées par lien suivi (`?src=`), et comptes créés le
+ * jour même par ces visiteurs (même empreinte du jour, visite connectée).
+ */
+async function campaigns(days) {
+  const { rows } = await query(`
+    WITH s AS (
+      SELECT source, visitor_key, created_at FROM visits
+      WHERE source IS NOT NULL AND created_at >= ${SINCE})
+    SELECT s.source AS label, COUNT(*)::int AS visits,
+           COUNT(DISTINCT s.visitor_key)::int AS visitors,
+           (SELECT COUNT(DISTINCT u.id)::int
+              FROM visits v JOIN users u ON u.id = v.user_id
+             WHERE v.visitor_key IN (SELECT visitor_key FROM s s2 WHERE s2.source = s.source)
+               AND u.created_at >= ${SINCE}
+               AND ${DAY('u.created_at')} = ${DAY('v.created_at')}) AS signups
+    FROM s GROUP BY s.source ORDER BY visits DESC, label LIMIT 20`, [days]);
+  return rows;
 }
 
 async function recentVisits() {
   const { rows } = await query(`
     SELECT v.created_at, v.path, v.device, host(v.ip) AS ip, v.country, v.region, v.city,
-           v.referrer_host, u.username
+           v.referrer_host, v.source, u.username
     FROM visits v LEFT JOIN users u ON u.id = v.user_id
     ORDER BY v.created_at DESC LIMIT 100`);
   return rows.map(r => ({
@@ -147,6 +168,7 @@ async function recentVisits() {
     region: r.region,
     city: r.city,
     referrer: r.referrer_host,
+    source: r.source,
     username: r.username,
   }));
 }

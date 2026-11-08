@@ -12,16 +12,51 @@ export function trackingRefused(nav: Navigator = navigator): boolean {
   return n.globalPrivacyControl === true || n.doNotTrack === '1' || n.msDoNotTrack === '1';
 }
 
+const SOURCE_PARAMS = ['src', 'utm_source'];
+
+/**
+ * Campagne d'arrivée (#290) : `?src=affiche` (ou `utm_source`). Seules les
+ * valeurs simples sont gardées ; le serveur les vérifie aussi.
+ */
+export function campaignSource(search: string): string | undefined {
+  const params = new URLSearchParams(search);
+  for (const name of SOURCE_PARAMS) {
+    const value = params.get(name)?.trim().toLowerCase();
+    if (value && /^[a-z0-9_-]{1,40}$/.test(value)) return value;
+  }
+  return undefined;
+}
+
+/**
+ * Adresse sans les paramètres de campagne, pour qu'un lien recopié ou partagé
+ * ne compte pas une seconde fois pour la même campagne. `null` si rien à retirer.
+ */
+export function withoutCampaign(href: string): string | null {
+  const url = new URL(href);
+  if (!SOURCE_PARAMS.some(name => url.searchParams.has(name))) return null;
+  for (const name of SOURCE_PARAMS) url.searchParams.delete(name);
+  return url.pathname + url.search + url.hash;
+}
+
 /** Envoie une page vue à chaque changement de page (#311). */
 export function useVisitTracking() {
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   const first = useRef(true);
 
   useEffect(() => {
     if (trackingRefused()) return;
-    // Site d'origine : seulement pour la première page de la visite.
-    const referrer = first.current ? document.referrer || undefined : undefined;
+    const isFirst = first.current;
     first.current = false;
-    visitsApi.track({ path: pathname, referrer }, useAuthStore.getState().token);
+    // Site d'origine et campagne : seulement pour la première page de la visite.
+    const referrer = isFirst ? document.referrer || undefined : undefined;
+    const source = isFirst ? campaignSource(search) : undefined;
+    visitsApi.track({ path: pathname, referrer, source }, useAuthStore.getState().token);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- une page vue par chemin, pas par requête
   }, [pathname]);
+
+  // Retire `?src=` de l'adresse, même si la mesure est refusée.
+  useEffect(() => {
+    const clean = withoutCampaign(window.location.href);
+    if (clean) window.history.replaceState(window.history.state, '', clean);
+  }, []);
 }

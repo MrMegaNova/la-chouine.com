@@ -36,7 +36,10 @@ export default function Privacy() {
           page vue est enregistrée sur notre serveur, sans outil tiers ni cookie :
         </p>
         <ul style={{ ...P, paddingLeft: 18 }}>
-          <li>la page visitée, la date et le site d'où vous arrivez ;</li>
+          <li>
+            la page visitée, la date, le site d'où vous arrivez et, si vous avez suivi un lien
+            d'une de nos campagnes (affiche, publication), le nom de cette campagne ;
+          </li>
           <li>le type d'appareil (ordinateur, tablette ou téléphone) ;</li>
           <li>
             votre adresse IP, <b>conservée 30 jours</b> puis effacée automatiquement, et la

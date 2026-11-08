@@ -232,16 +232,23 @@ export function StatTile({ label, value, hint }: { label: string; value: string 
 }
 
 /** Classement (pays, pages…) : tableau avec une barre de proportion. */
-export function RankedTable({ title, rows, labelOf = (l: string) => l }: {
-  title: string; rows: Array<{ label: string; visits: number; visitors: number }>; labelOf?: (l: string) => string;
+type RankedRow = { label: string; visits: number; visitors: number };
+
+export function RankedTable<R extends RankedRow>({ title, rows, labelOf = (l: string) => l, extra, empty = 'Aucune donnée.' }: {
+  title: string;
+  rows: R[];
+  labelOf?: (l: string) => string;
+  /** Colonne supplémentaire, après « Visiteurs ». */
+  extra?: { title: string; value: (row: R) => number };
+  empty?: string;
 }) {
   const max = Math.max(1, ...rows.map(r => r.visits));
   return (
     <div>
       <h3 className="admin-chart-title">{title}</h3>
-      {rows.length === 0 ? <p style={{ color: MUTED, fontSize: 14 }}>Aucune donnée.</p> : (
+      {rows.length === 0 ? <p style={{ color: MUTED, fontSize: 14 }}>{empty}</p> : (
         <table className="admin-table">
-          <thead><tr><th /><th>Visites</th><th>Visiteurs</th></tr></thead>
+          <thead><tr><th /><th>Visites</th><th>Visiteurs</th>{extra && <th>{extra.title}</th>}</tr></thead>
           <tbody>
             {rows.map(r => (
               <tr key={r.label}>
@@ -251,6 +258,7 @@ export function RankedTable({ title, rows, labelOf = (l: string) => l }: {
                 </td>
                 <td>{fmt(r.visits)}</td>
                 <td>{fmt(r.visitors)}</td>
+                {extra && <td>{fmt(extra.value(r))}</td>}
               </tr>
             ))}
           </tbody>

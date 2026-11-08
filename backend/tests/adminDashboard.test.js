@@ -53,11 +53,11 @@ async function createUser({ admin = false } = {}) {
   return { ...rows[0], token: signToken({ id: rows[0].id, username }) };
 }
 
-const visit = (path, { ua = BROWSER, ip = '203.0.113.7', token, referrer } = {}) => {
+const visit = (path, { ua = BROWSER, ip = '203.0.113.7', token, referrer, source } = {}) => {
   const req = request.post('/api/visits')
     .set('User-Agent', ua)
     .set('X-Forwarded-For', ip)
-    .send({ path, referrer });
+    .send({ path, referrer, source });
   return token ? req.set('Authorization', `Bearer ${token}`) : req;
 };
 
@@ -205,6 +205,38 @@ test('le tableau de bord agrège joueurs, temps de jeu et visites', async () => 
   const fromA = mine.find(v => v.username === a.username);
   assert.equal(fromA.ip, '203.0.113.7');
   assert.equal(fromA.city, 'Vendôme');
+});
+
+test('campagnes : arrivées par lien suivi et inscriptions du jour (#290)', async () => {
+  // Noms propres au fichier et au processus : les campagnes sont agrégées sur toute la base.
+  const SRC = `affiche-${process.pid}`;
+  const OTHER = `facebook-${process.pid}`;
+  const ip = '198.51.100.9';
+  await visit(PAGE, { ip, source: SRC.toUpperCase() });
+  // Le même visiteur s'inscrit, puis revient connecté : compté comme inscrit.
+  const newcomer = await createUser();
+  await visit(`${PAGE}/jouer`, { ip, token: newcomer.token });
+  await visit(PAGE, { ip: '198.51.100.10', ua: PHONE, source: SRC });
+  await visit(PAGE, { ip: '198.51.100.11', source: OTHER });
+  await visit(PAGE, { ip: '198.51.100.12', source: 'pas une campagne !' });
+
+  const { rows } = await pool.query(`SELECT source FROM visits WHERE path LIKE $1 ORDER BY id`, [`${PAGE}%`]);
+  assert.deepEqual(rows.map(r => r.source), [SRC, null, SRC, OTHER, null]);
+
+  const admin = await createUser({ admin: true });
+  const res = await request.get('/api/admin/dashboard?days=7').set('Authorization', `Bearer ${admin.token}`);
+  const byLabel = Object.fromEntries(res.body.visits.campaigns.map(c => [c.label, c]));
+  assert.deepEqual(byLabel[SRC], { label: SRC, visits: 2, visitors: 2, signups: 1 });
+  assert.deepEqual(byLabel[OTHER], { label: OTHER, visits: 1, visitors: 1, signups: 0 });
+  assert.equal(res.body.visits.recent.find(v => v.path === PAGE && v.source === OTHER)?.source, OTHER);
+});
+
+test('nom de campagne nettoyé', () => {
+  assert.equal(visits.cleanSource(' QR-Affiche_1 '), 'qr-affiche_1');
+  assert.equal(visits.cleanSource(''), null);
+  assert.equal(visits.cleanSource('a b'), null);
+  assert.equal(visits.cleanSource('x'.repeat(41)), null);
+  assert.equal(visits.cleanSource(42), null);
 });
 
 test('la période est bornée entre 7 et 365 jours', async () => {
