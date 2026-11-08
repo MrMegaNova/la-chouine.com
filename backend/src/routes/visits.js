@@ -28,6 +28,7 @@ router.post('/', async (req, res) => {
       userAgent,
       path,
       referrer: req.body?.referrer,
+      source: req.body?.source,
       userId: user && isUuid(user.id) ? user.id : null,
     });
   } catch (err) {

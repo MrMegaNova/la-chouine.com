@@ -137,6 +137,14 @@ export default function Admin() {
             <div className="panel"><RankedTable title="Pages" rows={data.visits.pages} /></div>
             <div className="panel"><RankedTable title="Sites d’origine" rows={data.visits.referrers} /></div>
             <div className="panel"><RankedTable title="Appareils" rows={data.visits.devices} labelOf={l => DEVICES[l] ?? l} /></div>
+            <div className="panel">
+              <RankedTable
+                title="Campagnes"
+                rows={data.visits.campaigns}
+                extra={{ title: 'Inscrits', value: r => r.signups }}
+                empty="Aucune arrivée par lien suivi. Ajoutez ?src=nom à vos liens, par exemple la-chouine.com/?src=affiche."
+              />
+            </div>
           </section>
 
           <section className="panel" style={{ marginTop: 16 }}>
@@ -161,7 +169,7 @@ export default function Admin() {
                       <td style={{ fontVariantNumeric: 'tabular-nums' }}>{v.ip ?? 'effacée'}</td>
                       <td>{[v.city, v.region, v.country && countryName(v.country)].filter(Boolean).join(', ') || '—'}</td>
                       <td>{DEVICES[v.device] ?? v.device}</td>
-                      <td>{v.referrer ?? '—'}</td>
+                      <td>{[v.source && `campagne « ${v.source} »`, v.referrer].filter(Boolean).join(' · ') || '—'}</td>
                     </tr>
                   ))}
                 </tbody>

@@ -247,7 +247,7 @@ export const onlineApi = {
 // ─── Mesure d'audience et tableau de bord (#311) ─────────────────────────────
 
 export const visitsApi = {
-  track: (payload: { path: string; referrer?: string }, token?: string | null) =>
+  track: (payload: { path: string; referrer?: string; source?: string }, token?: string | null) =>
     apiCall<Record<string, never>>('POST', '/visits', payload, token),
 };
 
@@ -271,6 +271,7 @@ export interface RecentVisit {
   region: string | null;
   city: string | null;
   referrer: string | null;
+  source: string | null;
   username: string | null;
 }
 
@@ -292,6 +293,7 @@ export interface Dashboard {
     pages: Ranked[];
     referrers: Ranked[];
     devices: Ranked[];
+    campaigns: Array<Ranked & { signups: number }>;
     recent: RecentVisit[];
   };
 }
