@@ -7,7 +7,7 @@ Ce guide explique comment activer les boutons « Continuer avec Google / Faceboo
 | Fournisseur | Coût | Variables |
 |---|---|---|
 | Google | gratuit | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` |
-| Facebook | gratuit | `FACEBOOK_APP_ID`, `FACEBOOK_APP_SECRET` |
+| Facebook | gratuit, mais **vérification d'entreprise obligatoire** (voir plus bas) | `FACEBOOK_APP_ID`, `FACEBOOK_APP_SECRET` |
 | Apple | Apple Developer Program, 99 $ par an | `APPLE_CLIENT_ID`, `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` |
 
 Dans tous les cas, il faut aussi renseigner `OAUTH_REDIRECT_BASE`.
@@ -47,6 +47,10 @@ Ce que le site reçoit de Google : un identifiant stable, l'adresse email avec l
 
 ## Facebook
 
+> **Prérequis : une entreprise vérifiée par Meta.** Pour que n'importe quel joueur puisse se connecter, l'application doit obtenir l'**accès avancé** à `public_profile` et `email`, et Meta exige pour cela une **vérification d'entreprise** ([niveaux d'accès](https://developers.facebook.com/docs/graph-api/overview/access-levels/), [annonce de 2023](https://developers.facebook.com/blog/post/2023/02/01/developer-platform-requiring-business-verification-for-advanced-access/)). Sans elle, seules les personnes qui ont un rôle sur l'application (administrateurs, testeurs) peuvent se connecter.
+>
+> La vérification passe par un **portefeuille business**, puis par le choix d'un type d'entreprise (société, entreprise individuelle, partenariat, entreprise privée, institution) et l'envoi de justificatifs officiels. **Aucune option ne correspond à un particulier** : en France, il faut au minimum une entreprise individuelle (micro-entreprise, SIRET). Tant que ce n'est pas fait, laisser `FACEBOOK_APP_ID` et `FACEBOOK_APP_SECRET` vides en production : le bouton Facebook n'apparaît pas.
+
 1. Sur [developers.facebook.com](https://developers.facebook.com/), créer une application.
    - Cas d'usage : **« Authentifier et demander des données aux utilisateurs avec Facebook Login »**.
    - Type d'application : **Consommateur**, si la question est posée.
@@ -62,7 +66,11 @@ Ce que le site reçoit de Google : un identifiant stable, l'adresse email avec l
    - URL des règles de confidentialité et URL des instructions de suppression des données : `https://www.la-chouine.com/confidentialite` ;
    - catégorie (Jeux) et icône 1024 × 1024.
 4. Copier l'**ID de l'application** dans `FACEBOOK_APP_ID` et la **clé secrète** dans `FACEBOOK_APP_SECRET`.
-5. **Publier** l'application : passer du mode « Développement » au mode « Live ». En mode Développement, seuls les administrateurs et testeurs de l'application peuvent se connecter. `email` et `public_profile` relèvent de l'accès standard : ni examen de l'application ni vérification d'entreprise ne sont demandés.
+5. **Vérifier l'entreprise** : sur la page **Publier**, **Démarrer la vérification**. Meta fait d'abord créer un portefeuille business (nom public, nom et prénom de l'admin, adresse email), puis demande le type d'entreprise et des justificatifs. Le délai va de quelques jours à quelques semaines.
+6. **Passer `public_profile` et `email` en accès avancé**, dans le cas d'usage Facebook Login. Pour une application « Consommateur », ces deux autorisations sont approuvées sans examen de l'application, mais restent en accès standard tant qu'on ne les passe pas en avancé.
+7. **Publier** l'application : passer du mode « Développement » au mode « Live ». Ne pas soumettre de « Demande de contrôle app » (examen de l'application) : elle n'est pas nécessaire pour ces deux autorisations.
+
+Avant la vérification, on peut déjà tester : ajouter les comptes voulus comme testeurs dans **Rôles dans l'application**, et renseigner les variables sur un environnement de test.
 
 Ce que le site reçoit de Facebook : un identifiant propre à l'application, le prénom, et l'adresse email si le joueur en a une et l'autorise.
 
@@ -162,7 +170,7 @@ Ouvrir le site sur `http://localhost:5173`, et non sur l'adresse IP de la machin
 | « La connexion n'a pas abouti » | Le fournisseur a refusé l'échange du code : secret erroné, ou clé Apple invalide. Le motif est dans les journaux du backend (`docker compose logs backend \| grep oauth`). |
 | « Un compte existe déjà avec cette adresse email » | Adresse déjà utilisée par un compte du site, et fournisseur qui ne garantit pas l'adresse (Facebook) : le joueur se connecte avec son pseudo. |
 | Google : seuls certains comptes peuvent se connecter | Application restée en mode « Test » dans **Audience** : la publier. |
-| Facebook : seuls les administrateurs peuvent se connecter | Application restée en mode « Développement » : la passer en « Live ». |
+| Facebook : seuls les administrateurs et testeurs peuvent se connecter | Application restée en mode « Développement », ou `public_profile` / `email` encore en accès standard. L'accès avancé exige la vérification d'entreprise. |
 
 ## Fonctionnement technique
 
