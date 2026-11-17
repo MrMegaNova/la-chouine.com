@@ -260,28 +260,11 @@ export function GameTable({ controller }: { controller?: GameController } = {}) 
             ))}
           </div>
 
-          {/* Capture info — les brisques adverses ne sont pas affichées : la
-              règle ne donne droit qu'au dernier pli adverse (#74), à chacun
-              de retenir les cartes tombées. */}
-          <div className={styles.captureInfo}>
-            {game.names.map((name, p) => {
-              const pl = game.players[p];
-              const plis = Math.floor(pl.won.length / n);
-              const briq = pl.won.filter(isBrisque).length;
-              return (
-                <span key={p} className={`${styles.captLine} ${p === me ? styles.captMe : ''}`}>
-                  {name} — plis {plis}{p === me ? ` · brisque${briq > 1 ? 's' : ''} ${briq}` : ''}{pl.annonce ? ` · ann ${pl.annonce}` : ''}
-                </span>
-              );
-            })}
-            <span>
-              <button className="btn btn--ghost btn--sm" disabled={game.players[me].won.length === 0}
-                onClick={() => setTricksView('mine')}>Mes plis</button>
-              {' '}
-              <button className="btn btn--ghost btn--sm" disabled={!opponentLastTrick(game, me)}
-                onClick={() => setTricksView('opp')}>Pli adverse</button>
-            </span>
-          </div>
+          {/* Plis à l'écran en permanence : ses propres plis et le dernier
+              pli adverse, en mini-cartes (cliquer agrandit). Les brisques
+              adverses ne sont pas affichées : la règle ne donne droit qu'au
+              dernier pli adverse (#74), à chacun de retenir les cartes tombées. */}
+          <TricksCorner game={game} me={me} onOpen={setTricksView} />
         </div>
 
         {/* Action bar */}
@@ -433,6 +416,71 @@ function opponentLastTrick(game: GameState, me: number) {
   return best;
 }
 
+// Les cartes sont empochées pli après pli, dans l'ordre : on les regroupe par
+// tranches de N pour retrouver chaque pli (#95).
+function splitTricks(won: Card[], n: number): Card[][] {
+  return Array.from({ length: Math.floor(won.length / n) }, (_, k) => won.slice(k * n, k * n + n));
+}
+
+// Encart permanent des plis : tous ses plis et le dernier pli adverse restent
+// visibles dans un coin du tapis, sans avoir à les demander (retour joueur de
+// Lavardin). Chaque bloc ouvre le panneau agrandi (#74/#95).
+function TricksCorner({ game, me, onOpen }: {
+  game: GameState; me: number; onOpen: (view: 'mine' | 'opp') => void;
+}) {
+  const n = game.playerCount;
+  const won = game.players[me].won;
+  const myTricks = splitTricks(won, n);
+  const briq = won.filter(isBrisque).length;
+  const oppLast = opponentLastTrick(game, me);
+  const isTrump = (c: Card) => game.trump !== null && c.s === game.trump;
+  return (
+    <div className={styles.captureInfo}>
+      {/* Plis et annonces des adversaires : un simple compte. */}
+      {game.names.map((name, p) => {
+        if (p === me) return null;
+        const pl = game.players[p];
+        return (
+          <span key={p} className={styles.captLine}>
+            {name} — plis {Math.floor(pl.won.length / n)}{pl.annonce ? ` · ann ${pl.annonce}` : ''}
+          </span>
+        );
+      })}
+
+      <button type="button" className={styles.tricksBlock} disabled={!oppLast}
+        aria-label="Pli adverse" title="Agrandir le dernier pli adverse"
+        onClick={() => onOpen('opp')}>
+        <span className={styles.tricksTitle}>
+          {oppLast ? `Dernier pli de ${game.names[oppLast.p]}` : 'Pli adverse : aucun'}
+        </span>
+        {oppLast && (
+          <span className={styles.miniTrick} data-testid="opp-last-trick">
+            {oppLast.cards.map((t, i) => <PlayingCard key={i} card={t.card} trump={isTrump(t.card)} />)}
+          </span>
+        )}
+      </button>
+
+      <button type="button" className={`${styles.tricksBlock} ${styles.captMe}`} disabled={myTricks.length === 0}
+        aria-label="Mes plis" title="Agrandir mes plis"
+        onClick={() => onOpen('mine')}>
+        <span className={styles.tricksTitle}>
+          Mes plis : {myTricks.length} · brisque{briq > 1 ? 's' : ''} {briq}
+          {game.players[me].annonce ? ` · ann ${game.players[me].annonce}` : ''}
+        </span>
+        {myTricks.length > 0 && (
+          <span className={styles.miniTricks} data-testid="my-tricks">
+            {myTricks.map((cards, k) => (
+              <span key={k} className={styles.miniTrick}>
+                {cards.map((c, i) => <PlayingCard key={i} card={c} trump={isTrump(c)} />)}
+              </span>
+            ))}
+          </span>
+        )}
+      </button>
+    </div>
+  );
+}
+
 // Panneau de consultation (#74/#95) : ses propres plis à volonté (groupés pli
 // par pli), ou le dernier pli ramassé par l'adversaire — conformément à la
 // règle de Lavardin.
@@ -441,12 +489,8 @@ function TricksPanel({ game, me, view, onClose }: {
 }) {
   const mine = view === 'mine';
   const n = game.playerCount;
-  // Les cartes sont empochées pli après pli, dans l'ordre : on les regroupe
-  // par tranches de N pour retrouver chaque pli (#95).
   const won = game.players[me].won;
-  const myTricks = mine
-    ? Array.from({ length: Math.floor(won.length / n) }, (_, k) => won.slice(k * n, k * n + n))
-    : [];
+  const myTricks = mine ? splitTricks(won, n) : [];
   const briq = mine ? won.filter(isBrisque).length : 0;
   const oppLast = mine ? null : opponentLastTrick(game, me);
   return (
