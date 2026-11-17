@@ -211,10 +211,58 @@
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 2px;
+  gap: 6px;
+  // Grandit avec l'écran : lisible sur un grand moniteur sans envahir un portable.
+  --mini-w: clamp(48px, 3.6vw, 64px);
+  max-width: calc(var(--mini-w) * 9.5);
 }
 .captLine { font-size: var(--fs-small); opacity: 0.85; text-align: right; }
+
+// Bloc cliquable (agrandir) : son dernier pli adverse, ses propres plis.
+.tricksBlock {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  max-width: 100%;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(8, 18, 13, 0.45);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  opacity: 0.9;
+  &:hover:not(:disabled), &:focus-visible { border-color: var(--gold); opacity: 1; }
+  &:disabled { cursor: default; opacity: 0.6; }
+}
 .captMe { opacity: 1; }
+.tricksTitle { font-size: var(--fs-small); text-align: right; }
+
+// Mini-cartes : seul le coin haut-gauche (valeur + couleur) est gardé — les
+// cartes d'un pli se chevauchent et le symbole central serait illisible.
+.miniTricks {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 5px 8px;
+  max-height: calc(var(--mini-w) * 1.46 * 4 + 15px);
+  overflow-y: auto;
+}
+.miniTrick {
+  display: flex;
+  :global(.playing-card) {
+    --w: var(--mini-w);
+    border-radius: 5px;
+    animation: none;
+  }
+  :global(.playing-card) + :global(.playing-card) { margin-left: calc(var(--mini-w) * -0.32); }
+  :global(.playing-card__corner--tl) { top: 2px; left: 3px; }
+  :global(.playing-card__rank) { font-size: max(var(--fs-small), calc(var(--mini-w) * 0.36)); }
+  :global(.playing-card__suit-corner) { font-size: max(var(--fs-small), calc(var(--mini-w) * 0.3)); }
+  :global(.playing-card__corner--br),
+  :global(.playing-card__pip) { display: none; }
+}
 
 .actBar {
   display: flex;
@@ -267,6 +315,22 @@
 @media (max-width: 860px) {
   .topBar { gap: 10px; padding: 10px 12px; }
   .midRow { gap: 28px; }
+  // L'encart des plis passe dans le flux, sous le talon et le pli, plutôt
+  // que de les chevaucher.
+  .captureInfo {
+    position: static;
+    flex: 0 0 100%;
+    max-width: none;
+    // Côte à côte : dernier pli adverse | mes plis.
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: flex-start;
+  }
+  .captLine { flex: 0 0 100%; }
+  .captLine, .tricksTitle { text-align: center; }
+  .tricksBlock { align-items: center; }
+  .miniTricks { justify-content: center; }
   .scoreRow :global(.score-pill) {
     padding: 6px 13px;
     b { font-size: 22px; }
@@ -294,12 +358,7 @@
       b { font-size: 19px; }
     }
   }
-  .captureInfo {
-    position: static;
-    flex: 0 0 100%;
-    align-items: center;
-  }
-  .captLine { text-align: center; }
+  .captureInfo { --mini-w: 26px; }
   .actBar { padding: 4px 0; min-height: 0; :global(.note) { font-size: var(--fs-small); } }
   // Trois adversaires doivent tenir sur une ligne : cartes en éventail.
   .oppSlot { flex: 0 1 auto; }

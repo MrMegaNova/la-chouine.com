@@ -167,4 +167,26 @@ describe('<GameTable> — consultation des plis (#74/#95)', () => {
     await user.click(btn);
     expect(screen.getByRole('heading', { name: 'Pli adverse' })).toBeInTheDocument();
   });
+
+  it('affiche en permanence ses plis et le dernier pli adverse, sans rien ouvrir', () => {
+    const ctrl = makeController(makeGame({
+      turn: 1,
+      players: [
+        { hand: [c('pique', '8')], won: [c('coeur', 'A'), c('coeur', '7'), c('pique', '10'), c('pique', '9')], declared: new Set(), annonce: 0 },
+        { hand: [c('trefle', '7')], won: [], declared: new Set(), annonce: 0 },
+      ],
+      lastTrickBySeat: [null, { cards: [{ p: 0, card: c('carreau', 'R') }, { p: 1, card: c('carreau', 'A') }], seq: 3 }],
+    }));
+    render(<GameTable controller={ctrl} />);
+    // Deux plis à soi, regroupés pli par pli, cartes visibles (faces).
+    const mine = screen.getByTestId('my-tricks');
+    expect(mine.children).toHaveLength(2);
+    expect(mine.querySelectorAll('.playing-card')).toHaveLength(4);
+    expect(screen.getByText(/Mes plis : 2 · brisques 2/)).toBeInTheDocument();
+    // Dernier pli adverse : ses deux cartes, avec le nom de l'adversaire.
+    expect(screen.getByTestId('opp-last-trick').querySelectorAll('.playing-card')).toHaveLength(2);
+    expect(screen.getByText(`Dernier pli de ${ctrl.game!.names[1]}`)).toBeInTheDocument();
+    // Aucun panneau ouvert.
+    expect(screen.queryByRole('heading', { name: 'Mes plis' })).toBeNull();
+  });
 });
