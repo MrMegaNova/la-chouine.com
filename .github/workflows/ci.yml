@@ -140,10 +140,26 @@ jobs:
         working-directory: backend
         run: npm ci
 
-      - name: npm audit backend (sévérité haute et critique)
+      # Bloquant : dépendances de production seulement (ce qui part dans les
+      # images). Une faille haute ou critique y fait échouer la CI.
+      - name: npm audit backend — production (bloquant)
         working-directory: backend
-        run: npm audit --audit-level=high
+        run: npm audit --omit=dev --audit-level=high
 
-      - name: npm audit frontend (sévérité haute et critique)
+      - name: npm audit frontend — production (bloquant)
         working-directory: frontend
-        run: npm audit --audit-level=high
+        run: npm audit --omit=dev --audit-level=high
+
+      # Informatif : audit complet, outils de build et de test compris. Une
+      # alerte sans correctif sur un outil (ex. picomatch, novembre 2026) ne
+      # bloque pas la CI : elle devient un avertissement visible dans le
+      # résumé du run, et Dependabot proposera le correctif dès sa sortie.
+      - name: npm audit backend — complet (informatif)
+        working-directory: backend
+        run: |
+          npm audit --audit-level=high || echo "::warning title=npm audit backend (outils)::Faille haute ou critique dans les dépendances de développement, voir les logs de cette étape."
+
+      - name: npm audit frontend — complet (informatif)
+        working-directory: frontend
+        run: |
+          npm audit --audit-level=high || echo "::warning title=npm audit frontend (outils)::Faille haute ou critique dans les dépendances de développement, voir les logs de cette étape."
