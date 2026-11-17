@@ -56,7 +56,7 @@ ESLint (#127) : un job **Lint** bloquant tourne dans les jobs Backend et Fronten
 
 ## CI (GitHub Actions)
 
-Sur push `main` ET pull_request : jobs **Backend** (lint + Postgres + vrai Redis + tests, `NODE_ENV=test`), **Frontend** (type-check + lint + vitest + build), **npm-audit** (bloquant sur les dépendances de production seulement, `--omit=dev` ; audit complet en informatif, `continue-on-error`).
+Sur push `main` ET pull_request : jobs **Backend** (lint + Postgres + vrai Redis + tests, `NODE_ENV=test`), **Frontend** (type-check + lint + vitest + build), **npm-audit** (bloquant sur les dépendances de production seulement, `--omit=dev` ; audit complet en informatif : avertissement dans le résumé du run, sans échec).
 
 ## Sous-agents (`.claude/agents/`)
 
